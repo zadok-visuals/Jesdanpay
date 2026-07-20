@@ -1,36 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# JesDanPay
 
-## Getting Started
+Cross-border currency exchange between Nigeria and China. This is Milestone 1: auth, KYC
+onboarding (individual + business), a USD/NGN wallet foundation, and the base dashboard shell.
+Klasha/Busha exchange flows and the admin panel are not built yet (Milestones 2-3).
 
-First, run the development server:
+## Setup
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Create a free project at [supabase.com](https://supabase.com).
+2. In the Supabase SQL editor, run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql).
+3. Copy `.env.local.example` to `.env.local` and fill in your project's URL, anon key, and
+   service role key (Project Settings → API).
+4. `npm install`
+5. `npm run dev` and open [http://localhost:3000](http://localhost:3000).
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Signing up redirects into the KYC selector, then the individual or business verification
+wizard, then a status tracker. The dashboard itself is reachable regardless of KYC status —
+a banner prompts completion until you're approved (approval is set manually in the `profiles`
+table for now; there's no automated verification provider wired in yet).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Notes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Klasha/Busha env vars in `.env.local.example` are placeholders for Milestone 2 — no
+  integration code exists yet.
+- `webhook_events` and `transactions` tables exist in the schema but nothing reads/writes them
+  until Milestone 2.

@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [state, formAction, pending] = useActionState(logIn, initialState);
 
   return (
-    <Card className="p-8">
+    <Card className="p-6 sm:p-8">
       <h1 className="mb-1 text-xl font-semibold">Welcome back</h1>
       <p className="mb-6 text-sm text-foreground/60">Log in to your JesDanPay account.</p>
 

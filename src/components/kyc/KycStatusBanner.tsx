@@ -49,7 +49,9 @@ export function KycStatusBanner({ status }: { status: KycStatus }) {
   const tone = TONE_CLASSES[copy.tone];
 
   return (
-    <div className={`flex items-center justify-between gap-4 rounded-2xl p-4 ${tone.card}`}>
+    <div
+      className={`flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between ${tone.card}`}
+    >
       <div className="flex items-center gap-3">
         <svg
           className={`h-5 w-5 shrink-0 ${tone.icon}`}
@@ -65,8 +67,8 @@ export function KycStatusBanner({ status }: { status: KycStatus }) {
         </svg>
         <p className={`text-sm font-medium ${tone.text}`}>{copy.title}</p>
       </div>
-      <Link href={copy.href}>
-        <Button size="sm" className={tone.button}>
+      <Link href={copy.href} className="shrink-0">
+        <Button size="sm" className={`w-full sm:w-auto ${tone.button}`}>
           {copy.cta}
         </Button>
       </Link>

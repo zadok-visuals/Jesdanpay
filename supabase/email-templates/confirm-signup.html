@@ -2,10 +2,10 @@
   Paste this into: Supabase Dashboard → Authentication → Email Templates → "Confirm signup"
   Subject line suggestion: Confirm your JesDanPay email
 
-  Before pasting: replace LOGO_URL below with your logo's live, public URL
-  (e.g. https://jesdanpay.com/jesdanpay-logo.png or your Vercel domain equivalent).
-  Email clients can't load images from localhost or from files outside this URL,
-  so the logo won't render until this points at a real deployed address.
+  Logo URL below assumes the app will be live at https://jesdanpay.net — if the
+  deployed app ends up on a different domain (e.g. a Vercel subdomain), swap the
+  src below to match. Email clients can't load images from localhost, so the logo
+  won't render until this points at the real deployed address.
 -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f7; padding:40px 0;">
   <tr>
@@ -13,7 +13,7 @@
       <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:16px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">
         <tr>
           <td style="padding:40px 40px 24px 40px; text-align:center;">
-            <img src="LOGO_URL" alt="JesDanPay" width="160" style="display:block; margin:0 auto;" />
+            <img src="https://jesdanpay.net/jesdanpay-logo.png" alt="JesDanPay" width="160" style="display:block; margin:0 auto;" />
           </td>
         </tr>
         <tr>

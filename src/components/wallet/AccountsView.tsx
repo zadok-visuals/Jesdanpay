@@ -18,7 +18,7 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
     <div className="flex flex-col gap-6">
       <Tabs options={currencies} value={selected} onChange={setSelected} />
 
-      <Card className="p-8">
+      <Card className="p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
           <span className="text-2xl">{CURRENCY_META[wallet.currency].flag}</span>
           <div>
@@ -29,7 +29,7 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button disabled title="Coming soon — Milestone 2">
             Add Money
           </Button>

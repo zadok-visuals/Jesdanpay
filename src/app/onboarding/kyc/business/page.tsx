@@ -28,7 +28,7 @@ export default function BusinessKycPage() {
   };
 
   return (
-    <Card className="p-8">
+    <Card className="p-6 sm:p-8">
       <StepIndicator step={step} total={TOTAL_STEPS} />
 
       <form action={formAction} className="flex flex-col gap-4">

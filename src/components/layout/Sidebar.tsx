@@ -14,11 +14,18 @@ const NAV_ITEMS = [
   { href: "/reports", label: "Reports" },
 ] as const;
 
-export function Sidebar() {
+interface SidebarProps {
+  className?: string;
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ className = "", onNavigate }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-border bg-surface px-4 py-6">
+    <aside
+      className={`flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-6 ${className}`}
+    >
       <div className="mb-8 px-2">
         <Wordmark />
       </div>
@@ -30,6 +37,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={`rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
                   ? "bg-primary-50 text-primary-700"

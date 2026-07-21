@@ -10,19 +10,19 @@ const ACTIONS = [
 
 export function QuickActions() {
   return (
-    <div className="flex gap-5">
+    <div className="flex flex-wrap justify-center gap-3">
       {ACTIONS.map((action) => (
         <button
           key={action.label}
           type="button"
           disabled
           title="Coming soon — Milestone 2"
-          className="flex flex-col items-center gap-1.5 text-xs font-medium text-foreground/50 disabled:cursor-not-allowed"
+          className="flex w-18 flex-col items-center gap-1.5 text-center text-xs font-medium text-foreground/50 disabled:cursor-not-allowed"
         >
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-50 text-lg text-primary-600">
             {action.icon}
           </span>
-          {action.label}
+          <span className="leading-tight">{action.label}</span>
         </button>
       ))}
     </div>

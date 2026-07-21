@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Topbar } from "@/components/layout/Topbar";
+import { DashboardChrome } from "@/components/layout/DashboardChrome";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -18,13 +17,5 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const name = profile?.full_name || profile?.email || "there";
 
-  return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Topbar name={name} />
-        <main className="flex-1 bg-background p-6">{children}</main>
-      </div>
-    </div>
-  );
+  return <DashboardChrome name={name}>{children}</DashboardChrome>;
 }

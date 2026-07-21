@@ -114,7 +114,7 @@ export default function BusinessKycPage() {
               Continue
             </Button>
           ) : (
-            <Button type="submit" disabled={pending || proofOfBusinessAddress === null}>
+            <Button type="submit" loading={pending} disabled={proofOfBusinessAddress === null}>
               {pending ? "Submitting…" : "Submit for review"}
             </Button>
           )}

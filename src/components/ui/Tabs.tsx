@@ -16,7 +16,7 @@ export function Tabs<T extends string>({ options, value, onChange }: TabsProps<T
           onClick={() => onChange(option)}
           className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
             option === value
-              ? "bg-white text-primary-700 shadow-soft"
+              ? "bg-white text-primary-700"
               : "text-foreground/60 hover:text-foreground"
           }`}
         >

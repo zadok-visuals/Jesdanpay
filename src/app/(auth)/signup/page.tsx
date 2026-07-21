@@ -21,8 +21,24 @@ export default function SignupPage() {
       </p>
 
       <form action={formAction} className="flex flex-col gap-4">
-        <Input label="Full name" id="fullName" name="fullName" type="text" required autoComplete="name" />
-        <Input label="Email" id="email" name="email" type="email" required autoComplete="email" />
+        <Input
+          label="Full name"
+          id="fullName"
+          name="fullName"
+          type="text"
+          required
+          autoComplete="name"
+          placeholder="e.g. Ada Lovelace"
+        />
+        <Input
+          label="Email"
+          id="email"
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="you@example.com"
+        />
         <PasswordInput
           label="Password"
           id="password"
@@ -31,11 +47,12 @@ export default function SignupPage() {
           minLength={8}
           autoComplete="new-password"
           showStrength
+          placeholder="At least 8 characters"
         />
 
         {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
 
-        <Button type="submit" disabled={pending} className="mt-2 w-full">
+        <Button type="submit" loading={pending} className="mt-2 w-full">
           {pending ? "Creating account…" : "Sign up"}
         </Button>
       </form>

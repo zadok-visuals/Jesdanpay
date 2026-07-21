@@ -18,7 +18,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-60 flex-col border-r border-border bg-surface px-4 py-6">
+    <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-border bg-surface px-4 py-6">
       <div className="mb-8 px-2">
         <Wordmark />
       </div>
@@ -45,8 +45,20 @@ export function Sidebar() {
       <form action={logOut}>
         <button
           type="submit"
-          className="w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium text-foreground/60 hover:bg-black/[.04] hover:text-foreground"
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-danger-500 hover:bg-danger-50"
         >
+          <svg
+            className="h-4 w-4 shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M16 17l5-5-5-5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           Log out
         </button>
       </form>

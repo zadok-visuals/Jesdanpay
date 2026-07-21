@@ -19,18 +19,27 @@ export default function LoginPage() {
       <p className="mb-6 text-sm text-foreground/60">Log in to your JesDanPay account.</p>
 
       <form action={formAction} className="flex flex-col gap-4">
-        <Input label="Email" id="email" name="email" type="email" required autoComplete="email" />
+        <Input
+          label="Email"
+          id="email"
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="you@example.com"
+        />
         <PasswordInput
           label="Password"
           id="password"
           name="password"
           required
           autoComplete="current-password"
+          placeholder="Enter your password"
         />
 
         {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
 
-        <Button type="submit" disabled={pending} className="mt-2 w-full">
+        <Button type="submit" loading={pending} className="mt-2 w-full">
           {pending ? "Logging in…" : "Log in"}
         </Button>
       </form>

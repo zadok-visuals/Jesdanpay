@@ -19,11 +19,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const name = profile?.full_name || profile?.email || "there";
 
   return (
-    <div className="flex h-full min-h-screen">
+    <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex flex-1 flex-col">
         <Topbar name={name} />
-        <main className="flex-1 overflow-y-auto bg-background p-6">{children}</main>
+        <main className="flex-1 bg-background p-6">{children}</main>
       </div>
     </div>
   );

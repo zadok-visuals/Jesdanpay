@@ -13,7 +13,7 @@ export function TotalBalanceCard({ wallets }: { wallets: Wallet[] }) {
   const wallet = wallets.find((w) => w.currency === selected);
 
   return (
-    <Card className="flex flex-col gap-6 p-8 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="flex flex-col gap-8 p-8 sm:flex-row sm:items-center sm:justify-center sm:gap-16">
       <div>
         <div className="mb-3 flex items-center gap-3">
           <p className="text-sm font-medium text-foreground/60">Balance</p>

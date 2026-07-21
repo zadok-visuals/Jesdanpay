@@ -95,7 +95,7 @@ export default function IndividualKycPage() {
               Continue
             </Button>
           ) : (
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" loading={pending}>
               {pending ? "Submitting…" : "Submit for review"}
             </Button>
           )}

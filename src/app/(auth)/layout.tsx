@@ -11,6 +11,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
 
+        <div className="p-10 pt-10">
+          <p className="max-w-xs text-3xl font-bold leading-tight text-white">
+            Move money between Nigeria and China with ease.
+          </p>
+          <p className="mt-4 text-sm text-white/60">© {new Date().getFullYear()} JesDanPay</p>
+        </div>
+
         <div className="flex flex-1 items-center overflow-hidden px-3 py-4">
           <div className="mx-auto w-full overflow-hidden rounded-2xl bg-white">
             <Image
@@ -22,13 +29,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               priority
             />
           </div>
-        </div>
-
-        <div className="p-10 pt-0">
-          <p className="max-w-xs text-3xl font-bold leading-tight text-white">
-            Move money between Nigeria and China with ease.
-          </p>
-          <p className="mt-4 text-sm text-white/60">© {new Date().getFullYear()} JesDanPay</p>
         </div>
       </div>
 

@@ -4,7 +4,7 @@ export function ComingSoon({ title, description }: { title: string; description:
   return (
     <div>
       <h1 className="mb-6 text-xl font-semibold">{title}</h1>
-      <Card className="flex flex-col items-center justify-center gap-1 py-20 text-center">
+      <Card className="flex flex-col items-center justify-center gap-1 px-6 py-20 text-center">
         <p className="text-sm font-medium text-foreground/60">Coming soon</p>
         <p className="max-w-sm text-xs text-foreground/40">{description}</p>
       </Card>

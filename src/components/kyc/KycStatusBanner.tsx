@@ -30,9 +30,9 @@ const COPY: Record<
 
 const TONE_CLASSES: Record<Tone, { card: string; text: string; icon: string; button: string }> = {
   warning: {
-    card: "border-l-4 border-accent-500 bg-accent-100",
+    card: "border-l-4 border-accent-300 bg-accent-50",
     text: "text-accent-900",
-    icon: "text-accent-600",
+    icon: "text-accent-500",
     button: "bg-accent-500 text-white hover:bg-accent-600",
   },
   danger: {

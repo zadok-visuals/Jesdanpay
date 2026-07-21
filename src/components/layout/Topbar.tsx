@@ -15,7 +15,7 @@ interface TopbarProps {
 
 export function Topbar({ name, onMenuClick }: TopbarProps) {
   return (
-    <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
+    <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"

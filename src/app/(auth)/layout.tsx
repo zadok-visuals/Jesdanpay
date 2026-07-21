@@ -1,5 +1,5 @@
+import Image from "next/image";
 import { Wordmark } from "@/components/layout/Wordmark";
-import { PersonWithPhoneIllustration } from "@/components/layout/PersonWithPhoneIllustration";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,7 +9,16 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <Wordmark />
         </div>
 
-        <PersonWithPhoneIllustration className="mx-auto h-auto w-full max-w-[280px]" />
+        <div className="mx-auto w-full max-w-[240px] overflow-hidden rounded-2xl bg-white">
+          <Image
+            src="/auth-hero.png"
+            alt="Smiling JesDanPay user holding up the app on their phone"
+            width={1124}
+            height={1399}
+            className="h-full w-full object-cover"
+            priority
+          />
+        </div>
 
         <div>
           <p className="max-w-xs text-3xl font-bold leading-tight text-white">

@@ -1,4 +1,5 @@
 import { Wordmark } from "@/components/layout/Wordmark";
+import { PersonWithPhoneIllustration } from "@/components/layout/PersonWithPhoneIllustration";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -7,6 +8,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="w-fit rounded-2xl bg-white p-3">
           <Wordmark />
         </div>
+
+        <PersonWithPhoneIllustration className="mx-auto h-auto w-full max-w-[280px]" />
+
         <div>
           <p className="max-w-xs text-3xl font-bold leading-tight text-white">
             Move money between Nigeria and China with ease.

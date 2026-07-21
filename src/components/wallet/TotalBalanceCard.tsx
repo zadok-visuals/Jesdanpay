@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Tabs } from "@/components/ui/Tabs";
+import { Card } from "@/components/ui/Card";
 import { QuickActions } from "@/components/wallet/QuickActions";
 
 export function TotalBalanceCard({ wallets }: { wallets: Wallet[] }) {
@@ -12,7 +13,7 @@ export function TotalBalanceCard({ wallets }: { wallets: Wallet[] }) {
   const wallet = wallets.find((w) => w.currency === selected);
 
   return (
-    <div className="flex flex-col gap-8 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="flex flex-col gap-8 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
       <div>
         <div className="mb-3 flex items-center gap-3">
           <p className="text-sm font-medium text-foreground/60">Balance</p>
@@ -29,6 +30,6 @@ export function TotalBalanceCard({ wallets }: { wallets: Wallet[] }) {
       <div className="hidden self-stretch border-l border-border sm:block" aria-hidden="true" />
 
       <QuickActions />
-    </div>
+    </Card>
   );
 }

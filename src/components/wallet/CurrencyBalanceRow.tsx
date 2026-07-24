@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/Card";
 
 export function CurrencyBalanceRow({ wallets }: { wallets: Wallet[] }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {wallets.map((wallet) => (
         <Card key={wallet.currency} className="p-5">
           <div className="mb-2 flex items-center gap-2">

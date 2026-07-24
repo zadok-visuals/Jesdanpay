@@ -1,8 +1,9 @@
 export type KycType = "individual" | "business";
 export type KycStatus = "not_started" | "pending" | "approved" | "rejected";
 export type KycTier = "individual_tier_1" | "individual_tier_2" | "individual_tier_3" | "business";
-export type Currency = "USD" | "NGN";
+export type Currency = "USD" | "NGN" | "CNY";
 export type DocumentStatus = "pending" | "approved" | "rejected";
+export type PayoutMethod = "alipay" | "wechat" | "bank";
 
 export type TransactionType = "rmb_manual" | "rmb_auto" | "usdt_ngn";
 export type TransactionProvider = "klasha" | "busha";
@@ -62,6 +63,19 @@ export type WebhookEvent = {
   created_at: string;
 };
 
+export type RmbRecipient = {
+  id: string;
+  transaction_id: string | null;
+  user_id: string;
+  payout_method: PayoutMethod;
+  recipient_alipay_id: string | null;
+  recipient_wechat_id: string | null;
+  recipient_bank_account_number: string | null;
+  recipient_bank_name: string | null;
+  recipient_account_holder_name: string | null;
+  created_at: string;
+};
+
 export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13";
@@ -97,6 +111,13 @@ export type Database = {
         Row: WebhookEvent;
         Insert: Partial<WebhookEvent> & Pick<WebhookEvent, "provider" | "event_type" | "payload">;
         Update: Partial<WebhookEvent>;
+        Relationships: [];
+      };
+      rmb_recipients: {
+        Row: RmbRecipient;
+        Insert: Partial<RmbRecipient> &
+          Pick<RmbRecipient, "user_id" | "payout_method">;
+        Update: Partial<RmbRecipient>;
         Relationships: [];
       };
     };

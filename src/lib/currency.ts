@@ -3,6 +3,7 @@ import type { Currency } from "@/lib/types/database";
 export const CURRENCY_META: Record<Currency, { flag: string; label: string; symbol: string }> = {
   USD: { flag: "🇺🇸", label: "US Dollar", symbol: "$" },
   NGN: { flag: "🇳🇬", label: "Nigerian Naira", symbol: "₦" },
+  CNY: { flag: "🇨🇳", label: "Chinese Yuan", symbol: "¥" },
 };
 
 export function formatBalance(currency: Currency, balance: number) {

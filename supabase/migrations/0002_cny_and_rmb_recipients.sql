@@ -6,9 +6,23 @@
 --    send attempt. Linked to `transactions.id` once Milestone 2 executes the
 --    exchange; nullable until then so recipients can be captured at UI time.
 -- 4. Update handle_new_user to also create a zero-balance CNY wallet.
+-- 5. Back-fill a CNY wallet for existing users.
+--
+-- Run this whole file in one go in the Supabase SQL Editor (or `supabase db
+-- push`). The `commit;` after step 1 is required, not optional: Postgres
+-- forbids using a newly added enum value in the same transaction that added
+-- it, and step 5 below inserts rows using 'CNY' directly. Without the
+-- explicit commit here, the whole script fails with:
+--   "unsafe use of new value of enum type currency"
+-- Postgres respects explicit BEGIN/COMMIT embedded in a multi-statement
+-- script, so this closes out the first implicit transaction and lets
+-- everything after it run — and see 'CNY' as already committed — in a
+-- fresh one, all within this single file/run.
 
 -- ── 1. Extend currency enum ──────────────────────────────────────────────────
 alter type currency add value if not exists 'CNY';
+
+commit;
 
 -- ── 2. Payout method enum ────────────────────────────────────────────────────
 do $$

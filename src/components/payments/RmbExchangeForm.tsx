@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useActionState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import type { Wallet, Currency, PayoutMethod } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { saveRmbRecipient, type PaymentsActionState } from "@/lib/actions/payments";
@@ -472,11 +472,7 @@ export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const [formState, setFormState] = useState<SendState>(DEFAULT_STATE);
   const [done, setDone] = useState(false);
   const [isPending, startTransition] = useTransition();
-
-  const [actionState, formAction] = useActionState<PaymentsActionState, FormData>(
-    saveRmbRecipient,
-    {},
-  );
+  const [actionState, setActionState] = useState<PaymentsActionState>({});
 
   function patch(p: Partial<SendState>) {
     setFormState((s) => ({ ...s, ...p }));
@@ -493,6 +489,7 @@ export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
 
     startTransition(async () => {
       const result = await saveRmbRecipient({}, fd);
+      setActionState(result);
       if (result.recipientId && !result.error) {
         setDone(true);
       }

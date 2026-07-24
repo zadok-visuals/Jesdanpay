@@ -26,7 +26,7 @@ export function PaymentsView({ wallets }: PaymentsViewProps) {
             onClick={() => setActiveTab(tab)}
             className={`rounded-lg px-5 py-2 text-sm font-medium transition-colors ${
               tab === activeTab
-                ? "bg-white text-primary-700 shadow-sm"
+                ? "bg-white text-primary-700"
                 : "text-foreground/60 hover:text-foreground"
             }`}
           >

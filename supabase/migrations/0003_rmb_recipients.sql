@@ -1,30 +1,16 @@
--- Migration 0002: CNY wallet support and RMB recipient details
+-- Migration 0003: RMB recipient details + CNY wallet provisioning.
 --
--- 1. Extend the `currency` enum with 'CNY'.
--- 2. Add a `payout_method` enum (alipay | wechat | bank).
--- 3. Create the `rmb_recipients` table — stores recipient detail for each RMB
+-- Must run after 0002 (which adds 'CNY' to the currency enum) has been
+-- executed and committed as a separate script — see 0002's header comment.
+--
+-- 1. Add a `payout_method` enum (alipay | wechat | bank).
+-- 2. Create the `rmb_recipients` table — stores recipient detail for each RMB
 --    send attempt. Linked to `transactions.id` once Milestone 2 executes the
 --    exchange; nullable until then so recipients can be captured at UI time.
--- 4. Update handle_new_user to also create a zero-balance CNY wallet.
--- 5. Back-fill a CNY wallet for existing users.
---
--- Run this whole file in one go in the Supabase SQL Editor (or `supabase db
--- push`). The `commit;` after step 1 is required, not optional: Postgres
--- forbids using a newly added enum value in the same transaction that added
--- it, and step 5 below inserts rows using 'CNY' directly. Without the
--- explicit commit here, the whole script fails with:
---   "unsafe use of new value of enum type currency"
--- Postgres respects explicit BEGIN/COMMIT embedded in a multi-statement
--- script, so this closes out the first implicit transaction and lets
--- everything after it run — and see 'CNY' as already committed — in a
--- fresh one, all within this single file/run.
+-- 3. Update handle_new_user to also create a zero-balance CNY wallet.
+-- 4. Back-fill a CNY wallet for existing users.
 
--- ── 1. Extend currency enum ──────────────────────────────────────────────────
-alter type currency add value if not exists 'CNY';
-
-commit;
-
--- ── 2. Payout method enum ────────────────────────────────────────────────────
+-- ── 1. Payout method enum ────────────────────────────────────────────────────
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'payout_method') then
@@ -32,7 +18,7 @@ begin
   end if;
 end$$;
 
--- ── 3. rmb_recipients table ──────────────────────────────────────────────────
+-- ── 2. rmb_recipients table ──────────────────────────────────────────────────
 create table if not exists rmb_recipients (
   id                           uuid primary key default gen_random_uuid(),
   -- Nullable until M2 executes the exchange and writes the transactions row.
@@ -64,7 +50,7 @@ create table if not exists rmb_recipients (
     )
 );
 
--- ── 4. RLS on rmb_recipients ─────────────────────────────────────────────────
+-- ── 3. RLS on rmb_recipients ─────────────────────────────────────────────────
 alter table rmb_recipients enable row level security;
 
 create policy "rmb_recipients: read own"
@@ -75,7 +61,7 @@ create policy "rmb_recipients: insert own"
   on rmb_recipients for insert
   with check (auth.uid() = user_id);
 
--- ── 5. Auto-provision CNY wallet on new signup ───────────────────────────────
+-- ── 4. Auto-provision CNY wallet on new signup ───────────────────────────────
 -- Replace the existing trigger function so new users get USD + NGN + CNY.
 -- Note: `create or replace function` is safe here; the trigger itself remains.
 create or replace function handle_new_user()
@@ -95,7 +81,7 @@ begin
 end;
 $$;
 
--- ── 6. Back-fill CNY wallet for existing users ───────────────────────────────
+-- ── 5. Back-fill CNY wallet for existing users ───────────────────────────────
 -- Idempotent: insert where the row doesn't already exist.
 insert into public.wallets (user_id, currency, balance)
 select id, 'CNY', 0

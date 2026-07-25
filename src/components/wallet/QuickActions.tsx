@@ -1,22 +1,51 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-const ACTIONS = [
-  { label: "Add Money", icon: "➕", href: null },
-  { label: "Send", icon: "↗", href: null },
-  { label: "Convert", icon: "⇄", href: null },
-  { label: "Exchange RMB", icon: "🇨🇳", href: "/payments" },
-  { label: "Exchange USDT", icon: "₮", href: null },
-] as const;
+function PlusIcon() {
+  return (
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M7 17 17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ConvertIcon() {
+  return (
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M6 8h13l-3.5-3.5M18 16H5l3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CurrencyBadge({ symbol }: { symbol: string }) {
+  return <span className="text-[15px] font-bold leading-none">{symbol}</span>;
+}
+
+const ACTIONS: { label: string; icon: ReactNode; href: string | null }[] = [
+  { label: "Add Money", icon: <PlusIcon />, href: null },
+  { label: "Send", icon: <SendIcon />, href: null },
+  { label: "Convert", icon: <ConvertIcon />, href: null },
+  { label: "Exchange RMB", icon: <CurrencyBadge symbol="¥" />, href: "/payments" },
+  { label: "Exchange USDT", icon: <CurrencyBadge symbol="₮" />, href: null },
+];
 
 export function QuickActions() {
   return (
-    <div className="flex flex-wrap justify-center gap-3">
+    <div className="flex flex-nowrap justify-center gap-2 sm:gap-3">
       {ACTIONS.map((action) => {
         const inner = (
           <span
-            className={`flex w-18 flex-col items-center gap-1.5 text-center text-xs font-medium transition-colors ${
+            className={`flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium transition-colors sm:w-18 sm:text-xs ${
               action.href
                 ? "text-foreground/70 hover:text-primary-700"
                 : "cursor-not-allowed text-foreground/50"
@@ -24,7 +53,7 @@ export function QuickActions() {
             title={action.href ? undefined : "Coming soon — Milestone 2"}
           >
             <span
-              className={`flex h-11 w-11 items-center justify-center rounded-full text-lg transition-colors ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors sm:h-11 sm:w-11 ${
                 action.href
                   ? "bg-primary-50 text-primary-600 hover:bg-primary-100"
                   : "bg-primary-50 text-primary-600 opacity-50"

@@ -59,7 +59,7 @@ export function Sidebar({ className = "", onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      <div className="border-t border-border px-4 pt-4 pb-6">
+      <div className="border-t border-border px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         <form action={logOut}>
           <button
             type="submit"

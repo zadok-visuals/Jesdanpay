@@ -20,8 +20,8 @@ export function DashboardChrome({
   }, [pathname]);
 
   return (
-    <div className="flex min-h-screen">
-      <div className="sticky top-0 hidden h-screen md:block">
+    <div className="flex min-h-dvh">
+      <div className="sticky top-0 hidden h-dvh md:block">
         <Sidebar />
       </div>
 
@@ -32,7 +32,7 @@ export function DashboardChrome({
             onClick={() => setDrawerOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute inset-y-0 left-0 h-screen w-64">
+          <div className="absolute inset-y-0 left-0 h-dvh w-64">
             <Sidebar onNavigate={() => setDrawerOpen(false)} />
           </div>
         </div>

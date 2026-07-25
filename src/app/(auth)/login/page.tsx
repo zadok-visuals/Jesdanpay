@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
+import { AuthShell } from "@/components/layout/AuthShell";
 
 const initialState: AuthActionState = {};
 
@@ -14,42 +15,49 @@ export default function LoginPage() {
   const [state, formAction, pending] = useActionState(logIn, initialState);
 
   return (
-    <Card className="p-6 sm:p-8">
-      <h1 className="mb-1 text-xl font-semibold">Welcome back</h1>
-      <p className="mb-6 text-sm text-foreground/60">Log in to your JesDanPay account.</p>
+    <AuthShell
+      imageSrc="/auth-hero-female.png"
+      imageAlt="Smiling JesDanPay user holding up the app on their phone"
+      imageWidth={1122}
+      imageHeight={1402}
+    >
+      <Card className="p-6 sm:p-8">
+        <h1 className="mb-1 text-xl font-semibold">Welcome back</h1>
+        <p className="mb-6 text-sm text-foreground/60">Log in to your JesDanPay account.</p>
 
-      <form action={formAction} className="flex flex-col gap-4">
-        <Input
-          label="Email"
-          id="email"
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          placeholder="you@example.com"
-        />
-        <PasswordInput
-          label="Password"
-          id="password"
-          name="password"
-          required
-          autoComplete="current-password"
-          placeholder="Enter your password"
-        />
+        <form action={formAction} className="flex flex-col gap-4">
+          <Input
+            label="Email"
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="you@example.com"
+          />
+          <PasswordInput
+            label="Password"
+            id="password"
+            name="password"
+            required
+            autoComplete="current-password"
+            placeholder="Enter your password"
+          />
 
-        {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
+          {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
 
-        <Button type="submit" loading={pending} className="mt-2 w-full">
-          {pending ? "Logging in…" : "Log in"}
-        </Button>
-      </form>
+          <Button type="submit" loading={pending} className="mt-2 w-full">
+            {pending ? "Logging in…" : "Log in"}
+          </Button>
+        </form>
 
-      <p className="mt-6 text-center text-sm text-foreground/60">
-        Don&apos;t have an account?{" "}
-        <Link href="/signup" className="font-medium text-primary-600 hover:underline">
-          Sign up
-        </Link>
-      </p>
-    </Card>
+        <p className="mt-6 text-center text-sm text-foreground/60">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="font-medium text-primary-600 hover:underline">
+            Sign up
+          </Link>
+        </p>
+      </Card>
+    </AuthShell>
   );
 }

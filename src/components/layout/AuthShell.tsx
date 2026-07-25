@@ -1,7 +1,15 @@
 import Image from "next/image";
 import { Wordmark } from "@/components/layout/Wordmark";
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+interface AuthShellProps {
+  imageSrc: string;
+  imageAlt: string;
+  imageWidth: number;
+  imageHeight: number;
+  children: React.ReactNode;
+}
+
+export function AuthShell({ imageSrc, imageAlt, imageWidth, imageHeight, children }: AuthShellProps) {
   return (
     <div className="flex min-h-dvh">
       <div className="hidden flex-col bg-gradient-to-br from-primary-600 to-primary-800 md:flex md:w-[42%] lg:w-2/5">
@@ -21,10 +29,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="flex flex-1 items-center overflow-hidden px-3 py-4">
           <div className="mx-auto w-full overflow-hidden rounded-2xl bg-white">
             <Image
-              src="/auth-hero.png"
-              alt="Smiling JesDanPay user holding up the app on their phone"
-              width={1124}
-              height={1399}
+              src={imageSrc}
+              alt={imageAlt}
+              width={imageWidth}
+              height={imageHeight}
               className="h-auto max-h-[60vh] w-full object-cover"
               priority
             />

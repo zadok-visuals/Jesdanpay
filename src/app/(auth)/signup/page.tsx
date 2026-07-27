@@ -18,8 +18,8 @@ export default function SignupPage() {
     <AuthShell
       imageSrc="/auth-hero-male.png"
       imageAlt="Smiling JesDanPay user holding up the app on their phone"
-      imageWidth={1123}
-      imageHeight={1400}
+      imageWidth={1191}
+      imageHeight={1500}
     >
       <Card className="p-6 sm:p-8">
         <h1 className="mb-1 text-xl font-semibold">Create your account</h1>

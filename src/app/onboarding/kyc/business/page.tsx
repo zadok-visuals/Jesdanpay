@@ -67,7 +67,7 @@ export default function BusinessKycPage() {
               placeholder="List directors/shareholders and their ownership %"
               value={ownershipStructure}
               onChange={(e) => setOwnershipStructure(e.target.value)}
-              className="rounded-xl border border-border bg-white p-3.5 text-sm outline-none focus:border-primary-400"
+              className="rounded-xl border border-border bg-white p-3.5 text-base outline-none focus:border-primary-400 sm:text-sm"
             />
           </label>
         </div>

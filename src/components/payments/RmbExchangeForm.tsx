@@ -162,7 +162,7 @@ function SourceStep({
             value={state.amount}
             onChange={(e) => onChange({ amount: e.target.value })}
             placeholder="0.00"
-            className="h-11 w-full rounded-xl border border-border bg-white pl-8 pr-3.5 text-sm outline-none transition-colors focus:border-primary-400"
+            className="h-11 w-full rounded-xl border border-border bg-white pl-8 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
           />
         </div>
         {sourceWallet && (

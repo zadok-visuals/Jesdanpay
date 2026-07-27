@@ -18,8 +18,8 @@ export default function LoginPage() {
     <AuthShell
       imageSrc="/auth-hero-female.png"
       imageAlt="Smiling JesDanPay user holding up the app on their phone"
-      imageWidth={1122}
-      imageHeight={1402}
+      imageWidth={1191}
+      imageHeight={1500}
     >
       <Card className="p-6 sm:p-8">
         <h1 className="mb-1 text-xl font-semibold">Welcome back</h1>

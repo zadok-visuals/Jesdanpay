@@ -60,7 +60,7 @@ export function PasswordInput({
           id={inputId}
           type={visible ? "text" : "password"}
           onChange={handleChange}
-          className={`h-11 w-full rounded-xl border border-border bg-white px-3.5 pr-11 text-sm outline-none transition-colors focus:border-primary-400 ${className}`}
+          className={`h-11 w-full rounded-xl border border-border bg-white px-3.5 pr-11 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm ${className}`}
           {...props}
         />
         <button

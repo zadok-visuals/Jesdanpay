@@ -16,7 +16,7 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      imageSrc="/auth-hero-female.png"
+      imageSrc="/auth-hero-female-v2.png"
       imageAlt="Smiling JesDanPay user holding up the app on their phone"
       imageWidth={1191}
       imageHeight={1500}

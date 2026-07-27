@@ -33,7 +33,7 @@ export function AuthShell({ imageSrc, imageAlt, imageWidth, imageHeight, childre
               alt={imageAlt}
               width={imageWidth}
               height={imageHeight}
-              className="h-auto max-h-[60vh] w-full object-cover object-top"
+              className="h-auto max-h-[70vh] w-full pt-20 object-contain object-bottom"
               priority
             />
           </div>

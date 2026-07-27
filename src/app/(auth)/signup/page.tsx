@@ -16,7 +16,7 @@ export default function SignupPage() {
 
   return (
     <AuthShell
-      imageSrc="/auth-hero-male.png"
+      imageSrc="/auth-hero-male-v2.png"
       imageAlt="Smiling JesDanPay user holding up the app on their phone"
       imageWidth={1191}
       imageHeight={1500}

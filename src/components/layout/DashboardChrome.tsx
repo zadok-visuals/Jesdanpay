@@ -20,8 +20,8 @@ export function DashboardChrome({
   }, [pathname]);
 
   return (
-    <div className="flex min-h-dvh">
-      <div className="sticky top-0 hidden h-dvh md:block">
+    <div className="flex h-dvh overflow-hidden">
+      <div className="hidden h-full md:block">
         <Sidebar />
       </div>
 
@@ -38,9 +38,9 @@ export function DashboardChrome({
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
         <Topbar name={name} onMenuClick={() => setDrawerOpen(true)} />
-        <main className="flex-1 overflow-x-hidden bg-background p-4 sm:p-6">{children}</main>
+        <main className="flex-1 bg-background p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );

@@ -14,7 +14,7 @@ export function AuthShell({ imageSrc, imageAlt, imageWidth, imageHeight, childre
     <div className="flex min-h-dvh">
       <div className="hidden flex-col bg-gradient-to-br from-primary-600 to-primary-800 md:flex md:w-[42%] lg:w-2/5">
         <div className="p-10 pb-0">
-          <div className="w-fit rounded-2xl bg-white p-3">
+          <div className="w-fit rounded-lg bg-white p-3">
             <Wordmark />
           </div>
         </div>

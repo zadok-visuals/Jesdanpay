@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import type { Wallet, Currency, PayoutMethod } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
-import { saveRmbRecipient, type PaymentsActionState } from "@/lib/actions/payments";
+import { submitRmbExchange, type PaymentsActionState } from "@/lib/actions/payments";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -338,21 +338,17 @@ function RecipientStep({
 
 function ConfirmStep({
   state,
-  wallets,
   onBack,
   onSubmit,
   actionState,
   pending,
 }: {
   state: SendState;
-  wallets: Wallet[];
   onBack: () => void;
   onSubmit: () => void;
   actionState: PaymentsActionState;
   pending: boolean;
 }) {
-  const isCnySource = state.sourceCurrency === "CNY";
-  const sourceWallet = wallets.find((w) => w.currency === state.sourceCurrency);
   const amountNum = parseFloat(state.amount) || 0;
   const methodLabel = PAYOUT_METHODS.find((m) => m.value === state.payoutMethod)?.label ?? "";
 
@@ -368,21 +364,7 @@ function ConfirmStep({
       label: "You send",
       value: `${CURRENCY_META[state.sourceCurrency].symbol}${amountNum.toLocaleString("en-US", { minimumFractionDigits: 2 })} ${state.sourceCurrency}`,
     },
-    ...(!isCnySource
-      ? [
-          {
-            label: "Exchange rate",
-            value: "Fetched at send time (Milestone 2)",
-          },
-          { label: "Fee", value: "To be confirmed (Milestone 2)" },
-        ]
-      : [{ label: "Exchange rate", value: "Rate locked at conversion" }]),
-    {
-      label: "Recipient receives",
-      value: isCnySource
-        ? `¥${amountNum.toLocaleString("en-US", { minimumFractionDigits: 2 })} CNY`
-        : "Calculated at send time",
-    },
+    { label: "Rate & fee", value: "Confirmed by our team during review" },
     { label: "Payout method", value: methodLabel },
     { label: "Recipient", value: recipientSummary },
     ...(state.payoutMethod === "bank"
@@ -417,8 +399,9 @@ function ConfirmStep({
           </svg>
         </span>
         <p className="text-xs leading-relaxed text-accent-900">
-          Your recipient details will be saved now. The actual transfer will execute once the Klasha
-          exchange integration is live (Milestone 2).
+          RMB transfers are processed manually by our team — the amount above will be held from your
+          balance now, and we&rsquo;ll confirm the rate and complete your transfer within 1–2 business
+          days.
         </p>
       </div>
 
@@ -430,13 +413,8 @@ function ConfirmStep({
         <Button variant="secondary" onClick={onBack} disabled={pending}>
           Back
         </Button>
-        <Button
-          onClick={onSubmit}
-          loading={pending}
-          title="Exchange provider not yet connected — Milestone 2"
-          className="relative"
-        >
-          {pending ? "Saving…" : "Confirm & Save Recipient"}
+        <Button onClick={onSubmit} loading={pending}>
+          {pending ? "Submitting…" : "Confirm & Submit Request"}
         </Button>
       </div>
     </div>
@@ -452,10 +430,11 @@ function SuccessScreen({ onReset }: { onReset: () => void }) {
         ✅
       </div>
       <div>
-        <p className="text-base font-semibold">Recipient saved!</p>
+        <p className="text-base font-semibold">Request submitted!</p>
         <p className="mt-1 text-sm text-foreground/60">
-          Your recipient details are stored. When Milestone 2 launches, your transfer will execute
-          automatically at the locked-in rate.
+          We&rsquo;ve received your transfer request and held the funds from your balance. Our team
+          will confirm the rate and complete it within 1–2 business days — track its status on the
+          Transactions page.
         </p>
       </div>
       <Button variant="secondary" onClick={onReset}>
@@ -480,6 +459,8 @@ export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
 
   function handleSubmit() {
     const fd = new FormData();
+    fd.set("sourceCurrency", formState.sourceCurrency);
+    fd.set("amount", formState.amount);
     fd.set("payoutMethod", formState.payoutMethod);
     fd.set("recipientAlipayId", formState.recipientAlipayId);
     fd.set("recipientWechatId", formState.recipientWechatId);
@@ -488,9 +469,9 @@ export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
     fd.set("recipientAccountHolderName", formState.recipientAccountHolderName);
 
     startTransition(async () => {
-      const result = await saveRmbRecipient({}, fd);
+      const result = await submitRmbExchange({}, fd);
       setActionState(result);
-      if (result.recipientId && !result.error) {
+      if (result.transactionId && !result.error) {
         setDone(true);
       }
     });
@@ -542,7 +523,6 @@ export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
       {step === "confirm" && (
         <ConfirmStep
           state={formState}
-          wallets={wallets}
           onBack={() => setStep("recipient")}
           onSubmit={handleSubmit}
           actionState={actionState}

@@ -122,6 +122,15 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      create_rmb_manual_transaction: {
+        Args: { p_recipient_id: string; p_currency: Currency; p_amount: number };
+        Returns: string;
+      };
+      admin_reject_rmb_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+    };
   };
 };

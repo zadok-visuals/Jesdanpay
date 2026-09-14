@@ -1,12 +1,12 @@
 export type KycType = "individual" | "business";
 export type KycStatus = "not_started" | "pending" | "approved" | "rejected";
 export type KycTier = "individual_tier_1" | "individual_tier_2" | "individual_tier_3" | "business";
-export type Currency = "USD" | "NGN" | "CNY";
+export type Currency = "USD" | "NGN" | "CNY" | "USDT" | "GHS";
 export type DocumentStatus = "pending" | "approved" | "rejected";
 export type PayoutMethod = "alipay" | "wechat" | "bank";
 
 export type TransactionType = "rmb_manual" | "rmb_auto" | "usdt_ngn";
-export type TransactionProvider = "klasha" | "busha";
+export type TransactionProvider = "klasha" | "busha" | "quidax";
 export type TransactionStatus = "pending" | "processing" | "completed" | "failed";
 
 // NOTE: these row shapes must stay `type` aliases, not `interface` — this
@@ -50,6 +50,10 @@ export type Transaction = {
   status: TransactionStatus;
   amount: number;
   currency: Currency;
+  target_currency: Currency | null;
+  target_amount: number | null;
+  actual_target_amount: number | null;
+  actual_rate_note: string | null;
   provider_reference: string | null;
   created_at: string;
 };
@@ -73,6 +77,17 @@ export type RmbRecipient = {
   recipient_bank_account_number: string | null;
   recipient_bank_name: string | null;
   recipient_account_holder_name: string | null;
+  created_at: string;
+};
+
+export type Deposit = {
+  id: string;
+  user_id: string;
+  currency: Currency;
+  amount: number;
+  status: TransactionStatus;
+  provider: TransactionProvider;
+  provider_reference: string | null;
   created_at: string;
 };
 
@@ -120,6 +135,12 @@ export type Database = {
         Update: Partial<RmbRecipient>;
         Relationships: [];
       };
+      deposits: {
+        Row: Deposit;
+        Insert: Partial<Deposit> & Pick<Deposit, "user_id" | "currency" | "amount" | "provider">;
+        Update: Partial<Deposit>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -129,6 +150,36 @@ export type Database = {
       };
       admin_reject_rmb_transaction: {
         Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      admin_complete_rmb_transaction: {
+        Args: { p_transaction_id: string; p_actual_target_amount: number; p_note: string };
+        Returns: undefined;
+      };
+      set_transaction_provider_reference: {
+        Args: { p_transaction_id: string; p_provider_reference: string };
+        Returns: undefined;
+      };
+      create_quidax_swap_transaction: {
+        Args: {
+          p_source_currency: Currency;
+          p_target_currency: Currency;
+          p_source_amount: number;
+          p_target_amount: number;
+          p_provider_reference: string;
+        };
+        Returns: string;
+      };
+      complete_quidax_swap_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      fail_quidax_swap_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      credit_deposit: {
+        Args: { p_deposit_id: string };
         Returns: undefined;
       };
     };

@@ -36,7 +36,7 @@ const ACTIONS: { label: string; icon: ReactNode; href: string | null }[] = [
   { label: "Send", icon: <SendIcon />, href: null },
   { label: "Convert", icon: <ConvertIcon />, href: null },
   { label: "Exchange RMB", icon: <CurrencyBadge symbol="¥" />, href: "/payments" },
-  { label: "Exchange USDT", icon: <CurrencyBadge symbol="₮" />, href: null },
+  { label: "Exchange USDT", icon: <CurrencyBadge symbol="₮" />, href: "/payments" },
 ];
 
 export function QuickActions() {

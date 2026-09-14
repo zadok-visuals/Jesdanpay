@@ -4,6 +4,8 @@ export const CURRENCY_META: Record<Currency, { flag: string; label: string; symb
   USD: { flag: "🇺🇸", label: "US Dollar", symbol: "$" },
   NGN: { flag: "🇳🇬", label: "Nigerian Naira", symbol: "₦" },
   CNY: { flag: "🇨🇳", label: "Chinese Yuan", symbol: "¥" },
+  USDT: { flag: "₮", label: "Tether USD", symbol: "₮" },
+  GHS: { flag: "🇬🇭", label: "Ghanaian Cedi", symbol: "₵" },
 };
 
 export function formatBalance(currency: Currency, balance: number) {

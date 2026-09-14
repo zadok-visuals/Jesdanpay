@@ -7,19 +7,30 @@ import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Tabs } from "@/components/ui/Tabs";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { DepositForm } from "@/components/wallet/DepositForm";
 
 export function AccountsView({ wallets }: { wallets: Wallet[] }) {
   const currencies = wallets.map((w) => w.currency);
   const [selected, setSelected] = useState(currencies[0] ?? "USD");
+  const [depositOpen, setDepositOpen] = useState(false);
   const wallet = wallets.find((w) => w.currency === selected);
 
   if (!wallet) return null;
 
   const isCny = wallet.currency === "CNY";
+  const isUsdt = wallet.currency === "USDT";
+  const isDepositable = wallet.currency === "NGN" || wallet.currency === "GHS";
 
   return (
     <div className="flex flex-col gap-6">
-      <Tabs options={currencies} value={selected} onChange={setSelected} />
+      <Tabs
+        options={currencies}
+        value={selected}
+        onChange={(c) => {
+          setSelected(c);
+          setDepositOpen(false);
+        }}
+      />
 
       <Card className="p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
@@ -60,11 +71,37 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
               </Link>
             </div>
           </>
+        ) : isUsdt ? (
+          <>
+            {/* USDT-specific note */}
+            <div className="mb-5 flex gap-3 rounded-xl border border-primary-200 bg-primary-50 p-4">
+              <span className="mt-0.5 shrink-0 text-primary-500">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v4" strokeLinecap="round" />
+                  <path d="M12 16h.01" strokeLinecap="round" />
+                </svg>
+              </span>
+              <p className="text-xs leading-relaxed text-primary-800">
+                Exchange USDT to or from NGN at a live rate via Busha, right from your balance.
+              </p>
+            </div>
+
+            <Link href="/payments">
+              <Button variant="secondary">Exchange USDT</Button>
+            </Link>
+          </>
         ) : (
           <div className="flex flex-wrap gap-3">
-            <Button disabled title="Coming soon — Milestone 2">
-              Add Money
-            </Button>
+            {isDepositable ? (
+              <Button onClick={() => setDepositOpen((o) => !o)}>
+                {depositOpen ? "Cancel" : "Add Money"}
+              </Button>
+            ) : (
+              <Button disabled title="Coming soon">
+                Add Money
+              </Button>
+            )}
             <Button variant="secondary" disabled title="Coming soon — Milestone 2">
               Send Money
             </Button>
@@ -72,6 +109,13 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
               Convert Funds
             </Button>
           </div>
+        )}
+
+        {isDepositable && depositOpen && (
+          <DepositForm
+            currency={wallet.currency as "NGN" | "GHS"}
+            onClose={() => setDepositOpen(false)}
+          />
         )}
       </Card>
 
@@ -82,7 +126,9 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
         <p className="text-sm text-foreground/50">
           {isCny
             ? "CNY is held in your JesDanPay balance. To send to a Chinese recipient, use the RMB Exchange flow in Payments."
-            : `Your dedicated ${wallet.currency} account details will appear here once account provisioning is enabled (Milestone 2).`}
+            : isUsdt
+              ? "USDT is held in your JesDanPay balance. Use the USDT Exchange flow in Payments to convert to or from NGN."
+              : `Your dedicated ${wallet.currency} account details will appear here once account provisioning is enabled (Milestone 2).`}
         </p>
       </Card>
     </div>

@@ -43,7 +43,7 @@ const PAYOUT_METHODS: { value: PayoutMethod; label: string; icon: string }[] = [
   { value: "bank", label: "Bank Account", icon: "🏦" },
 ];
 
-const SEND_CURRENCIES: Currency[] = ["NGN", "CNY"];
+const SEND_CURRENCIES: Currency[] = ["NGN", "CNY", "USDT"];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import type { Wallet } from "@/lib/types/database";
-import { ComingSoon } from "@/components/layout/ComingSoon";
 import { RmbExchangeForm } from "@/components/payments/RmbExchangeForm";
+import { UsdtExchangeForm } from "@/components/payments/UsdtExchangeForm";
 
 type Tab = "RMB Exchange" | "USDT Exchange";
 const TABS: Tab[] = ["RMB Exchange", "USDT Exchange"];
@@ -39,10 +39,7 @@ export function PaymentsView({ wallets }: PaymentsViewProps) {
       {activeTab === "RMB Exchange" ? (
         <RmbExchangeForm wallets={wallets} />
       ) : (
-        <ComingSoon
-          title="USDT Exchange"
-          description="USDT ↔ NGN exchange via Busha lands in Milestone 2 once the Busha integration is wired in."
-        />
+        <UsdtExchangeForm wallets={wallets} />
       )}
     </div>
   );

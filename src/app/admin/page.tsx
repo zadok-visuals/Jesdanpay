@@ -71,6 +71,14 @@ export default async function AdminRmbQueuePage() {
                   <p className="text-xs text-foreground/40">
                     {new Date(tx.created_at).toLocaleString()}
                   </p>
+                  {tx.status === "completed" && tx.actual_target_amount != null && (
+                    <p className="mt-1 text-xs text-foreground/60">
+                      Delivered <strong className="font-semibold text-foreground">
+                        ¥{tx.actual_target_amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </strong>
+                      {tx.actual_rate_note && ` · ${tx.actual_rate_note}`}
+                    </p>
+                  )}
                 </div>
 
                 <RmbQueueActions transactionId={tx.id} status={tx.status} />

@@ -6,6 +6,7 @@ export const CURRENCY_META: Record<Currency, { flag: string; label: string; symb
   CNY: { flag: "🇨🇳", label: "Chinese Yuan", symbol: "¥" },
   USDT: { flag: "₮", label: "Tether USD", symbol: "₮" },
   GHS: { flag: "🇬🇭", label: "Ghanaian Cedi", symbol: "₵" },
+  KES: { flag: "🇰🇪", label: "Kenyan Shilling", symbol: "KSh" },
 };
 
 export function formatBalance(currency: Currency, balance: number) {

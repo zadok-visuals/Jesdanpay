@@ -19,7 +19,11 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
 
   const isCny = wallet.currency === "CNY";
   const isUsdt = wallet.currency === "USDT";
-  const isDepositable = wallet.currency === "NGN" || wallet.currency === "GHS";
+  const isDepositable =
+    wallet.currency === "NGN" ||
+    wallet.currency === "GHS" ||
+    wallet.currency === "KES" ||
+    wallet.currency === "USDT";
 
   return (
     <div className="flex flex-col gap-6">
@@ -83,13 +87,19 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
                 </svg>
               </span>
               <p className="text-xs leading-relaxed text-primary-800">
-                Exchange USDT to or from NGN at a live rate via Busha, right from your balance.
+                Exchange USDT to or from NGN, GHS, or KES at a live rate via Busha, right from
+                your balance.
               </p>
             </div>
 
-            <Link href="/payments">
-              <Button variant="secondary">Exchange USDT</Button>
-            </Link>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={() => setDepositOpen((o) => !o)}>
+                {depositOpen ? "Cancel" : "Add Money"}
+              </Button>
+              <Link href="/payments">
+                <Button variant="secondary">Exchange USDT</Button>
+              </Link>
+            </div>
           </>
         ) : (
           <div className="flex flex-wrap gap-3">
@@ -113,7 +123,7 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
 
         {isDepositable && depositOpen && (
           <DepositForm
-            currency={wallet.currency as "NGN" | "GHS"}
+            currency={wallet.currency as "NGN" | "GHS" | "KES" | "USDT"}
             onClose={() => setDepositOpen(false)}
           />
         )}
@@ -127,8 +137,10 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
           {isCny
             ? "CNY is held in your JesDanPay balance. To send to a Chinese recipient, use the RMB Exchange flow in Payments."
             : isUsdt
-              ? "USDT is held in your JesDanPay balance. Use the USDT Exchange flow in Payments to convert to or from NGN."
-              : `Your dedicated ${wallet.currency} account details will appear here once account provisioning is enabled (Milestone 2).`}
+              ? "USDT is held in your JesDanPay balance. Deposit directly, or use the USDT Exchange flow in Payments to convert to or from NGN, GHS, or KES."
+              : isDepositable
+                ? `Use "Add Money" above to deposit ${wallet.currency} via Busha — your balance updates once the transfer is confirmed.`
+                : `Your dedicated ${wallet.currency} account details will appear here once account provisioning is enabled (Milestone 2).`}
         </p>
       </Card>
     </div>

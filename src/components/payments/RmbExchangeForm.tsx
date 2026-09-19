@@ -7,6 +7,7 @@ import { submitRmbExchange, type PaymentsActionState } from "@/lib/actions/payme
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { KlashaCnyForm } from "@/components/payments/KlashaCnyForm";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,11 @@ const PAYOUT_METHODS: { value: PayoutMethod; label: string; icon: string }[] = [
   { value: "bank", label: "Bank Account", icon: "🏦" },
 ];
 
-const SEND_CURRENCIES: Currency[] = ["NGN", "CNY", "USDT"];
+const SEND_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "CNY", "USDT"];
+
+// Klasha's automated CNY settlement only accepts an NGN or GHS balance (see
+// src/lib/klasha/client.ts) — KES and USDT always route to manual OTC.
+const KLASHA_ELIGIBLE: Currency[] = ["NGN", "GHS"];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -101,7 +106,7 @@ function SourceStep({
   wallets: Wallet[];
   state: SendState;
   onChange: (patch: Partial<SendState>) => void;
-  onNext: () => void;
+  onNext: (method: "manual" | "klasha") => void;
 }) {
   const availableCurrencies = SEND_CURRENCIES.filter((c) =>
     wallets.some((w) => w.currency === c),
@@ -198,19 +203,28 @@ function SourceStep({
               {state.sourceCurrency} → CNY exchange rate
             </p>
             <p className="text-xs text-foreground/40">
-              Live rate will be fetched via Klasha at confirmation (Milestone 2)
+              {KLASHA_ELIGIBLE.includes(state.sourceCurrency)
+                ? "Choose Instant below for a live rate now, or Manual OTC to negotiate with our team"
+                : "Rate confirmed manually by our team during review"}
             </p>
           </div>
         </div>
       )}
 
-      <Button
-        disabled={!amountValid}
-        onClick={onNext}
-        className="self-start"
-      >
-        Next — Recipient details
-      </Button>
+      {KLASHA_ELIGIBLE.includes(state.sourceCurrency) ? (
+        <div className="flex flex-wrap gap-3">
+          <Button disabled={!amountValid} onClick={() => onNext("klasha")}>
+            Instant via Klasha
+          </Button>
+          <Button variant="secondary" disabled={!amountValid} onClick={() => onNext("manual")}>
+            Manual OTC
+          </Button>
+        </div>
+      ) : (
+        <Button disabled={!amountValid} onClick={() => onNext("manual")} className="self-start">
+          Next — Recipient details
+        </Button>
+      )}
     </div>
   );
 }
@@ -449,6 +463,7 @@ function SuccessScreen({ onReset }: { onReset: () => void }) {
 export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const [step, setStep] = useState<Step>("source");
   const [formState, setFormState] = useState<SendState>(DEFAULT_STATE);
+  const [method, setMethod] = useState<"manual" | "klasha">("manual");
   const [done, setDone] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [actionState, setActionState] = useState<PaymentsActionState>({});
@@ -507,18 +522,27 @@ export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
           wallets={wallets}
           state={formState}
           onChange={patch}
-          onNext={() => setStep("recipient")}
+          onNext={(chosenMethod) => {
+            setMethod(chosenMethod);
+            setStep("recipient");
+          }}
         />
       )}
 
-      {step === "recipient" && (
+      {step === "recipient" && method === "klasha" ? (
+        <KlashaCnyForm
+          sourceCurrency={formState.sourceCurrency as "NGN" | "GHS"}
+          sourceWallet={wallets.find((w) => w.currency === formState.sourceCurrency)}
+          onBack={() => setStep("source")}
+        />
+      ) : step === "recipient" ? (
         <RecipientStep
           state={formState}
           onChange={patch}
           onBack={() => setStep("source")}
           onNext={() => setStep("confirm")}
         />
-      )}
+      ) : null}
 
       {step === "confirm" && (
         <ConfirmStep

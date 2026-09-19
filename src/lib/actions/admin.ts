@@ -71,3 +71,33 @@ export async function rejectRmbTransaction(
   revalidatePath("/admin");
   return {};
 }
+
+export async function approveKyc(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  await requireAdminUser();
+  const userId = String(formData.get("userId") ?? "");
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("admin_approve_kyc", { p_user_id: userId });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return {};
+}
+
+export async function rejectKyc(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  await requireAdminUser();
+  const userId = String(formData.get("userId") ?? "");
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("admin_reject_kyc", { p_user_id: userId });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return {};
+}

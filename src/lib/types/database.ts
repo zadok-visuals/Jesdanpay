@@ -1,7 +1,7 @@
 export type KycType = "individual" | "business";
 export type KycStatus = "not_started" | "pending" | "approved" | "rejected";
 export type KycTier = "individual_tier_1" | "individual_tier_2" | "individual_tier_3" | "business";
-export type Currency = "USD" | "NGN" | "CNY" | "USDT" | "GHS";
+export type Currency = "USD" | "NGN" | "CNY" | "USDT" | "GHS" | "KES";
 export type DocumentStatus = "pending" | "approved" | "rejected";
 export type PayoutMethod = "alipay" | "wechat" | "bank";
 
@@ -77,6 +77,9 @@ export type RmbRecipient = {
   recipient_bank_account_number: string | null;
   recipient_bank_name: string | null;
   recipient_account_holder_name: string | null;
+  receiver_id_number: string | null;
+  receiver_id_type: string | null;
+  receiver_mobile_number: string | null;
   created_at: string;
 };
 
@@ -160,7 +163,7 @@ export type Database = {
         Args: { p_transaction_id: string; p_provider_reference: string };
         Returns: undefined;
       };
-      create_quidax_swap_transaction: {
+      create_busha_swap_transaction: {
         Args: {
           p_source_currency: Currency;
           p_target_currency: Currency;
@@ -170,16 +173,42 @@ export type Database = {
         };
         Returns: string;
       };
-      complete_quidax_swap_transaction: {
+      complete_busha_swap_transaction: {
         Args: { p_transaction_id: string };
         Returns: undefined;
       };
-      fail_quidax_swap_transaction: {
+      fail_busha_swap_transaction: {
         Args: { p_transaction_id: string };
         Returns: undefined;
       };
       credit_deposit: {
         Args: { p_deposit_id: string };
+        Returns: undefined;
+      };
+      create_klasha_rmb_transaction: {
+        Args: {
+          p_recipient_id: string;
+          p_source_currency: Currency;
+          p_source_amount: number;
+          p_target_amount: number;
+          p_provider_reference: string;
+        };
+        Returns: string;
+      };
+      complete_klasha_rmb_transaction: {
+        Args: { p_transaction_id: string; p_actual_target_amount: number };
+        Returns: undefined;
+      };
+      fail_klasha_rmb_transaction: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      admin_approve_kyc: {
+        Args: { p_user_id: string };
+        Returns: undefined;
+      };
+      admin_reject_kyc: {
+        Args: { p_user_id: string };
         Returns: undefined;
       };
     };

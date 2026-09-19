@@ -3,18 +3,26 @@
 import { useEffect, useState, useTransition } from "react";
 import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
-import { getSwapQuote, confirmSwap, type QuidaxActionState } from "@/lib/actions/quidax";
+import { getSwapQuote, confirmSwap, type BushaActionState } from "@/lib/actions/busha";
 import type { Currency } from "@/lib/types/database";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
-type Direction = "USDT_TO_NGN" | "NGN_TO_USDT" | "USDT_TO_GHS" | "GHS_TO_USDT";
+type Direction =
+  | "USDT_TO_NGN"
+  | "NGN_TO_USDT"
+  | "USDT_TO_GHS"
+  | "GHS_TO_USDT"
+  | "USDT_TO_KES"
+  | "KES_TO_USDT";
 
 const DIRECTIONS: { value: Direction; source: Currency; target: Currency; label: string }[] = [
   { value: "NGN_TO_USDT", source: "NGN", target: "USDT", label: "NGN → USDT" },
   { value: "USDT_TO_NGN", source: "USDT", target: "NGN", label: "USDT → NGN" },
   { value: "GHS_TO_USDT", source: "GHS", target: "USDT", label: "GHS → USDT" },
   { value: "USDT_TO_GHS", source: "USDT", target: "GHS", label: "USDT → GHS" },
+  { value: "KES_TO_USDT", source: "KES", target: "USDT", label: "KES → USDT" },
+  { value: "USDT_TO_KES", source: "USDT", target: "KES", label: "USDT → KES" },
 ];
 
 function useCountdown(expiresAt: string | undefined) {
@@ -41,7 +49,7 @@ function SuccessScreen({ onReset }: { onReset: () => void }) {
       <div>
         <p className="text-base font-semibold">Exchange submitted!</p>
         <p className="mt-1 text-sm text-foreground/60">
-          Your funds will appear once Quidax confirms the exchange — usually within minutes. Track its
+          Your funds will appear once Busha confirms the exchange — usually within minutes. Track its
           status on the Transactions page.
         </p>
       </div>
@@ -55,8 +63,8 @@ function SuccessScreen({ onReset }: { onReset: () => void }) {
 export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const [direction, setDirection] = useState<Direction>("NGN_TO_USDT");
   const [amount, setAmount] = useState("");
-  const [quoteState, setQuoteState] = useState<QuidaxActionState>({});
-  const [confirmState, setConfirmState] = useState<QuidaxActionState>({});
+  const [quoteState, setQuoteState] = useState<BushaActionState>({});
+  const [confirmState, setConfirmState] = useState<BushaActionState>({});
   const [done, setDone] = useState(false);
   const [isQuoting, startQuoting] = useTransition();
   const [isConfirming, startConfirming] = useTransition();

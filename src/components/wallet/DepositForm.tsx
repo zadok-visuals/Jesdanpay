@@ -1,14 +1,22 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { getDepositQuote, initiateDeposit, type DepositQuoteState } from "@/lib/actions/quidax";
+import {
+  getDepositQuote,
+  initiateDeposit,
+  type DepositQuoteState,
+  type DepositActionState,
+} from "@/lib/actions/busha";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
+import type { Currency } from "@/lib/types/database";
 
-export function DepositForm({ currency, onClose }: { currency: "NGN" | "GHS"; onClose: () => void }) {
+type DepositableCurrency = "NGN" | "GHS" | "KES" | "USDT";
+
+export function DepositForm({ currency, onClose }: { currency: DepositableCurrency; onClose: () => void }) {
   const [amount, setAmount] = useState("");
   const [quoteState, setQuoteState] = useState<DepositQuoteState>({});
-  const [depositError, setDepositError] = useState<string | undefined>();
+  const [depositState, setDepositState] = useState<DepositActionState>({});
   const [isQuoting, startQuoting] = useTransition();
   const [isDepositing, startDepositing] = useTransition();
 
@@ -19,15 +27,80 @@ export function DepositForm({ currency, onClose }: { currency: "NGN" | "GHS"; on
     startQuoting(async () => {
       const result = await getDepositQuote({}, fd);
       setQuoteState(result);
-      setDepositError(undefined);
+      setDepositState({});
     });
   }
 
   function handleDeposit() {
+    if (!quoteState.quoteId) return;
+    const fd = new FormData();
+    fd.set("quoteId", quoteState.quoteId);
+    fd.set("currency", currency);
+    fd.set("amount", quoteState.amount ?? amount);
     startDepositing(async () => {
-      const result = await initiateDeposit({}, new FormData());
-      setDepositError(result.error);
+      const result = await initiateDeposit({}, fd);
+      setDepositState(result);
     });
+  }
+
+  if (depositState.bankDetails) {
+    const { accountName, accountNumber, bankName, expiresAt } = depositState.bankDetails;
+    return (
+      <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">Transfer to complete your deposit</p>
+          <button type="button" onClick={onClose} className="text-xs text-foreground/50 hover:text-foreground">
+            Close
+          </button>
+        </div>
+        <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+          {[
+            { label: "Bank", value: bankName },
+            { label: "Account number", value: accountNumber },
+            { label: "Account name", value: accountName },
+          ].map(({ label, value }) => (
+            <div key={label} className="flex items-center justify-between gap-4 px-4 py-3">
+              <dt className="text-sm text-foreground/60">{label}</dt>
+              <dd className="text-sm font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="text-xs text-foreground/50">
+          Transfer exactly {formatBalance(currency as Currency, Number(quoteState.amount))} to the account
+          above{expiresAt ? ` before ${new Date(expiresAt).toLocaleString()}` : ""}. Your wallet is
+          credited automatically once the transfer is confirmed.
+        </p>
+      </div>
+    );
+  }
+
+  if (depositState.cryptoAddress) {
+    const { address, network, expiresAt } = depositState.cryptoAddress;
+    return (
+      <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">Send USDT to complete your deposit</p>
+          <button type="button" onClick={onClose} className="text-xs text-foreground/50 hover:text-foreground">
+            Close
+          </button>
+        </div>
+        <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-foreground/60">Network</dt>
+            <dd className="text-sm font-medium">{network || "—"}</dd>
+          </div>
+          <div className="flex flex-col gap-1 px-4 py-3">
+            <dt className="text-sm text-foreground/60">Address</dt>
+            <dd className="break-all text-sm font-medium">{address}</dd>
+          </div>
+        </dl>
+        <p className="text-xs text-foreground/50">
+          Send exactly {quoteState.amount} USDT to the address above
+          {expiresAt ? ` before ${new Date(expiresAt).toLocaleString()}` : ""}. Your wallet is credited
+          automatically once the deposit is confirmed on-chain.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -45,7 +118,7 @@ export function DepositForm({ currency, onClose }: { currency: "NGN" | "GHS"; on
         </label>
         <div className="relative">
           <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-foreground/50">
-            {CURRENCY_META[currency].symbol}
+            {CURRENCY_META[currency as Currency].symbol}
           </span>
           <input
             id="depositAmount"
@@ -65,25 +138,21 @@ export function DepositForm({ currency, onClose }: { currency: "NGN" | "GHS"; on
 
       {quoteState.error && <p className="text-sm text-danger-500">{quoteState.error}</p>}
 
-      {quoteState.toAmount ? (
+      {quoteState.quoteId ? (
         <div className="overflow-hidden rounded-xl border border-border">
           <dl className="divide-y divide-border">
             <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-sm text-foreground/60">You&rsquo;ll receive (est.)</dt>
-              <dd className="text-sm font-medium">{quoteState.toAmount} USDT</dd>
-            </div>
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
               <dt className="text-sm text-foreground/60">Fee</dt>
-              <dd className="text-sm font-medium">{formatBalance(currency, Number(quoteState.fee))}</dd>
+              <dd className="text-sm font-medium">{formatBalance(currency as Currency, Number(quoteState.fee))}</dd>
             </div>
           </dl>
         </div>
       ) : null}
 
-      {depositError && <p className="text-sm text-danger-500">{depositError}</p>}
+      {depositState.error && <p className="text-sm text-danger-500">{depositState.error}</p>}
 
       <div className="flex gap-3">
-        {!quoteState.toAmount ? (
+        {!quoteState.quoteId ? (
           <Button
             onClick={handleGetQuote}
             loading={isQuoting}

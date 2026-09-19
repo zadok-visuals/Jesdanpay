@@ -1,14 +1,19 @@
-// Server-only. Thin fetch wrapper over Klasha's CNY Payout API (developers.klasha.com) — the
-// automated China-vendor-settlement leg. Not a deposit/collection provider for this app: the
-// user's NGN/GHS balance (already funded via Busha) is what gets debited; this client only
-// ever talks to Klasha to convert that value to CNY and pay the vendor.
+// Server-only. Thin fetch wrapper over Klasha's API (developers.klasha.com) — covers both:
+//   1. The CNY Payout API — the automated China-vendor-settlement leg (quote -> bank codes ->
+//      transfer), funded from an existing NGN/GHS balance.
+//   2. The Payments/Collection API — deposit collection for NGN and GHS. Confirmed from docs:
+//      `productType: "COLLECTION"`, currency enum is `NGN|ZAR|GHS` — no KES, no crypto/USDT
+//      anywhere in this API. KES stays on Busha; USDT has no Klasha product to attempt at all,
+//      confirmed by absence rather than left unconfirmed.
 //
-// Confirmed real and programmatic: quote -> bank codes -> transfer, with a live `fxRate` and a
-// webhook reporting payout status. Two things are NOT guessed at and must be confirmed against
-// a real sandbox account before this goes live:
-//   1. Whether `sourceCurrency` accepts 'NGN' — the only documented example uses 'USD'.
+// Things NOT guessed at and still needing a real sandbox/production test once Klasha support
+// clears account access:
+//   1. Whether the CNY payout's `sourceCurrency` accepts 'NGN' — the only documented example
+//      uses 'USD'.
 //   2. The exact 3DES parameters below (key length, IV derivation) — implemented per Klasha's
 //      own encryption-algorithm docs, but untested against a live key.
+//   3. Whether the collection webhook (`charge.completed`) payload is encrypted the same way
+//      as request bodies — undocumented; the webhook route tries a plaintext parse first.
 
 import { createCipheriv, createDecipheriv } from "node:crypto";
 
@@ -160,6 +165,54 @@ export function initiateCnyTransfer(params: KlashaTransferRequest): Promise<Klas
       receiverLastName: params.receiverLastName,
       receiverMobileNumber: params.receiverMobileNumber,
       requestId: params.requestId,
+    },
+  });
+}
+
+export type KlashaCollectionResult = {
+  tx_ref: string;
+  meta: {
+    authorization: {
+      mode: "banktransfer" | "redirect";
+      transfer_account?: string;
+      transfer_bank?: string;
+      transfer_amount?: number;
+      account_expiration?: string;
+      redirect?: string;
+    };
+  };
+  status: string;
+};
+
+// POST /pay/aggregators/{gateway}/banktransfer/v3 — deposit collection. NGN returns bank
+// account details directly; GHS (like ZAR) returns a redirect URL to Klasha's hosted payment
+// page instead — confirmed from docs, not guessed. No separate quote/fee-preview step exists
+// for this endpoint, unlike Busha's quote-then-transfer pattern.
+export function createCollection(params: {
+  txRef: string;
+  currency: "NGN" | "GHS";
+  amount: string;
+  email: string;
+  phoneNumber: string;
+  fullName: string;
+  redirectUrl?: string;
+}): Promise<KlashaCollectionResult> {
+  return request(`/pay/aggregators/${params.currency}/banktransfer/v3`, {
+    method: "POST",
+    body: {
+      tx_ref: params.txRef,
+      amount: params.amount,
+      email: params.email,
+      phone_number: params.phoneNumber,
+      currency: params.currency,
+      narration: "JesDanPay wallet deposit",
+      rate: 1,
+      paymentType: "woo",
+      productType: "COLLECTION",
+      sourceCurrency: params.currency,
+      sourceAmount: Number(params.amount),
+      fullname: params.fullName,
+      ...(params.currency === "GHS" ? { redirect_url: params.redirectUrl } : {}),
     },
   });
 }

@@ -1,18 +1,23 @@
 // Server-only. Thin fetch wrapper over Busha's Business API (docs.busha.io) — the sole
 // deposit/swap provider for NGN, GHS, KES, and USDT.
 //
-// One generic quote -> transfer pattern serves both deposits and swaps, confirmed against
-// docs.busha.io's real reference pages:
-//   - A deposit is a same-currency quote (source_currency === target_currency); the resulting
-//     transfer's `pay_in` carries a temporary bank account (fiat) or a one-time receiving
-//     address (crypto) to show the user.
+// One generic quote -> transfer pattern serves both deposits and swaps — confirmed live
+// against a real Busha Business account, not just from docs:
+//   - A deposit is a same-currency quote (source_currency === target_currency) with a `pay_in`
+//     object on the request; the resulting transfer's `pay_in` carries a temporary bank
+//     account (fiat) or a one-time receiving address (crypto) to show the user.
 //   - A swap is a quote between two different currencies; the transfer executes it directly,
 //     no pay_in details needed since the source balance already sits inside Busha.
+//
+// The base URL defaults to Busha's production host — a real registered Busha Business
+// account's secret key was rejected outright by the documented sandbox host
+// (api.sandbox.busha.so) but worked immediately against api.busha.io, so a real business
+// account may simply not have a usable sandbox counterpart.
 //
 // Unconfirmed and NOT guessed at: the exact webhook signature scheme (see the webhook route's
 // header comment) — confirm against a real dashboard before trusting any signature check.
 
-const BASE_URL = process.env.BUSHA_API_BASE_URL ?? "https://api.sandbox.busha.so";
+const BASE_URL = process.env.BUSHA_API_BASE_URL ?? "https://api.busha.io";
 
 export class BushaError extends Error {
   constructor(

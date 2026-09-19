@@ -189,7 +189,6 @@ export async function initiateDeposit(
 
   const quoteId = String(formData.get("quoteId") ?? "");
   const currency = String(formData.get("currency") ?? "").toUpperCase() as Currency;
-  const amount = String(formData.get("amount") ?? "");
   if (!quoteId) return { error: "Missing quote." };
 
   let transfer;
@@ -200,10 +199,14 @@ export async function initiateDeposit(
   }
 
   const admin = createAdminClient();
+  // Credit the wallet for Busha's own confirmed `target_amount` (net of their gateway fee),
+  // not the gross amount the client asked to deposit — confirmed live that a ₦2,000 deposit
+  // quote returns `target_amount: "1900"` after a ₦100 fee, so crediting the raw requested
+  // amount would over-credit the user by the fee every time.
   const { error: insertError } = await admin.from("deposits").insert({
     user_id: user.id,
     currency,
-    amount: Number(amount),
+    amount: Number(transfer.target_amount),
     provider: "busha",
     provider_reference: transfer.id,
   });
@@ -219,7 +222,7 @@ export async function initiateDeposit(
     };
   }
 
-  const details = transfer.pay_in.payer_details;
+  const details = transfer.pay_in.recipient_details;
   return {
     bankDetails: {
       accountName: details?.account_name ?? "",

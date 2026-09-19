@@ -55,10 +55,13 @@ export type BushaPayInDetails = {
   address?: string;
   network?: string;
   expires_at?: string;
-  payer_details?: {
+  // Confirmed live against a real transfer response — the field is `recipient_details`, not
+  // `payer_details` as originally guessed from docs.
+  recipient_details?: {
     account_name?: string;
     account_number?: string;
     bank_name?: string;
+    bank_code?: string;
     email?: string;
   };
 };
@@ -101,19 +104,32 @@ export type BushaTransfer = {
 
 // POST /v1/quotes — pass the same currency for source/target to get a deposit quote (no
 // conversion); pass different currencies for a swap quote.
+//
+// Deposit `pay_in` shape depends on whether the currency is fiat or crypto — confirmed live
+// against a real account: fiat wants `{type: "temporary_bank_account"}`, but a bare USDT
+// deposit needs `{type: "address", network: "BSC"}` — this account's real Busha balance only
+// accepts USDT over BSC, not the more commonly assumed TRC20/ERC20 (both rejected outright:
+// "Invalid network. TRC20/ERC20 is not supported by USDT" on this account).
 export function createQuote(params: {
   sourceCurrency: string;
   targetCurrency: string;
   sourceAmount: string;
   isDeposit?: boolean;
 }): Promise<BushaQuote> {
+  const currency = params.sourceCurrency.toUpperCase();
+  const payIn = params.isDeposit
+    ? currency === "USDT"
+      ? { pay_in: { type: "address", network: "BSC" } }
+      : { pay_in: { type: "temporary_bank_account" } }
+    : {};
+
   return request("/v1/quotes", {
     method: "POST",
     body: {
-      source_currency: params.sourceCurrency.toUpperCase(),
+      source_currency: currency,
       target_currency: params.targetCurrency.toUpperCase(),
       source_amount: params.sourceAmount,
-      ...(params.isDeposit ? { pay_in: { type: "temporary_bank_account" } } : {}),
+      ...payIn,
     },
   });
 }

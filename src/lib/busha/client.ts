@@ -1,5 +1,5 @@
 // Server-only. Thin fetch wrapper over Busha's Business API (docs.busha.io) — the sole
-// deposit/swap provider for NGN, GHS, KES, and USDT, replacing Quidax entirely.
+// deposit/swap provider for NGN, GHS, KES, and USDT.
 //
 // One generic quote -> transfer pattern serves both deposits and swaps, confirmed against
 // docs.busha.io's real reference pages:

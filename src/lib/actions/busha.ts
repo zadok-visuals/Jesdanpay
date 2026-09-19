@@ -174,9 +174,9 @@ export interface DepositActionState {
 }
 
 // Executes the deposit quote, recording a pending `deposits` row (service-role insert — no
-// insert policy exists for regular users, same as the removed Quidax version) and returning
-// whatever payment instructions Busha generated so the UI can display them. The webhook
-// credits the wallet once Busha confirms funds received.
+// insert policy exists for regular users) and returning whatever payment instructions Busha
+// generated so the UI can display them. The webhook credits the wallet once Busha confirms
+// funds received.
 export async function initiateDeposit(
   _prevState: DepositActionState,
   formData: FormData,

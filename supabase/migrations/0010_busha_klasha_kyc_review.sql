@@ -1,5 +1,5 @@
--- Migration 0010: KES wallet provisioning, Busha deposit/swap functions (replacing Quidax),
--- Klasha automated CNY-settlement functions, and admin KYC review.
+-- Migration 0010: KES wallet provisioning, Busha deposit/swap functions, Klasha automated
+-- CNY-settlement functions, and admin KYC review.
 --
 -- Must run after 0009 (which adds 'KES' to the currency enum) has been executed and committed
 -- as a separate script — see 0009's header comment.
@@ -34,8 +34,8 @@ where not exists (
 );
 
 -- ── 3. Busha swap: create / complete / fail ──────────────────────────────────────
--- Replaces the Quidax versions from 0008 (Quidax is being removed entirely) — identical
--- shape, provider='busha'. Handles NGN/GHS/KES <-> USDT, any pair.
+-- Same shape as the USDT exchange functions in 0006, provider='busha'. Handles
+-- NGN/GHS/KES <-> USDT, any pair.
 create or replace function create_busha_swap_transaction(
   p_source_currency currency,
   p_target_currency currency,

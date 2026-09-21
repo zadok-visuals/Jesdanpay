@@ -11,80 +11,32 @@ function PlusIcon() {
   );
 }
 
-function SendIcon() {
-  return (
-    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M7 17 17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ConvertIcon() {
-  return (
-    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M6 8h13l-3.5-3.5M18 16H5l3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 function CurrencyBadge({ symbol }: { symbol: string }) {
   return <span className="text-[15px] font-bold leading-none">{symbol}</span>;
 }
 
-const ACTIONS: { label: string; icon: ReactNode; href: string | null }[] = [
-  { label: "Add Money", icon: <PlusIcon />, href: null },
-  { label: "Send", icon: <SendIcon />, href: null },
-  { label: "Convert", icon: <ConvertIcon />, href: null },
+// "Send" and "Convert" were dropped from here — once given real destinations they were exact
+// duplicates of "Exchange RMB" and "Exchange USDT" below (the only send/convert features that
+// actually exist), so having both was confusing rather than useful.
+const ACTIONS: { label: string; icon: ReactNode; href: string }[] = [
+  { label: "Add Money", icon: <PlusIcon />, href: "/accounts" },
   { label: "Exchange RMB", icon: <CurrencyBadge symbol="¥" />, href: "/payments" },
-  { label: "Exchange USDT", icon: <CurrencyBadge symbol="₮" />, href: "/payments" },
+  { label: "Exchange USDT", icon: <CurrencyBadge symbol="₮" />, href: "/payments?tab=usdt" },
 ];
 
 export function QuickActions() {
   return (
     <div className="flex flex-nowrap justify-center gap-2 sm:gap-3">
-      {ACTIONS.map((action) => {
-        const inner = (
-          <span
-            className={`flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium transition-colors sm:w-18 sm:text-xs ${
-              action.href
-                ? "text-foreground/70 hover:text-primary-700"
-                : "cursor-not-allowed text-foreground/50"
-            }`}
-            title={action.href ? undefined : "Coming soon — Milestone 2"}
-          >
-            <span
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors sm:h-11 sm:w-11 ${
-                action.href
-                  ? "bg-primary-50 text-primary-600 hover:bg-primary-100"
-                  : "bg-primary-50 text-primary-600 opacity-50"
-              }`}
-            >
+      {ACTIONS.map((action) => (
+        <Link key={action.label} href={action.href}>
+          <span className="flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium text-foreground/70 transition-colors hover:text-primary-700 sm:w-18 sm:text-xs">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary-100 sm:h-11 sm:w-11">
               {action.icon}
             </span>
             <span className="leading-tight">{action.label}</span>
           </span>
-        );
-
-        if (action.href) {
-          return (
-            <Link key={action.label} href={action.href}>
-              {inner}
-            </Link>
-          );
-        }
-
-        return (
-          <button
-            key={action.label}
-            type="button"
-            disabled
-            title="Coming soon — Milestone 2"
-            className="appearance-none"
-          >
-            {inner}
-          </button>
-        );
-      })}
+        </Link>
+      ))}
     </div>
   );
 }

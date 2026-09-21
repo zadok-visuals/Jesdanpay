@@ -17,12 +17,9 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
 
   if (!wallet) return null;
 
+  // Every wallet currency that still exists (NGN, GHS, KES, USDT) is depositable — USD and
+  // CNY, the only two that weren't, are no longer provisioned at all (see migration 0012).
   const isUsdt = wallet.currency === "USDT";
-  const isDepositable =
-    wallet.currency === "NGN" ||
-    wallet.currency === "GHS" ||
-    wallet.currency === "KES" ||
-    wallet.currency === "USDT";
 
   return (
     <div className="flex flex-col gap-6">
@@ -67,32 +64,26 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
               <Button onClick={() => setDepositOpen((o) => !o)}>
                 {depositOpen ? "Cancel" : "Add Money"}
               </Button>
-              <Link href="/payments">
+              <Link href="/payments?tab=usdt">
                 <Button variant="secondary">Exchange USDT</Button>
               </Link>
             </div>
           </>
         ) : (
           <div className="flex flex-wrap gap-3">
-            {isDepositable ? (
-              <Button onClick={() => setDepositOpen((o) => !o)}>
-                {depositOpen ? "Cancel" : "Add Money"}
-              </Button>
-            ) : (
-              <Button disabled title="Coming soon">
-                Add Money
-              </Button>
-            )}
-            <Button variant="secondary" disabled title="Coming soon — Milestone 2">
-              Send Money
+            <Button onClick={() => setDepositOpen((o) => !o)}>
+              {depositOpen ? "Cancel" : "Add Money"}
             </Button>
-            <Button variant="secondary" disabled title="Coming soon — Milestone 2">
-              Convert Funds
-            </Button>
+            <Link href="/payments">
+              <Button variant="secondary">Send to China</Button>
+            </Link>
+            <Link href="/payments?tab=usdt">
+              <Button variant="secondary">Exchange to USDT</Button>
+            </Link>
           </div>
         )}
 
-        {isDepositable && depositOpen && (
+        {depositOpen && (
           <DepositForm
             currency={wallet.currency as "NGN" | "GHS" | "KES" | "USDT"}
             onClose={() => setDepositOpen(false)}
@@ -107,9 +98,7 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
         <p className="text-sm text-foreground/50">
           {isUsdt
             ? "USDT is held in your JesDanPay balance. Deposit directly, or use the USDT Exchange flow in Payments to convert to or from NGN, GHS, or KES."
-            : isDepositable
-                ? `Use "Add Money" above to deposit ${wallet.currency} — your balance updates once the transfer is confirmed.`
-                : `Your dedicated ${wallet.currency} account details will appear here once account provisioning is enabled (Milestone 2).`}
+            : `Use "Add Money" above to deposit ${wallet.currency} — your balance updates once the transfer is confirmed.`}
         </p>
       </Card>
     </div>

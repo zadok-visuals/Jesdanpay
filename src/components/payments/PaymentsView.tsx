@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Wallet } from "@/lib/types/database";
 import { RmbExchangeForm } from "@/components/payments/RmbExchangeForm";
 import { UsdtExchangeForm } from "@/components/payments/UsdtExchangeForm";
@@ -13,7 +14,11 @@ interface PaymentsViewProps {
 }
 
 export function PaymentsView({ wallets }: PaymentsViewProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("RMB Exchange");
+  // Lets other pages deep-link into a specific tab, e.g. /payments?tab=usdt from the
+  // dashboard's quick actions — falls back to RMB Exchange when absent/unrecognized.
+  const searchParams = useSearchParams();
+  const initialTab: Tab = searchParams.get("tab") === "usdt" ? "USDT Exchange" : "RMB Exchange";
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   return (
     <div className="flex flex-col gap-6">

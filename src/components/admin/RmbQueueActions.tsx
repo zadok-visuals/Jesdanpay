@@ -71,7 +71,7 @@ function CompleteForm({ transactionId }: { transactionId: string }) {
         id={`note-${transactionId}`}
         name="note"
         type="text"
-        placeholder="e.g. Klasha rate used"
+        placeholder="e.g. rate used, settlement notes"
         className="w-full"
       />
       {state.error && <p className="text-xs text-danger-500">{state.error}</p>}

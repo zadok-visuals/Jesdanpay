@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Currency } from "@/lib/types/database";
 import * as busha from "@/lib/busha/client";
 import { applyMarkup, formatEffectiveRate } from "@/lib/busha/markup";
+import { toCustomerError } from "@/lib/provider-error";
 
 export interface BushaQuoteView {
   id: string;
@@ -72,7 +73,7 @@ export async function getSwapQuote(
       },
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Could not get a quote right now." };
+    return { error: toCustomerError(err, "busha.getSwapQuote") };
   }
 }
 
@@ -96,7 +97,7 @@ export async function confirmSwap(
   try {
     transfer = await busha.createTransfer(quoteId);
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Could not execute the swap." };
+    return { error: toCustomerError(err, "busha.confirmSwap") };
   }
 
   const sourceCurrency = transfer.source_currency.toUpperCase() as Currency;
@@ -150,7 +151,7 @@ export async function getDepositQuote(
   // NGN/GHS deposit access has been blocked account-wide since it was built. GHS stays on
   // Klasha since Busha's real account rejects it outright ("Invalid Currency GHS").
   if (currency !== "NGN" && currency !== "KES" && currency !== "USDT") {
-    return { error: "Busha deposits are only available in NGN, KES, or USDT." };
+    return { error: "Deposits are only available in NGN, KES, or USDT." };
   }
   if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
     return { error: "Enter a valid amount." };
@@ -166,7 +167,7 @@ export async function getDepositQuote(
     const fee = quote.fees.reduce((sum, f) => sum + Number(f.amount.amount), 0);
     return { quoteId: quote.id, fee: fee.toFixed(2), amount, currency };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Could not get a deposit quote right now." };
+    return { error: toCustomerError(err, "busha.getDepositQuote") };
   }
 }
 
@@ -198,7 +199,7 @@ export async function initiateDeposit(
   try {
     transfer = await busha.createTransfer(quoteId);
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Could not start the deposit." };
+    return { error: toCustomerError(err, "busha.initiateDeposit") };
   }
 
   const admin = createAdminClient();

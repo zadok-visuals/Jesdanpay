@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import * as klasha from "@/lib/klasha/client";
+import { toCustomerError } from "@/lib/provider-error";
 
 export interface KlashaDepositState {
   error?: string;
@@ -30,7 +31,7 @@ export async function initiateKlashaDeposit(
   const amount = String(formData.get("amount") ?? "");
 
   if (currency !== "GHS") {
-    return { error: "Klasha deposits are only available in GHS." };
+    return { error: "This deposit method only supports GHS." };
   }
   if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
     return { error: "Enter a valid amount." };
@@ -42,7 +43,7 @@ export async function initiateKlashaDeposit(
     .eq("id", user.id)
     .single();
   if (!profile?.phone) {
-    return { error: "Add a phone number to your profile (complete KYC) before depositing via Klasha." };
+    return { error: "Add a phone number to your profile (complete KYC) before depositing." };
   }
 
   const txRef = randomUUID();
@@ -62,7 +63,7 @@ export async function initiateKlashaDeposit(
       redirectUrl: `${appUrl}/accounts`,
     });
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Could not start the deposit." };
+    return { error: toCustomerError(err, "klasha.initiateKlashaDeposit") };
   }
 
   const admin = createAdminClient();

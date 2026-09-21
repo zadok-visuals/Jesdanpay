@@ -74,6 +74,8 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const sourceWallet = wallets.find((w) => w.currency === config.source);
   const secondsLeft = useCountdown(quoteState.quote?.expiresAt);
   const quoteExpired = quoteState.quote ? secondsLeft <= 0 : false;
+  const amountNum = Number(amount) || 0;
+  const amountValid = amountNum > 0 && amountNum <= (sourceWallet?.balance ?? 0);
 
   function handleGetQuote() {
     const fd = new FormData();
@@ -167,7 +169,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
           <Button
             onClick={handleGetQuote}
             loading={isQuoting}
-            disabled={!amount || Number(amount) <= 0}
+            disabled={!amountValid}
             className="self-start"
           >
             Get quote

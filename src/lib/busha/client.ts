@@ -44,7 +44,11 @@ async function request<T>(path: string, options: { method: "GET" | "POST"; body?
 
   const json = await res.json().catch(() => null);
   if (!res.ok || json?.status === "error") {
-    const message = json?.message ?? `Busha request failed (${res.status})`;
+    // Busha's real error shape is {"error":{"name":..., "message":...}} — confirmed live
+    // (e.g. {"error":{"name":"Bad Request","message":"insufficient balance"}}). There is no
+    // top-level `message` field on error responses, so reading json.message directly always
+    // fell through to the generic fallback below instead of the actual reason.
+    const message = json?.error?.message ?? json?.message ?? `Busha request failed (${res.status})`;
     throw new BushaError(message, res.status);
   }
   return json.data as T;

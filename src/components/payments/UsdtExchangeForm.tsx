@@ -49,7 +49,7 @@ function SuccessScreen({ onReset }: { onReset: () => void }) {
       <div>
         <p className="text-base font-semibold">Exchange submitted!</p>
         <p className="mt-1 text-sm text-foreground/60">
-          Your funds will appear once Busha confirms the exchange — usually within minutes. Track its
+          Your funds will appear once the exchange is confirmed — usually within minutes. Track its
           status on the Transactions page.
         </p>
       </div>
@@ -160,7 +160,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
-                className="h-11 w-full rounded-xl border border-border bg-white pl-8 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
+                className="h-11 w-full rounded-xl border border-border bg-white pl-14 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
               />
             </div>
             {sourceWallet && (

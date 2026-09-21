@@ -53,7 +53,7 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <p className="text-xs text-foreground/50">
-          Klasha needs you to finish this payment on their secure page. Your wallet is credited
+          Finish this payment on the secure page that opens next. Your wallet is credited
           automatically once it's confirmed.
         </p>
         <a href={state.redirectUrl} target="_blank" rel="noopener noreferrer" className="self-start">
@@ -88,7 +88,7 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
-            className="h-11 w-full rounded-xl border border-border bg-white pl-8 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
+            className="h-11 w-full rounded-xl border border-border bg-white pl-14 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
           />
         </div>
       </div>
@@ -226,7 +226,7 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
               setQuoteState({});
             }}
             placeholder="0.00"
-            className="h-11 w-full rounded-xl border border-border bg-white pl-8 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
+            className="h-11 w-full rounded-xl border border-border bg-white pl-14 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
           />
         </div>
       </div>

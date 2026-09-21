@@ -58,7 +58,7 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
                 </svg>
               </span>
               <p className="text-xs leading-relaxed text-primary-800">
-                Exchange USDT to or from NGN, GHS, or KES at a live rate via Busha, right from
+                Exchange USDT to or from NGN, GHS, or KES at a live rate, right from
                 your balance.
               </p>
             </div>
@@ -108,9 +108,7 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
           {isUsdt
             ? "USDT is held in your JesDanPay balance. Deposit directly, or use the USDT Exchange flow in Payments to convert to or from NGN, GHS, or KES."
             : isDepositable
-                ? `Use "Add Money" above to deposit ${wallet.currency} via ${
-                    wallet.currency === "GHS" ? "Klasha" : "Busha"
-                  } — your balance updates once the transfer is confirmed.`
+                ? `Use "Add Money" above to deposit ${wallet.currency} — your balance updates once the transfer is confirmed.`
                 : `Your dedicated ${wallet.currency} account details will appear here once account provisioning is enabled (Milestone 2).`}
         </p>
       </Card>

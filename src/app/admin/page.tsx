@@ -14,32 +14,21 @@ const PAYOUT_LABELS: Record<string, string> = {
 export default async function AdminPage() {
   const admin = createAdminClient();
 
-  const [{ data: rmbTransactions }, { data: klashaTransactions }, { data: pendingProfiles }] =
-    await Promise.all([
-      admin.from("transactions").select("*").eq("type", "rmb_manual").order("created_at", { ascending: false }),
-      admin
-        .from("transactions")
-        .select("*")
-        .eq("type", "rmb_auto")
-        .eq("provider", "klasha")
-        .order("created_at", { ascending: false }),
-      admin.from("profiles").select("id, email, full_name, kyc_type").eq("kyc_status", "pending"),
-    ]);
+  const [{ data: rmbTransactions }, { data: pendingProfiles }] = await Promise.all([
+    admin.from("transactions").select("*").eq("type", "rmb_manual").order("created_at", { ascending: false }),
+    admin.from("profiles").select("id, email, full_name, kyc_type").eq("kyc_status", "pending"),
+  ]);
 
-  const allTxIds = [...(rmbTransactions ?? []), ...(klashaTransactions ?? [])].map((t) => t.id);
-  const allUserIds = [
-    ...new Set(
-      [...(rmbTransactions ?? []), ...(klashaTransactions ?? [])].map((t) => t.user_id),
-    ),
-  ];
+  const txIds = (rmbTransactions ?? []).map((t) => t.id);
+  const userIds = [...new Set((rmbTransactions ?? []).map((t) => t.user_id))];
   const kycUserIds = (pendingProfiles ?? []).map((p) => p.id);
 
   const [{ data: recipients }, { data: profiles }, { data: kycDocuments }] = await Promise.all([
-    allTxIds.length
-      ? admin.from("rmb_recipients").select("*").in("transaction_id", allTxIds)
+    txIds.length
+      ? admin.from("rmb_recipients").select("*").in("transaction_id", txIds)
       : Promise.resolve({ data: [] }),
-    allUserIds.length
-      ? admin.from("profiles").select("id, email, full_name").in("id", allUserIds)
+    userIds.length
+      ? admin.from("profiles").select("id, email, full_name").in("id", userIds)
       : Promise.resolve({ data: [] }),
     kycUserIds.length
       ? admin.from("kyc_documents").select("*").in("user_id", kycUserIds).eq("status", "pending")
@@ -86,46 +75,6 @@ export default async function AdminPage() {
                     </p>
                   </div>
                   <KycQueueActions userId={profile.id} />
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h1 className="mb-6 text-xl font-semibold">Klasha CNY Queue</h1>
-        {!klashaTransactions || klashaTransactions.length === 0 ? (
-          <Card className="p-10 text-center text-sm text-foreground/50">
-            No Klasha settlements yet.
-          </Card>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {klashaTransactions.map((tx) => {
-              const recipient = recipientByTx.get(tx.id);
-              const profile = profileByUser.get(tx.user_id);
-              return (
-                <Card key={tx.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{formatBalance(tx.currency, tx.amount)}</span>
-                      <span className="text-xs text-foreground/40">→ ¥{tx.target_amount}</span>
-                      <Pill tone={statusTone(tx.status)}>{tx.status}</Pill>
-                    </div>
-                    <p className="text-sm text-foreground/60">
-                      {profile?.full_name || profile?.email || tx.user_id}
-                    </p>
-                    <p className="text-xs text-foreground/50">
-                      {recipient ? recipientSummary(recipient) : "—"}
-                    </p>
-                    <p className="text-xs text-foreground/40">{new Date(tx.created_at).toLocaleString()}</p>
-                    {tx.status === "failed" && (
-                      <p className="text-xs text-danger-500">
-                        Payout failed or is stuck pending — check Klasha's dashboard for this
-                        request and settle manually if needed.
-                      </p>
-                    )}
-                  </div>
                 </Card>
               );
             })}

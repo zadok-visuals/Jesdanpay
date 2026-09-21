@@ -1,23 +1,26 @@
-// Server-only. Thin fetch wrapper over Klasha's API (developers.klasha.com) — covers both:
-//   1. The CNY Payout API — the automated China-vendor-settlement leg (quote -> bank codes ->
-//      transfer), funded from an existing NGN/GHS balance.
-//   2. The Payments/Collection API — deposit collection for NGN and GHS. Confirmed from docs:
-//      `productType: "COLLECTION"`, currency enum is `NGN|ZAR|GHS` — no KES, no crypto/USDT
-//      anywhere in this API. KES stays on Busha; USDT has no Klasha product to attempt at all,
-//      confirmed by absence rather than left unconfirmed.
+// Server-only. Thin fetch wrapper over Klasha's Payments/Collection API
+// (developers.klasha.com) — deposit collection for NGN and GHS only.
 //
-// Things NOT guessed at and still needing a real sandbox/production test once Klasha support
-// clears account access:
-//   1. Whether the CNY payout's `sourceCurrency` accepts 'NGN' — the only documented example
-//      uses 'USD'.
-//   2. The exact 3DES parameters below (key length, IV derivation) — implemented per Klasha's
+// Klasha's CNY payout API (quote -> bank codes -> transfer) was investigated and built
+// against earlier, but Klasha's own engineering and product teams confirmed it's a
+// merchant-only product — for a business to pay its own vendors from Klasha's dashboard, not
+// something that can be resold to end customers via API. It was removed once that came back
+// (never actually usable for this app despite looking real and automated from the docs).
+//
+// Confirmed from docs, not guessed: `productType: "COLLECTION"`, currency enum is
+// `NGN|ZAR|GHS` — no KES, no crypto/USDT anywhere in this API. KES and USDT deposits stay on
+// Busha; there's no Klasha product to attempt for USDT at all.
+//
+// Things NOT guessed at and still needing a real production test once Klasha support clears
+// account access:
+//   1. The exact 3DES parameters below (key length, IV derivation) — implemented per Klasha's
 //      own encryption-algorithm docs, but untested against a live key.
-//   3. Whether the collection webhook (`charge.completed`) payload is encrypted the same way
+//   2. Whether the collection webhook (`charge.completed`) payload is encrypted the same way
 //      as request bodies — undocumented; the webhook route tries a plaintext parse first.
 
 import { createCipheriv, createDecipheriv } from "node:crypto";
 
-const BASE_URL = process.env.KLASHA_API_BASE_URL ?? "https://api.klasha.com";
+const BASE_URL = process.env.KLASHA_API_BASE_URL ?? "https://gate.klasapps.com";
 
 export class KlashaError extends Error {
   constructor(
@@ -79,94 +82,6 @@ async function request<T>(path: string, options: { method: "GET" | "POST"; body?
     throw new KlashaError(message, res.status);
   }
   return (json.data ?? json) as T;
-}
-
-export type KlashaCnyQuotation = {
-  id: number;
-  sourceAmount: number;
-  sourceCurrency: string;
-  destinationAmount: number;
-  destinationCurrency: string;
-  fxRate: number;
-  fee: number;
-  expiration: number;
-  reference: string;
-  expired: boolean;
-};
-
-// POST /wallet/merchant/quotation/v2 — locks in a live rate + fee for a moment.
-export function createCnyQuote(params: {
-  sourceCurrency: string;
-  destinationAmount: string;
-}): Promise<KlashaCnyQuotation> {
-  return request("/wallet/merchant/quotation/v2", {
-    method: "POST",
-    body: {
-      serviceCode: "UNIONPAY",
-      service: "BANK_ACCOUNT",
-      transferType: "B2C",
-      destinationCurrency: "CNY",
-      sourceCurrency: params.sourceCurrency,
-      fundSource: "CASH",
-      destinationAmount: params.destinationAmount,
-    },
-  });
-}
-
-export type KlashaBankCode = { code: string; name: string };
-
-// GET /wallet/merchant/bank/transfer/request/banks/CNY
-export function getBankCodes(): Promise<KlashaBankCode[]> {
-  return request("/wallet/merchant/bank/transfer/request/banks/CNY", { method: "GET" });
-}
-
-export type KlashaTransferRequest = {
-  quotationId: number;
-  requestId: string;
-  accountName: string;
-  accountNumber: string;
-  bankCode: string;
-  bankName: string;
-  receiverFirstName: string;
-  receiverLastName: string;
-  receiverIdNumber: string;
-  receiverIdType: string;
-  receiverMobileNumber: string;
-  purpose: string;
-};
-
-export type KlashaTransferResult = {
-  id: number;
-  amount: number;
-  payoutStatus: "PENDING" | "SUCCESSFUL" | "FAILED";
-  requestId: string;
-  fee: number;
-};
-
-// POST /wallet/merchant/{businessId}/bank/transfer/v2/request
-export function initiateCnyTransfer(params: KlashaTransferRequest): Promise<KlashaTransferResult> {
-  const businessId = process.env.KLASHA_BUSINESS_ID;
-  if (!businessId) throw new KlashaError("KLASHA_BUSINESS_ID is not configured", 500);
-
-  return request(`/wallet/merchant/${businessId}/bank/transfer/v2/request`, {
-    method: "POST",
-    body: {
-      accountName: params.accountName,
-      accountNumber: params.accountNumber,
-      accountType: "INDIVIDUAL",
-      bankCode: params.bankCode,
-      bankName: params.bankName,
-      creditAccountCountry: "CN",
-      purpose: params.purpose,
-      quotationId: params.quotationId,
-      receiverFirstName: params.receiverFirstName,
-      receiverIdNumber: params.receiverIdNumber,
-      receiverIdType: params.receiverIdType,
-      receiverLastName: params.receiverLastName,
-      receiverMobileNumber: params.receiverMobileNumber,
-      requestId: params.requestId,
-    },
-  });
 }
 
 export type KlashaCollectionResult = {

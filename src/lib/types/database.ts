@@ -77,9 +77,6 @@ export type RmbRecipient = {
   recipient_bank_account_number: string | null;
   recipient_bank_name: string | null;
   recipient_account_holder_name: string | null;
-  receiver_id_number: string | null;
-  receiver_id_type: string | null;
-  receiver_mobile_number: string | null;
   created_at: string;
 };
 
@@ -183,24 +180,6 @@ export type Database = {
       };
       credit_deposit: {
         Args: { p_deposit_id: string };
-        Returns: undefined;
-      };
-      create_klasha_rmb_transaction: {
-        Args: {
-          p_recipient_id: string;
-          p_source_currency: Currency;
-          p_source_amount: number;
-          p_target_amount: number;
-          p_provider_reference: string;
-        };
-        Returns: string;
-      };
-      complete_klasha_rmb_transaction: {
-        Args: { p_transaction_id: string; p_actual_target_amount: number };
-        Returns: undefined;
-      };
-      fail_klasha_rmb_transaction: {
-        Args: { p_transaction_id: string };
         Returns: undefined;
       };
       admin_approve_kyc: {

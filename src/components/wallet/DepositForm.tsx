@@ -14,18 +14,21 @@ import type { Currency } from "@/lib/types/database";
 
 type DepositableCurrency = "NGN" | "GHS" | "KES" | "USDT";
 
-// NGN/GHS deposit through Klasha, KES/USDT through Busha — see src/lib/klasha/client.ts's
-// header comment for why: Klasha's collection API has no KES or crypto support at all.
+// GHS deposit through Klasha, NGN/KES/USDT through Busha. NGN moved here from Klasha once
+// Busha confirmed working for it live while Klasha's own access stayed blocked account-wide;
+// GHS stays on Klasha since Busha's real account rejects GHS outright.
 export function DepositForm({ currency, onClose }: { currency: DepositableCurrency; onClose: () => void }) {
-  if (currency === "NGN" || currency === "GHS") {
-    return <KlashaDepositForm currency={currency} onClose={onClose} />;
+  if (currency === "GHS") {
+    return <KlashaDepositForm onClose={onClose} />;
   }
   return <BushaDepositForm currency={currency} onClose={onClose} />;
 }
 
 // Klasha has no separate quote/fee-preview step for deposits — one call both starts the
-// collection and returns payment instructions.
-function KlashaDepositForm({ currency, onClose }: { currency: "NGN" | "GHS"; onClose: () => void }) {
+// collection and returns the redirect link (GHS always uses Klasha's hosted payment page,
+// never the direct bank-details response that was NGN-only).
+function KlashaDepositForm({ onClose }: { onClose: () => void }) {
+  const currency = "GHS" as const;
   const [amount, setAmount] = useState("");
   const [state, setState] = useState<KlashaDepositState>({});
   const [isDepositing, startDepositing] = useTransition();
@@ -56,35 +59,6 @@ function KlashaDepositForm({ currency, onClose }: { currency: "NGN" | "GHS"; onC
         <a href={state.redirectUrl} target="_blank" rel="noopener noreferrer" className="self-start">
           <Button>Complete payment</Button>
         </a>
-      </div>
-    );
-  }
-
-  if (state.bankDetails) {
-    const { accountNumber, bankName, expiresAt } = state.bankDetails;
-    return (
-      <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold">Transfer to complete your deposit</p>
-          <button type="button" onClick={onClose} className="text-xs text-foreground/50 hover:text-foreground">
-            Close
-          </button>
-        </div>
-        <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-          <div className="flex items-center justify-between gap-4 px-4 py-3">
-            <dt className="text-sm text-foreground/60">Bank</dt>
-            <dd className="text-sm font-medium">{bankName}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-4 px-4 py-3">
-            <dt className="text-sm text-foreground/60">Account number</dt>
-            <dd className="text-sm font-medium">{accountNumber}</dd>
-          </div>
-        </dl>
-        <p className="text-xs text-foreground/50">
-          Transfer exactly {formatBalance(currency, Number(amount))} to the account above
-          {expiresAt ? ` before ${new Date(expiresAt).toLocaleString()}` : ""}. Your wallet is
-          credited automatically once the transfer is confirmed.
-        </p>
       </div>
     );
   }
@@ -133,8 +107,8 @@ function KlashaDepositForm({ currency, onClose }: { currency: "NGN" | "GHS"; onC
   );
 }
 
-// Busha's quote-then-transfer pattern, with a fee preview step — used for KES and USDT only.
-function BushaDepositForm({ currency, onClose }: { currency: "KES" | "USDT"; onClose: () => void }) {
+// Busha's quote-then-transfer pattern, with a fee preview step — used for NGN, KES, and USDT.
+function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "USDT"; onClose: () => void }) {
   const [amount, setAmount] = useState("");
   const [quoteState, setQuoteState] = useState<DepositQuoteState>({});
   const [depositState, setDepositState] = useState<DepositActionState>({});

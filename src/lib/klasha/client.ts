@@ -1,5 +1,6 @@
 // Server-only. Thin fetch wrapper over Klasha's Payments/Collection API
-// (developers.klasha.com) — deposit collection for NGN and GHS only.
+// (developers.klasha.com) — deposit collection for GHS only (NGN moved to Busha, see
+// src/lib/actions/klasha.ts's header comment).
 //
 // Klasha's CNY payout API (quote -> bank codes -> transfer) was investigated and built
 // against earlier, but Klasha's own engineering and product teams confirmed it's a
@@ -13,8 +14,13 @@
 //
 // Things NOT guessed at and still needing a real production test once Klasha support clears
 // account access:
-//   1. The exact 3DES parameters below (key length, IV derivation) — implemented per Klasha's
-//      own encryption-algorithm docs, but untested against a live key.
+//   1. The 3DES parameters below are almost certainly WRONG. Klasha's docs say 3DES (which
+//      needs a 16- or 24-byte key), but the real KLASHA_ENCRYPTION_SECRET base64-decodes to
+//      exactly 32 bytes — a valid AES-256 key length, not a valid 3DES one. Every live test so
+//      far has returned the same account-wide 403 regardless of encryption scheme (even a
+//      bodyless GET fails identically), so this has never actually been exercised end-to-end.
+//      Try AES-256-CBC (32-byte decoded key, 16-byte IV) first once account access clears,
+//      before assuming 3DES is correct just because it's what the docs say.
 //   2. Whether the collection webhook (`charge.completed`) payload is encrypted the same way
 //      as request bodies — undocumented; the webhook route tries a plaintext parse first.
 
@@ -99,18 +105,19 @@ export type KlashaCollectionResult = {
   status: string;
 };
 
-// POST /pay/aggregators/{gateway}/banktransfer/v3 — deposit collection. NGN returns bank
-// account details directly; GHS (like ZAR) returns a redirect URL to Klasha's hosted payment
-// page instead — confirmed from docs, not guessed. No separate quote/fee-preview step exists
-// for this endpoint, unlike Busha's quote-then-transfer pattern.
+// POST /pay/aggregators/{gateway}/banktransfer/v3 — deposit collection. GHS-only now (NGN
+// moved to Busha, confirmed live there while Klasha's own NGN/GHS access was blocked
+// account-wide). GHS (like ZAR) returns a redirect URL to Klasha's hosted payment page —
+// confirmed from docs, not guessed. No separate quote/fee-preview step exists for this
+// endpoint, unlike Busha's quote-then-transfer pattern.
 export function createCollection(params: {
   txRef: string;
-  currency: "NGN" | "GHS";
+  currency: "GHS";
   amount: string;
   email: string;
   phoneNumber: string;
   fullName: string;
-  redirectUrl?: string;
+  redirectUrl: string;
 }): Promise<KlashaCollectionResult> {
   return request(`/pay/aggregators/${params.currency}/banktransfer/v3`, {
     method: "POST",
@@ -127,7 +134,7 @@ export function createCollection(params: {
       sourceCurrency: params.currency,
       sourceAmount: Number(params.amount),
       fullname: params.fullName,
-      ...(params.currency === "GHS" ? { redirect_url: params.redirectUrl } : {}),
+      redirect_url: params.redirectUrl,
     },
   });
 }

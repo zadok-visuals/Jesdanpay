@@ -146,10 +146,11 @@ export async function getDepositQuote(
   const currency = String(formData.get("currency") ?? "").toUpperCase() as Currency;
   const amount = String(formData.get("amount") ?? "");
 
-  // NGN/GHS deposits go through Klasha instead (see src/lib/actions/klasha.ts's
-  // initiateKlashaDeposit) — Busha handles KES and USDT deposits only.
-  if (currency !== "KES" && currency !== "USDT") {
-    return { error: "Busha deposits are only available in KES or USDT." };
+  // NGN moved here from Klasha — confirmed live and working on Busha, while Klasha's
+  // NGN/GHS deposit access has been blocked account-wide since it was built. GHS stays on
+  // Klasha since Busha's real account rejects it outright ("Invalid Currency GHS").
+  if (currency !== "NGN" && currency !== "KES" && currency !== "USDT") {
+    return { error: "Busha deposits are only available in NGN, KES, or USDT." };
   }
   if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
     return { error: "Enter a valid amount." };

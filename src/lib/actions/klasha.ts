@@ -8,15 +8,14 @@ import * as klasha from "@/lib/klasha/client";
 
 export interface KlashaDepositState {
   error?: string;
-  bankDetails?: { accountNumber: string; bankName: string; expiresAt: string };
   redirectUrl?: string;
 }
 
-// Deposit collection for NGN and GHS only — confirmed absence, not unconfirmed: Klasha's
-// Payments API documents `currency: NGN|ZAR|GHS` with no KES and no crypto anywhere, so KES
-// and USDT stay on Busha (which already works for both). NGN returns bank account details
-// directly; GHS returns a redirect URL to Klasha's hosted payment page instead (same as ZAR)
-// — the two need different UI treatment, handled by returning one or the other here.
+// Deposit collection for GHS only — NGN moved to Busha (confirmed live and working there;
+// Klasha's own NGN/GHS deposit access has been blocked account-wide since this was built).
+// GHS stays here since Busha's real account rejects it outright ("Invalid Currency GHS").
+// GHS always returns a redirect URL to Klasha's hosted payment page (confirmed from docs —
+// only NGN used the direct bank-details response, which no longer applies here).
 export async function initiateKlashaDeposit(
   _prevState: KlashaDepositState,
   formData: FormData,
@@ -30,8 +29,8 @@ export async function initiateKlashaDeposit(
   const currency = String(formData.get("currency") ?? "").toUpperCase();
   const amount = String(formData.get("amount") ?? "");
 
-  if (currency !== "NGN" && currency !== "GHS") {
-    return { error: "Klasha deposits are only available in NGN or GHS." };
+  if (currency !== "GHS") {
+    return { error: "Klasha deposits are only available in GHS." };
   }
   if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
     return { error: "Enter a valid amount." };
@@ -53,7 +52,7 @@ export async function initiateKlashaDeposit(
   try {
     result = await klasha.createCollection({
       txRef,
-      currency,
+      currency: "GHS",
       amount,
       email: profile.email,
       phoneNumber: profile.phone,
@@ -67,22 +66,12 @@ export async function initiateKlashaDeposit(
   const admin = createAdminClient();
   const { error: insertError } = await admin.from("deposits").insert({
     user_id: user.id,
-    currency,
+    currency: "GHS",
     amount: Number(amount),
     provider: "klasha",
     provider_reference: result.tx_ref,
   });
   if (insertError) return { error: insertError.message };
 
-  const auth = result.meta.authorization;
-  if (auth.mode === "redirect" && auth.redirect) {
-    return { redirectUrl: auth.redirect };
-  }
-  return {
-    bankDetails: {
-      accountNumber: auth.transfer_account ?? "",
-      bankName: auth.transfer_bank ?? "",
-      expiresAt: auth.account_expiration ?? "",
-    },
-  };
+  return { redirectUrl: result.meta.authorization.redirect };
 }

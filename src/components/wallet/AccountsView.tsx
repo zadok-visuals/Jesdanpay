@@ -11,13 +11,12 @@ import { DepositForm } from "@/components/wallet/DepositForm";
 
 export function AccountsView({ wallets }: { wallets: Wallet[] }) {
   const currencies = wallets.map((w) => w.currency);
-  const [selected, setSelected] = useState(currencies[0] ?? "USD");
+  const [selected, setSelected] = useState(currencies[0] ?? "NGN");
   const [depositOpen, setDepositOpen] = useState(false);
   const wallet = wallets.find((w) => w.currency === selected);
 
   if (!wallet) return null;
 
-  const isCny = wallet.currency === "CNY";
   const isUsdt = wallet.currency === "USDT";
   const isDepositable =
     wallet.currency === "NGN" ||
@@ -47,35 +46,7 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
           </div>
         </div>
 
-        {isCny ? (
-          <>
-            {/* CNY-specific note */}
-            <div className="mb-5 flex gap-3 rounded-xl border border-primary-200 bg-primary-50 p-4">
-              <span className="mt-0.5 shrink-0 text-primary-500">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 8v4" strokeLinecap="round" />
-                  <path d="M12 16h.01" strokeLinecap="round" />
-                </svg>
-              </span>
-              <p className="text-xs leading-relaxed text-primary-800">
-                Converted CNY is stored here until you choose to send it. Rate is locked at
-                conversion time — no re-conversion happens at send time.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button disabled title="Convert from NGN or USDT — Klasha Swap API, Milestone 2">
-                Convert to CNY
-              </Button>
-              <Link href="/payments">
-                <Button variant="secondary">
-                  Send via RMB Exchange
-                </Button>
-              </Link>
-            </div>
-          </>
-        ) : isUsdt ? (
+        {isUsdt ? (
           <>
             {/* USDT-specific note */}
             <div className="mb-5 flex gap-3 rounded-xl border border-primary-200 bg-primary-50 p-4">
@@ -134,11 +105,9 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
           {wallet.currency} receiving account
         </h2>
         <p className="text-sm text-foreground/50">
-          {isCny
-            ? "CNY is held in your JesDanPay balance. To send to a Chinese recipient, use the RMB Exchange flow in Payments."
-            : isUsdt
-              ? "USDT is held in your JesDanPay balance. Deposit directly, or use the USDT Exchange flow in Payments to convert to or from NGN, GHS, or KES."
-              : isDepositable
+          {isUsdt
+            ? "USDT is held in your JesDanPay balance. Deposit directly, or use the USDT Exchange flow in Payments to convert to or from NGN, GHS, or KES."
+            : isDepositable
                 ? `Use "Add Money" above to deposit ${wallet.currency} via ${
                     wallet.currency === "GHS" ? "Klasha" : "Busha"
                   } — your balance updates once the transfer is confirmed.`

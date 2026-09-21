@@ -43,7 +43,11 @@ const PAYOUT_METHODS: { value: PayoutMethod; label: string; icon: string }[] = [
   { value: "bank", label: "Bank Account", icon: "🏦" },
 ];
 
-const SEND_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "CNY", "USDT"];
+// CNY is deliberately excluded — no deposit or swap path ever credits a user's CNY wallet
+// (Busha and Klasha both reject CNY outright, and completing a manual RMB request only
+// records what was delivered as metadata, never credits a balance), so it can never be a
+// valid source here.
+const SEND_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "USDT"];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -107,7 +111,6 @@ function SourceStep({
     wallets.some((w) => w.currency === c),
   );
   const sourceWallet = wallets.find((w) => w.currency === state.sourceCurrency);
-  const isCnySource = state.sourceCurrency === "CNY";
   const amountNum = parseFloat(state.amount) || 0;
   const amountValid = amountNum > 0 && amountNum <= (sourceWallet?.balance ?? 0);
 
@@ -172,37 +175,17 @@ function SourceStep({
         )}
       </div>
 
-      {/* CNY direct-send info banner */}
-      {isCnySource && (
-        <div className="flex gap-3 rounded-xl border border-primary-200 bg-primary-50 p-4">
-          <span className="mt-0.5 shrink-0 text-primary-500">
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 8v4" strokeLinecap="round" />
-              <path d="M12 16h.01" strokeLinecap="round" />
-            </svg>
-          </span>
-          <p className="text-xs leading-relaxed text-primary-800">
-            You&rsquo;re sending from your CNY balance. The rate was locked in at the time you
-            converted — no further conversion happens at send time.
+      <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-white px-4 py-3">
+        <span className="text-lg">⇄</span>
+        <div>
+          <p className="text-xs font-medium text-foreground/70">
+            {state.sourceCurrency} → CNY exchange rate
+          </p>
+          <p className="text-xs text-foreground/40">
+            Rate confirmed manually by our team during review
           </p>
         </div>
-      )}
-
-      {/* Rate info for non-CNY sources */}
-      {!isCnySource && (
-        <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-white px-4 py-3">
-          <span className="text-lg">⇄</span>
-          <div>
-            <p className="text-xs font-medium text-foreground/70">
-              {state.sourceCurrency} → CNY exchange rate
-            </p>
-            <p className="text-xs text-foreground/40">
-              Rate confirmed manually by our team during review
-            </p>
-          </div>
-        </div>
-      )}
+      </div>
 
       <Button disabled={!amountValid} onClick={onNext} className="self-start">
         Next — Recipient details

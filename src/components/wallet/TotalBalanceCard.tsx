@@ -9,7 +9,7 @@ import { QuickActions } from "@/components/wallet/QuickActions";
 
 export function TotalBalanceCard({ wallets }: { wallets: Wallet[] }) {
   const currencies = wallets.map((w) => w.currency);
-  const [selected, setSelected] = useState(currencies[0] ?? "USD");
+  const [selected, setSelected] = useState(currencies[0] ?? "NGN");
   const wallet = wallets.find((w) => w.currency === selected);
 
   return (

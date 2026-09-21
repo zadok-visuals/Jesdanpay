@@ -46,7 +46,9 @@ export async function initiateKlashaDeposit(
   }
 
   const txRef = randomUUID();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  // Server-only — never read in client code, so no NEXT_PUBLIC_ prefix is needed (and using
+  // one would unnecessarily ship this into the browser bundle).
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
 
   let result;
   try {

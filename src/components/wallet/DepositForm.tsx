@@ -10,6 +10,7 @@ import {
 import { initiateKlashaDeposit, type KlashaDepositState } from "@/lib/actions/klasha";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
+import { AmountInput } from "@/components/ui/AmountInput";
 import type { Currency } from "@/lib/types/database";
 
 type DepositableCurrency = "NGN" | "GHS" | "KES" | "USDT";
@@ -76,21 +77,12 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
         <label htmlFor="depositAmount" className="mb-1.5 block text-sm font-medium text-foreground/80">
           Amount ({currency})
         </label>
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-foreground/50">
-            {CURRENCY_META[currency].symbol}
-          </span>
-          <input
-            id="depositAmount"
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-            className="h-11 w-full rounded-xl border border-border bg-white pl-14 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
-          />
-        </div>
+        <AmountInput
+          id="depositAmount"
+          symbol={CURRENCY_META[currency].symbol}
+          value={amount}
+          onChange={setAmount}
+        />
       </div>
 
       {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
@@ -211,24 +203,15 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
         <label htmlFor="depositAmount" className="mb-1.5 block text-sm font-medium text-foreground/80">
           Amount ({currency})
         </label>
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-foreground/50">
-            {CURRENCY_META[currency as Currency].symbol}
-          </span>
-          <input
-            id="depositAmount"
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={amount}
-            onChange={(e) => {
-              setAmount(e.target.value);
-              setQuoteState({});
-            }}
-            placeholder="0.00"
-            className="h-11 w-full rounded-xl border border-border bg-white pl-14 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
-          />
-        </div>
+        <AmountInput
+          id="depositAmount"
+          symbol={CURRENCY_META[currency as Currency].symbol}
+          value={amount}
+          onChange={(v) => {
+            setAmount(v);
+            setQuoteState({});
+          }}
+        />
       </div>
 
       {quoteState.error && <p className="text-sm text-danger-500">{quoteState.error}</p>}

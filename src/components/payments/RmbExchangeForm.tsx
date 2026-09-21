@@ -7,6 +7,7 @@ import { submitRmbExchange, type PaymentsActionState } from "@/lib/actions/payme
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { AmountInput } from "@/components/ui/AmountInput";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -151,23 +152,12 @@ function SourceStep({
         <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-foreground/80">
           Amount ({state.sourceCurrency})
         </label>
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-foreground/50">
-            {CURRENCY_META[state.sourceCurrency].symbol}
-          </span>
-          <input
-            id="amount"
-            name="amount"
-            type="number"
-            min="0.01"
-            step="0.01"
-            max={sourceWallet?.balance ?? undefined}
-            value={state.amount}
-            onChange={(e) => onChange({ amount: e.target.value })}
-            placeholder="0.00"
-            className="h-11 w-full rounded-xl border border-border bg-white pl-14 pr-3.5 text-base outline-none transition-colors focus:border-primary-400 sm:text-sm"
-          />
-        </div>
+        <AmountInput
+          id="amount"
+          symbol={CURRENCY_META[state.sourceCurrency].symbol}
+          value={state.amount}
+          onChange={(v) => onChange({ amount: v })}
+        />
         {sourceWallet && (
           <p className="mt-1.5 text-xs text-foreground/50">
             Available: {formatBalance(state.sourceCurrency, sourceWallet.balance)}

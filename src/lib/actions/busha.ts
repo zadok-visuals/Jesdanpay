@@ -249,8 +249,15 @@ export interface DepositStatusState {
   error?: string;
 }
 
-// Lightweight poll target for the deposit instructions screen — lets the UI notice a webhook
-// (or the reconciliation cron) crediting the deposit without the user needing to refresh.
+// Lightweight poll target for the deposit instructions screen. Originally this only read our
+// own `deposits.status` column, trusting the webhook (or the reconciliation cron) to have
+// updated it — but neither can be relied on to actually fire (Busha's webhook has never once
+// delivered to this endpoint in production, per webhook_events being empty, and the cron was
+// never reachable on Vercel's Hobby plan and has no external scheduler wired up yet — see
+// src/app/api/cron/reconcile-deposits). So while a Busha deposit sits pending, this now checks
+// Busha's own transfer status directly on every poll and self-heals by crediting immediately if
+// funds have already arrived — the user gets credited within one poll cycle even if every other
+// automated path is down.
 export async function checkDepositStatus(depositId: string): Promise<DepositStatusState> {
   const supabase = await createClient();
   const {
@@ -260,12 +267,54 @@ export async function checkDepositStatus(depositId: string): Promise<DepositStat
 
   const { data, error } = await supabase
     .from("deposits")
-    .select("status")
+    .select("status, provider, provider_reference")
     .eq("id", depositId)
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (error) return { error: error.message };
   if (!data) return { error: "Deposit not found." };
+
+  if (data.status === "pending" && data.provider === "busha" && data.provider_reference) {
+    try {
+      const transfer = await busha.getTransfer(data.provider_reference);
+      if (transfer.status === "funds_received") {
+        const admin = createAdminClient();
+        const { error: creditError } = await admin.rpc("credit_deposit", {
+          p_deposit_id: depositId,
+        });
+        if (creditError) {
+          console.error("[checkDepositStatus] credit_deposit RPC failed", {
+            depositId,
+            providerReference: data.provider_reference,
+            error: creditError,
+          });
+        } else {
+          return { status: "completed" };
+        }
+      } else if (transfer.status === "cancelled" || transfer.status === "funds_not_delivered") {
+        const admin = createAdminClient();
+        const { error: failError } = await admin.rpc("fail_deposit", { p_deposit_id: depositId });
+        if (failError) {
+          console.error("[checkDepositStatus] fail_deposit RPC failed", {
+            depositId,
+            providerReference: data.provider_reference,
+            error: failError,
+          });
+        } else {
+          return { status: "failed" };
+        }
+      }
+    } catch (err) {
+      // Don't fail the poll over a transient Busha API error — just fall through and report
+      // whatever our own DB currently says, and log so a persistent failure is visible.
+      console.error("[checkDepositStatus] Busha reconciliation check failed", {
+        depositId,
+        providerReference: data.provider_reference,
+        error: err instanceof Error ? err.message : err,
+      });
+    }
+  }
+
   return { status: data.status };
 }

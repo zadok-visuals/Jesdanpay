@@ -140,26 +140,48 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
   const [isQuoting, startQuoting] = useTransition();
   const [isDepositing, startDepositing] = useTransition();
   const [confirmed, setConfirmed] = useState(false);
+  const [depositFailed, setDepositFailed] = useState(false);
 
   const expiresAt = depositState.bankDetails?.expiresAt || depositState.cryptoAddress?.expiresAt;
   const secondsLeft = useCountdown(expiresAt);
   const expired = expiresAt ? secondsLeft <= 0 : false;
 
-  // Poll for the webhook (or reconciliation cron) crediting this deposit, so the success state
-  // appears without the user needing to refresh.
+  // Poll for this deposit resolving. checkDepositStatus checks Busha's own transfer status
+  // directly on every call now — it doesn't just trust a webhook/cron to have updated our DB —
+  // so this reaches a terminal state even if nothing else in the pipeline ever fires.
   useEffect(() => {
-    if (!depositState.depositId || confirmed) return;
+    if (!depositState.depositId || confirmed || depositFailed) return;
     const interval = setInterval(async () => {
       const result = await checkDepositStatus(depositState.depositId!);
       if (result.status === "completed") {
         setConfirmed(true);
+      } else if (result.status === "failed") {
+        setDepositFailed(true);
       }
     }, STATUS_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [depositState.depositId, confirmed]);
+  }, [depositState.depositId, confirmed, depositFailed]);
 
   if (confirmed) {
     return <DepositSuccessScreen onClose={onClose} />;
+  }
+
+  if (depositFailed) {
+    return (
+      <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-border bg-white p-6 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-danger-50 text-2xl">✕</div>
+        <div>
+          <p className="text-base font-semibold">Deposit didn&rsquo;t go through</p>
+          <p className="mt-1 text-sm text-foreground/60">
+            This deposit was cancelled or expired before we received your payment. No funds were
+            taken — start a new deposit whenever you&rsquo;re ready.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    );
   }
 
   function handleGetQuote() {

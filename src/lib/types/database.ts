@@ -255,6 +255,10 @@ export type Database = {
         Args: { p_deposit_id: string };
         Returns: undefined;
       };
+      fail_deposit: {
+        Args: { p_deposit_id: string };
+        Returns: undefined;
+      };
       admin_approve_kyc: {
         Args: { p_user_id: string };
         Returns: undefined;

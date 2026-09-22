@@ -110,21 +110,26 @@ export type Deposit = {
   created_at: string;
 };
 
-export type AdminFxRate = {
-  source_currency: Currency;
-  cny_rate: number | null;
+export type CnyTierRate = {
+  tier_min_cny: number;
+  tier_max_cny: number;
+  usdt_to_cny_rate: number;
   updated_at: string;
 };
+
+export type CnyConversionDirection = "to_cny" | "from_cny";
 
 export type CnyConversion = {
   id: string;
   user_id: string;
-  source_currency: Currency;
-  source_amount: number;
-  published_rate: number;
+  direction: CnyConversionDirection;
+  from_currency: Currency;
+  from_amount: number;
+  to_currency: Currency;
+  to_amount: number;
+  busha_rate: number | null;
+  tier_rate: number;
   margin_rate: number;
-  locked_rate: number;
-  locked_cny_amount: number;
   created_at: string;
 };
 
@@ -188,16 +193,16 @@ export type Database = {
         Update: Partial<Deposit>;
         Relationships: [];
       };
-      admin_fx_rates: {
-        Row: AdminFxRate;
-        Insert: Partial<AdminFxRate> & Pick<AdminFxRate, "source_currency">;
-        Update: Partial<AdminFxRate>;
+      cny_tier_rates: {
+        Row: CnyTierRate;
+        Insert: Partial<CnyTierRate> & Pick<CnyTierRate, "tier_min_cny" | "tier_max_cny" | "usdt_to_cny_rate">;
+        Update: Partial<CnyTierRate>;
         Relationships: [];
       };
       cny_conversions: {
         Row: CnyConversion;
         Insert: Partial<CnyConversion> &
-          Pick<CnyConversion, "user_id" | "source_currency" | "source_amount" | "published_rate" | "margin_rate" | "locked_rate" | "locked_cny_amount">;
+          Pick<CnyConversion, "user_id" | "direction" | "from_currency" | "from_amount" | "to_currency" | "to_amount" | "tier_rate" | "margin_rate">;
         Update: Partial<CnyConversion>;
         Relationships: [];
       };
@@ -267,12 +272,21 @@ export type Database = {
         Args: { p_user_id: string };
         Returns: undefined;
       };
-      convert_to_cny_locked: {
-        Args: { p_source_currency: Currency; p_source_amount: number };
+      record_cny_conversion: {
+        Args: {
+          p_direction: string;
+          p_from_currency: Currency;
+          p_from_amount: number;
+          p_to_currency: Currency;
+          p_to_amount: number;
+          p_busha_rate: number | null;
+          p_tier_rate: number;
+          p_margin_rate: number;
+        };
         Returns: string;
       };
-      admin_set_fx_rate: {
-        Args: { p_source_currency: Currency; p_cny_rate: number };
+      admin_set_cny_tier_rate: {
+        Args: { p_tier_min: number; p_cny_rate: number };
         Returns: undefined;
       };
       set_withdrawal_recipient: {

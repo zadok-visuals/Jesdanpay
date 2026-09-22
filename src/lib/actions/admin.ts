@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Currency } from "@/lib/types/database";
 
 export interface AdminActionState {
   error?: string;
@@ -133,12 +132,12 @@ export async function rejectWithdrawal(
   return {};
 }
 
-export async function setFxRate(
+export async function setCnyTierRate(
   _prevState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
   await requireAdminUser();
-  const sourceCurrency = String(formData.get("sourceCurrency") ?? "");
+  const tierMin = Number(formData.get("tierMin"));
   const cnyRate = Number(formData.get("cnyRate"));
 
   if (!Number.isFinite(cnyRate) || cnyRate <= 0) {
@@ -146,8 +145,8 @@ export async function setFxRate(
   }
 
   const admin = createAdminClient();
-  const { error } = await admin.rpc("admin_set_fx_rate", {
-    p_source_currency: sourceCurrency as Currency,
+  const { error } = await admin.rpc("admin_set_cny_tier_rate", {
+    p_tier_min: tierMin,
     p_cny_rate: cnyRate,
   });
 

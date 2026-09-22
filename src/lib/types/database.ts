@@ -6,8 +6,8 @@ export type DocumentStatus = "pending" | "approved" | "rejected";
 export type PayoutMethod = "alipay" | "wechat" | "bank";
 export type CountryCode = "NG" | "GH" | "KE";
 
-export type TransactionType = "rmb_manual" | "rmb_auto" | "usdt_ngn";
-export type TransactionProvider = "klasha" | "busha" | "quidax";
+export type TransactionType = "rmb_manual" | "rmb_auto" | "usdt_ngn" | "withdrawal";
+export type TransactionProvider = "klasha" | "busha" | "quidax" | "manual";
 export type TransactionStatus = "pending" | "processing" | "completed" | "failed";
 
 // NOTE: these row shapes must stay `type` aliases, not `interface` — this
@@ -126,6 +126,16 @@ export type CnyConversion = {
   created_at: string;
 };
 
+export type WithdrawalRecipient = {
+  user_id: string;
+  currency: Currency;
+  account_holder_name: string;
+  bank_account_number: string | null;
+  bank_name: string | null;
+  wallet_address: string | null;
+  created_at: string;
+};
+
 export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13";
@@ -195,6 +205,13 @@ export type Database = {
         Update: Partial<SavedRmbRecipient>;
         Relationships: [];
       };
+      withdrawal_recipients: {
+        Row: WithdrawalRecipient;
+        Insert: Partial<WithdrawalRecipient> &
+          Pick<WithdrawalRecipient, "user_id" | "currency" | "account_holder_name">;
+        Update: Partial<WithdrawalRecipient>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -250,6 +267,28 @@ export type Database = {
       };
       admin_set_fx_rate: {
         Args: { p_source_currency: Currency; p_cny_rate: number };
+        Returns: undefined;
+      };
+      set_withdrawal_recipient: {
+        Args: {
+          p_currency: Currency;
+          p_account_holder_name: string;
+          p_bank_account_number: string | null;
+          p_bank_name: string | null;
+          p_wallet_address: string | null;
+        };
+        Returns: undefined;
+      };
+      create_withdrawal_request: {
+        Args: { p_currency: Currency; p_amount: number };
+        Returns: string;
+      };
+      admin_complete_withdrawal: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      admin_reject_withdrawal: {
+        Args: { p_transaction_id: string };
         Returns: undefined;
       };
     };

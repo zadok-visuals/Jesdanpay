@@ -5,6 +5,7 @@ import { formatBalance } from "@/lib/currency";
 import { RmbQueueActions } from "@/components/admin/RmbQueueActions";
 import { KycQueueActions } from "@/components/admin/KycQueueActions";
 import { FxRateForm } from "@/components/admin/FxRateForm";
+import { WithdrawalQueueActions } from "@/components/admin/WithdrawalQueueActions";
 import type { Currency } from "@/lib/types/database";
 
 const FX_SOURCE_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "USDT"];
@@ -18,28 +19,40 @@ const PAYOUT_LABELS: Record<string, string> = {
 export default async function AdminPage() {
   const admin = createAdminClient();
 
-  const [{ data: rmbTransactions }, { data: pendingProfiles }, { data: fxRates }] = await Promise.all([
-    admin.from("transactions").select("*").eq("type", "rmb_manual").order("created_at", { ascending: false }),
-    admin.from("profiles").select("id, email, full_name, kyc_type").eq("kyc_status", "pending"),
-    admin.from("admin_fx_rates").select("*"),
-  ]);
+  const [{ data: rmbTransactions }, { data: pendingProfiles }, { data: fxRates }, { data: withdrawalTransactions }] =
+    await Promise.all([
+      admin.from("transactions").select("*").eq("type", "rmb_manual").order("created_at", { ascending: false }),
+      admin.from("profiles").select("id, email, full_name, kyc_type").eq("kyc_status", "pending"),
+      admin.from("admin_fx_rates").select("*"),
+      admin.from("transactions").select("*").eq("type", "withdrawal").order("created_at", { ascending: false }),
+    ]);
   const fxRateByCurrency = new Map((fxRates ?? []).map((r) => [r.source_currency, r.cny_rate]));
 
   const txIds = (rmbTransactions ?? []).map((t) => t.id);
   const userIds = [...new Set((rmbTransactions ?? []).map((t) => t.user_id))];
   const kycUserIds = (pendingProfiles ?? []).map((p) => p.id);
+  const withdrawalUserIds = [...new Set((withdrawalTransactions ?? []).map((t) => t.user_id))];
 
-  const [{ data: recipients }, { data: profiles }, { data: kycDocuments }] = await Promise.all([
-    txIds.length
-      ? admin.from("rmb_recipients").select("*").in("transaction_id", txIds)
-      : Promise.resolve({ data: [] }),
-    userIds.length
-      ? admin.from("profiles").select("id, email, full_name").in("id", userIds)
-      : Promise.resolve({ data: [] }),
-    kycUserIds.length
-      ? admin.from("kyc_documents").select("*").in("user_id", kycUserIds).eq("status", "pending")
-      : Promise.resolve({ data: [] }),
-  ]);
+  const [{ data: recipients }, { data: profiles }, { data: kycDocuments }, { data: withdrawalRecipients }, { data: withdrawalProfiles }] =
+    await Promise.all([
+      txIds.length
+        ? admin.from("rmb_recipients").select("*").in("transaction_id", txIds)
+        : Promise.resolve({ data: [] }),
+      userIds.length
+        ? admin.from("profiles").select("id, email, full_name").in("id", userIds)
+        : Promise.resolve({ data: [] }),
+      kycUserIds.length
+        ? admin.from("kyc_documents").select("*").in("user_id", kycUserIds).eq("status", "pending")
+        : Promise.resolve({ data: [] }),
+      withdrawalUserIds.length
+        ? admin.from("withdrawal_recipients").select("*").in("user_id", withdrawalUserIds)
+        : Promise.resolve({ data: [] }),
+      withdrawalUserIds.length
+        ? admin.from("profiles").select("id, email, full_name").in("id", withdrawalUserIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+  const withdrawalRecipientByUser = new Map((withdrawalRecipients ?? []).map((r) => [r.user_id, r]));
+  const withdrawalProfileByUser = new Map((withdrawalProfiles ?? []).map((p) => [p.id, p]));
 
   const recipientByTx = new Map((recipients ?? []).map((r) => [r.transaction_id, r]));
   const profileByUser = new Map((profiles ?? []).map((p) => [p.id, p]));
@@ -169,6 +182,56 @@ export default async function AdminPage() {
                   </div>
 
                   <RmbQueueActions transactionId={tx.id} status={tx.status} />
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h1 className="mb-6 text-xl font-semibold">Withdrawal Requests</h1>
+        {!withdrawalTransactions || withdrawalTransactions.length === 0 ? (
+          <Card className="p-10 text-center text-sm text-foreground/50">
+            No withdrawal requests yet.
+          </Card>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {withdrawalTransactions.map((tx) => {
+              const recipient = withdrawalRecipientByUser.get(tx.user_id);
+              const profile = withdrawalProfileByUser.get(tx.user_id);
+
+              return (
+                <Card key={tx.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{formatBalance(tx.currency, tx.amount)}</span>
+                      <Pill tone={statusTone(tx.status)}>{tx.status}</Pill>
+                    </div>
+                    <p className="text-sm text-foreground/60">
+                      {profile?.full_name || profile?.email || tx.user_id}
+                    </p>
+                    <p className="text-xs text-foreground/50">
+                      {recipient
+                        ? recipient.wallet_address
+                          ? `USDT · ${recipient.wallet_address}`
+                          : `${recipient.bank_name} · ${recipient.bank_account_number} · ${recipient.account_holder_name}`
+                        : "—"}
+                    </p>
+                    {tx.target_amount != null && (
+                      <p className="text-xs text-foreground/50">
+                        Net payout: <strong className="font-semibold text-foreground">
+                          {formatBalance(tx.currency, tx.target_amount)}
+                        </strong>{" "}
+                        (after 1% fee)
+                      </p>
+                    )}
+                    <p className="text-xs text-foreground/40">
+                      {new Date(tx.created_at).toLocaleString()}
+                    </p>
+                  </div>
+
+                  <WithdrawalQueueActions transactionId={tx.id} status={tx.status} />
                 </Card>
               );
             })}

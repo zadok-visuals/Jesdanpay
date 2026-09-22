@@ -103,6 +103,36 @@ export async function rejectKyc(
   return {};
 }
 
+export async function completeWithdrawal(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  await requireAdminUser();
+  const transactionId = String(formData.get("transactionId") ?? "");
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("admin_complete_withdrawal", { p_transaction_id: transactionId });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return {};
+}
+
+export async function rejectWithdrawal(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  await requireAdminUser();
+  const transactionId = String(formData.get("transactionId") ?? "");
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("admin_reject_withdrawal", { p_transaction_id: transactionId });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return {};
+}
+
 export async function setFxRate(
   _prevState: AdminActionState,
   formData: FormData,

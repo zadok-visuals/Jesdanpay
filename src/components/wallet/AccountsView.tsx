@@ -2,24 +2,35 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { Wallet } from "@/lib/types/database";
+import type { Wallet, WithdrawalRecipient } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Tabs } from "@/components/ui/Tabs";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { DepositForm } from "@/components/wallet/DepositForm";
+import { WithdrawForm } from "@/components/wallet/WithdrawForm";
 
-export function AccountsView({ wallets }: { wallets: Wallet[] }) {
+export function AccountsView({
+  wallets,
+  withdrawalRecipient,
+}: {
+  wallets: Wallet[];
+  withdrawalRecipient: WithdrawalRecipient | null;
+}) {
   const currencies = wallets.map((w) => w.currency);
   const [selected, setSelected] = useState(currencies[0] ?? "NGN");
   const [depositOpen, setDepositOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const wallet = wallets.find((w) => w.currency === selected);
 
   if (!wallet) return null;
 
-  // Every wallet currency that still exists (NGN, GHS, KES, USDT) is depositable — USD and
-  // CNY, the only two that weren't, are no longer provisioned at all (see migration 0012).
+  // NGN/GHS/KES/USDT are depositable directly. CNY has no direct deposit path — it's only ever
+  // funded via the rate-lock conversion (see the Convert to CNY tab in Payments) — so it gets
+  // neither "Add Money" nor "Withdraw" here, only "Send to China" to spend the locked balance.
   const isUsdt = wallet.currency === "USDT";
+  const isCny = wallet.currency === "CNY";
+  const canWithdraw = !isCny;
 
   return (
     <div className="flex flex-col gap-6">
@@ -29,6 +40,7 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
         onChange={(c) => {
           setSelected(c);
           setDepositOpen(false);
+          setWithdrawOpen(false);
         }}
       />
 
@@ -43,7 +55,16 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
           </div>
         </div>
 
-        {isUsdt ? (
+        {isCny ? (
+          <div className="flex flex-wrap gap-3">
+            <Link href="/payments">
+              <Button>Send to China</Button>
+            </Link>
+            <Link href="/payments?tab=cny">
+              <Button variant="secondary">Convert more to CNY</Button>
+            </Link>
+          </div>
+        ) : isUsdt ? (
           <>
             {/* USDT-specific note */}
             <div className="mb-5 flex gap-3 rounded-xl border border-primary-200 bg-primary-50 p-4">
@@ -64,6 +85,9 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
               <Button onClick={() => setDepositOpen((o) => !o)}>
                 {depositOpen ? "Cancel" : "Add Money"}
               </Button>
+              <Button variant="secondary" onClick={() => setWithdrawOpen((o) => !o)}>
+                {withdrawOpen ? "Cancel" : "Withdraw"}
+              </Button>
               <Link href="/payments?tab=usdt">
                 <Button variant="secondary">Exchange USDT</Button>
               </Link>
@@ -73,6 +97,9 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
           <div className="flex flex-wrap gap-3">
             <Button onClick={() => setDepositOpen((o) => !o)}>
               {depositOpen ? "Cancel" : "Add Money"}
+            </Button>
+            <Button variant="secondary" onClick={() => setWithdrawOpen((o) => !o)}>
+              {withdrawOpen ? "Cancel" : "Withdraw"}
             </Button>
             <Link href="/payments">
               <Button variant="secondary">Send to China</Button>
@@ -87,6 +114,15 @@ export function AccountsView({ wallets }: { wallets: Wallet[] }) {
           <DepositForm
             currency={wallet.currency as "NGN" | "GHS" | "KES" | "USDT"}
             onClose={() => setDepositOpen(false)}
+          />
+        )}
+
+        {canWithdraw && withdrawOpen && (
+          <WithdrawForm
+            currency={wallet.currency}
+            balance={wallet.balance}
+            recipient={withdrawalRecipient}
+            onClose={() => setWithdrawOpen(false)}
           />
         )}
       </Card>

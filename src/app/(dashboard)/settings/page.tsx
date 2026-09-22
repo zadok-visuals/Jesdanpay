@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Pill, statusTone } from "@/components/ui/Pill";
+import { WithdrawalRecipientCard } from "@/components/wallet/WithdrawalRecipientCard";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -19,11 +20,14 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, email, phone, business_name, kyc_type, kyc_status, created_at")
-    .eq("id", user.id)
-    .single();
+  const [{ data: profile }, { data: withdrawalRecipient }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name, email, phone, business_name, kyc_type, kyc_status, created_at")
+      .eq("id", user.id)
+      .single(),
+    supabase.from("withdrawal_recipients").select("*").eq("user_id", user.id).maybeSingle(),
+  ]);
 
   return (
     <div>
@@ -67,6 +71,8 @@ export default async function SettingsPage() {
             </div>
           </div>
         </Card>
+
+        <WithdrawalRecipientCard recipient={withdrawalRecipient ?? null} />
 
         <Card className="p-6">
           <h2 className="mb-1 text-base font-semibold">Notifications & security</h2>

@@ -5,6 +5,7 @@ import { formatBalance } from "@/lib/currency";
 import { RmbQueueActions } from "@/components/admin/RmbQueueActions";
 import { KycQueueActions } from "@/components/admin/KycQueueActions";
 import { CnyTierRateForm } from "@/components/admin/CnyTierRateForm";
+import { CnyMarkupForm } from "@/components/admin/CnyMarkupForm";
 import { WithdrawalQueueActions } from "@/components/admin/WithdrawalQueueActions";
 
 const PAYOUT_LABELS: Record<string, string> = {
@@ -16,11 +17,12 @@ const PAYOUT_LABELS: Record<string, string> = {
 export default async function AdminPage() {
   const admin = createAdminClient();
 
-  const [{ data: rmbTransactions }, { data: pendingProfiles }, { data: tierRates }, { data: withdrawalTransactions }] =
+  const [{ data: rmbTransactions }, { data: pendingProfiles }, { data: tierRates }, { data: markupRow }, { data: withdrawalTransactions }] =
     await Promise.all([
       admin.from("transactions").select("*").eq("type", "rmb_manual").order("created_at", { ascending: false }),
       admin.from("profiles").select("id, email, full_name, kyc_type").eq("kyc_status", "pending"),
       admin.from("cny_tier_rates").select("*").order("tier_min_cny"),
+      admin.from("cny_markup_rate").select("*").single(),
       admin.from("transactions").select("*").eq("type", "withdrawal").order("created_at", { ascending: false }),
     ]);
 
@@ -96,6 +98,13 @@ export default async function AdminPage() {
                 usdtToCnyRate={tier.usdt_to_cny_rate}
               />
             ))}
+          </div>
+          <div className="border-t border-border pt-4">
+            <p className="mb-3 text-xs text-foreground/50">
+              Applied on top of the tiered rate above before it's shown to any user — the single
+              markup Convert CNY and Pay to China both use, so they can never quote differently.
+            </p>
+            <CnyMarkupForm markupRate={markupRow?.markup_rate ?? 0} />
           </div>
         </Card>
       </section>
@@ -215,7 +224,7 @@ export default async function AdminPage() {
                     <p className="text-xs text-foreground/50">
                       {recipient
                         ? recipient.wallet_address
-                          ? `USDT · ${recipient.wallet_address}`
+                          ? `USDT (BSC) · ${recipient.wallet_address}`
                           : `${recipient.bank_name} · ${recipient.bank_account_number} · ${recipient.account_holder_name}`
                         : "—"}
                     </p>

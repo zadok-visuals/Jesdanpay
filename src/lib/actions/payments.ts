@@ -3,47 +3,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Currency, PayoutMethod, RmbRecipient } from "@/lib/types/database";
-import * as busha from "@/lib/busha/client";
-import { BushaError } from "@/lib/busha/client";
 import { toCustomerError } from "@/lib/provider-error";
-import { marginFor, resolveForwardTier, resolveReverseTier, round2 } from "@/lib/cny/tiers";
-
-// Busha's swap quotes validate against this account's *real* balance and a per-pair minimum
-// (confirmed live: a 50,000 NGN probe failed "insufficient balance" against an account holding
-// only ~1,800 NGN; a 100 NGN probe failed "The minimum sale amount is 262.05 NGN"). So the
-// user's actual amount can never be sent to Busha directly for a rate lookup — it could easily
-// exceed either ceiling. Instead, probe with a tiny amount and fall back to whatever minimum
-// Busha itself reports, then derive the rate as a plain ratio of the quote's own
-// target_amount/source_amount (not by parsing rate.rate's string, whose orientation isn't
-// guaranteed) — same defensive pattern as formatEffectiveRate in busha/markup.ts.
-//
-// Also confirmed live: this account holds real NGN but zero USDT, so a USDT-sourced probe
-// fails "insufficient balance" at ANY amount, including the minimum — there's no probe amount
-// that would ever work in that direction. So every rate lookup here always probes
-// fiat -> USDT (never the reverse) and inverts the ratio when USDT -> fiat is what's actually
-// needed — sidesteps depending on the account ever holding real USDT balance at all.
-async function probeFiatToUsdtRate(fiatCurrency: string): Promise<number> {
-  async function quoteAt(amount: string) {
-    const quote = await busha.createQuote({
-      sourceCurrency: fiatCurrency,
-      targetCurrency: "USDT",
-      sourceAmount: amount,
-    });
-    return Number(quote.target_amount) / Number(quote.source_amount);
-  }
-
-  try {
-    return await quoteAt("1");
-  } catch (err) {
-    if (err instanceof BushaError) {
-      // Busha's wording varies ("minimum sale amount", "Minimum trade amount") depending on
-      // the pair — confirmed live for both — so match loosely on "minimum ... amount is X".
-      const match = err.message.match(/minimum .*?amount is ([\d.]+)/i);
-      if (match) return await quoteAt(match[1]);
-    }
-    throw err;
-  }
-}
+import { probeFiatToUsdtRate } from "@/lib/busha/rate";
+import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/tiers";
 
 export interface PaymentsActionState {
   error?: string;
@@ -162,9 +124,7 @@ export async function submitRmbExchange(
   return { transactionId: transactionId ?? undefined };
 }
 
-export type CnyDirection = "to_cny" | "from_cny";
-
-export interface CnyRatePreview {
+interface CnyRatePreview {
   nonCnyCurrency: Currency;
   cnyAmount: number;
   nonCnyAmount: number;
@@ -172,12 +132,9 @@ export interface CnyRatePreview {
   tierRate: number;
 }
 
-export interface CnyRateState {
-  error?: string;
-  preview?: CnyRatePreview;
-}
-
-// Shared by both the preview and lock-in actions so lock-in never trusts a client-echoed rate —
+// Used internally by submitCnyConversion at lock-in — the live "preview" a user sees while
+// typing is computed entirely client-side (via previewLiveBushaRate + computeConversionAmounts,
+// no full-preview action needed), so lock-in never trusts a client-echoed rate —
 // it recomputes this fresh from scratch every time, exactly like every other provider-backed
 // action in this project (see getSwapQuote's header comment).
 //
@@ -185,6 +142,9 @@ export interface CnyRateState {
 // amount being spent when direction is "from_cny". Only ever touches Busha as a read-only quote
 // lookup (never createTransfer) — the CNY balance stays a synthetic ledger entry with no real
 // provider-side movement until the user actually spends it via the existing "Send to China" flow.
+// The actual arithmetic lives in computeConversionAmounts (src/lib/cny/tiers.ts) — a pure
+// function the client calls too, once it has a cached live rate, so a live "you'll receive"
+// field can never drift from what this server-side path independently recomputes at commit time.
 async function computeCnyRate(
   direction: CnyDirection,
   nonCnyCurrency: Currency,
@@ -197,49 +157,55 @@ async function computeCnyRate(
   }
 
   try {
-    if (direction === "to_cny") {
-      let usdtEquivalent = amount;
-      let bushaRate: number | null = null;
-      if (nonCnyCurrency !== "USDT") {
-        // USDT per 1 unit of nonCnyCurrency.
-        bushaRate = await probeFiatToUsdtRate(nonCnyCurrency);
-        usdtEquivalent = amount * bushaRate;
-      }
-      const tier = resolveForwardTier(usdtEquivalent, tiers);
-      if (!tier) return { error: "Conversion rates are not configured yet." };
-      return {
-        preview: {
-          nonCnyCurrency,
-          cnyAmount: round2(usdtEquivalent * tier.usdt_to_cny_rate),
-          nonCnyAmount: amount,
-          bushaRate,
-          tierRate: tier.usdt_to_cny_rate,
-        },
-      };
-    } else {
-      const tier = resolveReverseTier(amount, tiers);
-      if (!tier) return { error: "Conversion rates are not configured yet." };
-      const usdtEquivalent = amount / tier.usdt_to_cny_rate;
-      let nonCnyAmount = usdtEquivalent;
-      let bushaRate: number | null = null;
-      if (nonCnyCurrency !== "USDT") {
-        // Always probe fiat -> USDT (this account never holds real USDT balance to probe the
-        // other way), then invert: USDT per 1 fiat -> fiat per 1 USDT.
-        bushaRate = await probeFiatToUsdtRate(nonCnyCurrency);
-        nonCnyAmount = usdtEquivalent / bushaRate;
-      }
-      return {
-        preview: {
-          nonCnyCurrency,
-          cnyAmount: amount,
-          nonCnyAmount: round2(nonCnyAmount),
-          bushaRate,
-          tierRate: tier.usdt_to_cny_rate,
-        },
-      };
+    let bushaRate: number | null = null;
+    if (nonCnyCurrency !== "USDT") {
+      // USDT per 1 unit of nonCnyCurrency, regardless of direction — see probeFiatToUsdtRate's
+      // header comment for why it's never probed the other way.
+      bushaRate = await probeFiatToUsdtRate(nonCnyCurrency);
     }
+
+    const amounts = computeConversionAmounts(direction, amount, bushaRate, tiers);
+    if (!amounts) return { error: "Conversion rates are not configured yet." };
+
+    return {
+      preview: {
+        nonCnyCurrency,
+        cnyAmount: amounts.cnyAmount,
+        nonCnyAmount: amounts.nonCnyAmount,
+        bushaRate,
+        tierRate: amounts.tierRate,
+      },
+    };
   } catch (err) {
     return { error: toCustomerError(err, "payments.computeCnyRate") };
+  }
+}
+
+// The one admin-configurable markup applied on top of the live rate + tiered rate before a user
+// ever sees a final number — single source of truth for all fiat-to-CNY pricing across the app
+// (Convert CNY, Pay to China), replacing the old per-currency-type margin that risked drifting
+// out of sync between pages. Falls back to 0 (never blocks a conversion) if somehow unset.
+async function getCnyMarkupRate(supabase: Awaited<ReturnType<typeof createClient>>): Promise<number> {
+  const { data } = await supabase.from("cny_markup_rate").select("markup_rate").single();
+  return data?.markup_rate ?? 0;
+}
+
+export interface LiveRateState {
+  error?: string;
+  rate?: number;
+}
+
+// Lightweight rate-only lookup — no amount, no tier math, just "USDT per 1 unit of currency"
+// (or null for USDT itself, which has no fiat leg). Called once per currency/direction change
+// (not per keystroke) by both Convert CNY and Convert USDT, so they cache the exact same live
+// number a Server Action would otherwise recompute redundantly on every render.
+export async function previewLiveBushaRate(currency: Currency): Promise<LiveRateState> {
+  if (currency === "USDT") return { rate: undefined };
+  try {
+    const rate = await probeFiatToUsdtRate(currency);
+    return { rate };
+  } catch (err) {
+    return { error: toCustomerError(err, "payments.previewLiveBushaRate") };
   }
 }
 
@@ -249,19 +215,6 @@ function parseCnyFormInputs(formData: FormData) {
     nonCnyCurrency: String(formData.get("nonCnyCurrency") ?? "") as Currency,
     amount: Number(formData.get("amount")),
   };
-}
-
-// Safe to call repeatedly as the user types/changes currency — mutates nothing.
-export async function previewCnyRate(
-  _prevState: CnyRateState,
-  formData: FormData,
-): Promise<CnyRateState> {
-  const { direction, nonCnyCurrency, amount } = parseCnyFormInputs(formData);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { error: "Enter a valid amount." };
-  }
-  const result = await computeCnyRate(direction, nonCnyCurrency, amount);
-  return "error" in result ? { error: result.error } : { preview: result.preview };
 }
 
 export interface CnyConvertActionState {
@@ -288,7 +241,7 @@ export async function submitCnyConversion(
   if ("error" in result) return { error: result.error };
   const { preview } = result;
 
-  const margin = marginFor(nonCnyCurrency);
+  const margin = await getCnyMarkupRate(supabase);
   const fromCurrency: Currency = direction === "to_cny" ? nonCnyCurrency : "CNY";
   const fromAmount = direction === "to_cny" ? preview.nonCnyAmount : preview.cnyAmount;
   const toCurrency: Currency = direction === "to_cny" ? "CNY" : nonCnyCurrency;

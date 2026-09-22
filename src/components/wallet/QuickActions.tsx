@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 
 function PlusIcon() {
@@ -36,20 +37,60 @@ function SwapIcon() {
   );
 }
 
-function TradeIcon() {
+const CONVERT_OPTIONS = [
+  { label: "Convert CNY", href: "/payments?tab=cny" },
+  { label: "Convert USDT", href: "/payments?tab=usdt" },
+];
+
+// Reintroduces the popover pattern this codebase used once before for the same reason (merging
+// several destinations behind one "Convert" trigger) — see git history at commit 573b19f for
+// the original, removed in b2b9318 when Send to China was promoted to a primary button and this
+// row briefly went flat. Now Convert (CNY) and Trade USDT collapse back into one trigger.
+function ConvertAction() {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
   return (
-    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 12a9 9 0 0 1-15.5 6.3M3 12a9 9 0 0 1 15.5-6.3" strokeLinecap="round" />
-      <path d="M3 16v-4h4M21 8v4h-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium text-foreground/70 transition-colors hover:text-primary-700 sm:w-18 sm:text-xs"
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary-100 sm:h-11 sm:w-11">
+          <SwapIcon />
+        </span>
+        <span className="leading-tight">Convert</span>
+      </button>
+
+      {open && (
+        <div className="absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 rounded-xl border border-foreground/10 bg-background p-1.5 shadow-lg">
+          {CONVERT_OPTIONS.map((option) => (
+            <Link
+              key={option.href}
+              href={option.href}
+              onClick={() => setOpen(false)}
+              className="block rounded-lg px-3 py-2 text-left text-sm font-medium text-foreground/80 hover:bg-primary-50 hover:text-primary-700"
+            >
+              {option.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
-
-const SECONDARY_ACTIONS = [
-  { label: "Withdraw", href: "/accounts", Icon: WithdrawIcon },
-  { label: "Convert", href: "/payments?tab=cny", Icon: SwapIcon },
-  { label: "Trade USDT", href: "/payments?tab=usdt", Icon: TradeIcon },
-];
 
 export function QuickActions() {
   return (
@@ -80,18 +121,18 @@ export function QuickActions() {
         </Link>
       </div>
 
-      {/* Secondary quick actions — everything else, one tap away, no menu to open first */}
+      {/* Secondary quick actions — Withdraw is one tap; Convert opens a small chooser since it
+          covers two destinations (Convert CNY, Convert USDT). */}
       <div className="flex flex-nowrap justify-center gap-2 sm:gap-3">
-        {SECONDARY_ACTIONS.map(({ label, href, Icon }) => (
-          <Link key={href} href={href}>
-            <span className="flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium text-foreground/70 transition-colors hover:text-primary-700 sm:w-18 sm:text-xs">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary-100 sm:h-11 sm:w-11">
-                <Icon />
-              </span>
-              <span className="leading-tight">{label}</span>
+        <Link href="/accounts">
+          <span className="flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium text-foreground/70 transition-colors hover:text-primary-700 sm:w-18 sm:text-xs">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary-100 sm:h-11 sm:w-11">
+              <WithdrawIcon />
             </span>
-          </Link>
-        ))}
+            <span className="leading-tight">Withdraw</span>
+          </span>
+        </Link>
+        <ConvertAction />
       </div>
     </div>
   );

@@ -8,14 +8,3 @@ export const MARKUP_RATE = 0.005;
 export function applyMarkup(rawTargetAmount: number): number {
   return rawTargetAmount * (1 - MARKUP_RATE);
 }
-
-export function formatEffectiveRate(
-  sourceAmount: number,
-  effectiveTargetAmount: number,
-  sourceCurrency: string,
-  targetCurrency: string,
-): string {
-  if (sourceAmount <= 0) return "—";
-  const rate = effectiveTargetAmount / sourceAmount;
-  return `1 ${sourceCurrency} ≈ ${rate.toLocaleString("en-US", { maximumFractionDigits: 6 })} ${targetCurrency}`;
-}

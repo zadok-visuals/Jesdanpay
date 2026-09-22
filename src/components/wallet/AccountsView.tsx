@@ -28,7 +28,7 @@ export function AccountsView({
   if (!wallet) return null;
 
   // NGN/GHS/KES/USDT are depositable directly. CNY has no direct deposit path — it's only ever
-  // funded via the rate-lock conversion (see the Convert to CNY tab in Payments) — so it gets
+  // funded via the rate-lock conversion (see the Convert CNY tab in Conversions) — so it gets
   // neither "Add Money" nor "Withdraw" here, only "Send to China" to spend the locked balance.
   const isUsdt = wallet.currency === "USDT";
   const isCny = wallet.currency === "CNY";
@@ -72,7 +72,7 @@ export function AccountsView({
             </Link>
             <Link href="/payments?tab=cny" className="w-full sm:w-auto">
               <Button variant="secondary" className="w-full sm:w-auto">
-                Convert more to CNY
+                Convert more CNY
               </Button>
             </Link>
           </div>
@@ -102,7 +102,7 @@ export function AccountsView({
               </Button>
               <Link href="/payments?tab=usdt" className="w-full sm:w-auto">
                 <Button variant="secondary" className="w-full sm:w-auto">
-                  Exchange USDT
+                  Convert USDT
                 </Button>
               </Link>
             </div>
@@ -122,7 +122,7 @@ export function AccountsView({
             </Link>
             <Link href="/payments?tab=usdt" className="w-full sm:w-auto">
               <Button variant="secondary" className="w-full sm:w-auto">
-                Exchange to USDT
+                Convert USDT
               </Button>
             </Link>
           </div>
@@ -151,7 +151,7 @@ export function AccountsView({
         </h2>
         <p className="text-sm text-foreground/50">
           {isUsdt
-            ? "USDT is held in your JesDanPay balance. Deposit directly, or use the USDT Exchange flow in Conversions to convert to or from NGN, GHS, or KES."
+            ? "USDT is held in your JesDanPay balance. Deposit directly, or use the Convert USDT flow in Conversions to convert to or from NGN, GHS, or KES."
             : `Use "Add Money" above to deposit ${wallet.currency} — your balance updates once the transfer is confirmed.`}
         </p>
       </Card>

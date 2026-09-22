@@ -2,22 +2,26 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { Wallet } from "@/lib/types/database";
+import type { CnyTierRate, Wallet } from "@/lib/types/database";
 import { UsdtExchangeForm } from "@/components/payments/UsdtExchangeForm";
 import { CnyConvertForm } from "@/components/payments/CnyConvertForm";
 
-type Tab = "USDT Exchange" | "Convert to CNY";
-const TABS: Tab[] = ["USDT Exchange", "Convert to CNY"];
+type Tab = "Convert USDT" | "Convert CNY";
+const TABS: Tab[] = ["Convert USDT", "Convert CNY"];
 
 interface PaymentsViewProps {
   wallets: Wallet[];
+  tierRates: CnyTierRate[];
+  markupRate: number;
 }
 
-export function PaymentsView({ wallets }: PaymentsViewProps) {
+export function PaymentsView({ wallets, tierRates, markupRate }: PaymentsViewProps) {
   // Lets other pages deep-link into a specific tab, e.g. /payments?tab=cny from the
-  // dashboard's quick actions — falls back to USDT Exchange when absent/unrecognized.
+  // dashboard's quick actions — falls back to Convert USDT when absent/unrecognized. The query
+  // param values themselves ("usdt"/"cny") are independent internal ids, unrelated to these
+  // display labels.
   const searchParams = useSearchParams();
-  const initialTab: Tab = searchParams.get("tab") === "cny" ? "Convert to CNY" : "USDT Exchange";
+  const initialTab: Tab = searchParams.get("tab") === "cny" ? "Convert CNY" : "Convert USDT";
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   return (
@@ -41,10 +45,10 @@ export function PaymentsView({ wallets }: PaymentsViewProps) {
       </div>
 
       {/* Panel */}
-      {activeTab === "USDT Exchange" ? (
+      {activeTab === "Convert USDT" ? (
         <UsdtExchangeForm wallets={wallets} />
       ) : (
-        <CnyConvertForm wallets={wallets} />
+        <CnyConvertForm wallets={wallets} tierRates={tierRates} markupRate={markupRate} />
       )}
     </div>
   );

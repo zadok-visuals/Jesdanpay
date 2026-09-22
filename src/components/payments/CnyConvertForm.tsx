@@ -2,14 +2,12 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Currency, Wallet } from "@/lib/types/database";
+import type { Currency, Wallet, CnyTierRate } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
-import { marginFor, round2 } from "@/lib/cny/tiers";
+import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/tiers";
 import {
-  previewCnyRate,
+  previewLiveBushaRate,
   submitCnyConversion,
-  type CnyDirection,
-  type CnyRateState,
   type CnyConvertActionState,
 } from "@/lib/actions/payments";
 import { Card } from "@/components/ui/Card";
@@ -41,7 +39,15 @@ function SuccessScreen({ direction, onReset }: { direction: CnyDirection; onRese
   );
 }
 
-export function CnyConvertForm({ wallets }: { wallets: Wallet[] }) {
+export function CnyConvertForm({
+  wallets,
+  tierRates,
+  markupRate,
+}: {
+  wallets: Wallet[];
+  tierRates: CnyTierRate[];
+  markupRate: number;
+}) {
   const availableCurrencies = NON_CNY_CURRENCIES.filter((c) => wallets.some((w) => w.currency === c));
   const cnyWallet = wallets.find((w) => w.currency === "CNY");
 
@@ -49,17 +55,31 @@ export function CnyConvertForm({ wallets }: { wallets: Wallet[] }) {
   const [nonCnyCurrency, setNonCnyCurrency] = useState<Currency>(availableCurrencies[0] ?? "NGN");
   const [amount, setAmount] = useState("");
   const [done, setDone] = useState(false);
-  const [previewState, setPreviewState] = useState<CnyRateState>({});
-  const [isPreviewing, startPreviewing] = useTransition();
   const [actionState, setActionState] = useState<CnyConvertActionState>({});
   const [isSubmitting, startSubmitting] = useTransition();
   const router = useRouter();
 
-  // Any change to what's being converted invalidates the current preview — force a fresh "Get
-  // rate" rather than let a stale quote sit next to a "Lock in" button.
+  // The live rate depends only on which non-CNY currency is selected, not on direction or
+  // amount — fetched once per currency change (a discrete, infrequent event), never per
+  // keystroke. Every keystroke after that is pure client math via computeConversionAmounts, so
+  // "you'll receive" is genuinely instant with no network round-trip.
+  const [bushaRate, setBushaRate] = useState<number | null>(null);
+  const [rateError, setRateError] = useState<string | null>(null);
+  const [isRateLoading, startRateLoading] = useTransition();
+
   useEffect(() => {
-    setPreviewState({});
-  }, [direction, nonCnyCurrency, amount]);
+    setRateError(null);
+    if (nonCnyCurrency === "USDT") {
+      setBushaRate(null);
+      return;
+    }
+    setBushaRate(null);
+    startRateLoading(async () => {
+      const result = await previewLiveBushaRate(nonCnyCurrency);
+      if (result.error) setRateError(result.error);
+      else setBushaRate(result.rate ?? null);
+    });
+  }, [nonCnyCurrency]);
 
   const amountNum = parseFloat(amount) || 0;
   const amountEntered = amountNum > 0;
@@ -67,52 +87,30 @@ export function CnyConvertForm({ wallets }: { wallets: Wallet[] }) {
   const spendCurrency: Currency = direction === "to_cny" ? nonCnyCurrency : "CNY";
   const exceedsBalance = amountEntered && !!spendWallet && amountNum > spendWallet.balance;
   const amountValid = amountEntered && !exceedsBalance;
+  const rateReady = nonCnyCurrency === "USDT" || bushaRate != null;
 
-  const preview = previewState.preview;
-  const margin = marginFor(nonCnyCurrency);
-  // When there's no fiat leg (nonCnyCurrency is USDT), the tier rate itself IS the reference
-  // rate — show that exact configured number rather than re-deriving a ratio from already-
-  // rounded preview amounts, which introduces tiny cosmetic rounding noise (e.g. 6.501951
-  // instead of the actual configured 6.5).
-  const effectiveRate =
-    !preview
-      ? null
-      : preview.bushaRate == null
-        ? preview.tierRate
-        : preview.nonCnyAmount > 0
-          ? preview.cnyAmount / preview.nonCnyAmount
-          : null;
-  const receiveAmount = preview
-    ? direction === "to_cny"
-      ? round2(preview.cnyAmount * (1 - margin))
-      : round2(preview.nonCnyAmount * (1 - margin))
-    : null;
+  const amounts =
+    amountValid && rateReady
+      ? computeConversionAmounts(direction, amountNum, bushaRate, tierRates)
+      : null;
+
+  const effectiveRate = amounts && amounts.nonCnyAmount > 0 ? amounts.cnyAmount / amounts.nonCnyAmount : null;
   const receiveCurrency: Currency = direction === "to_cny" ? "CNY" : nonCnyCurrency;
+  const receiveAmount = amounts
+    ? round2((direction === "to_cny" ? amounts.cnyAmount : amounts.nonCnyAmount) * (1 - markupRate))
+    : null;
 
-  let previewButtonReason: string | null = null;
-  if (!amountEntered) previewButtonReason = "Enter an amount to continue";
-  else if (exceedsBalance) previewButtonReason = `Amount exceeds your available ${spendCurrency} balance`;
-
-  let lockButtonReason: string | null = null;
-  if (!amountValid) lockButtonReason = previewButtonReason;
-  else if (!preview) lockButtonReason = "Get a rate first";
+  let disabledReason: string | null = null;
+  if (!amountEntered) disabledReason = "Enter an amount to continue";
+  else if (exceedsBalance) disabledReason = `Amount exceeds your available ${spendCurrency} balance`;
+  else if (isRateLoading) disabledReason = "Fetching live rate…";
+  else if (rateError) disabledReason = "Rate unavailable — try again";
+  else if (!amounts) disabledReason = "Conversion rates aren't configured yet";
 
   function switchDirection(next: CnyDirection) {
     setDirection(next);
     setAmount("");
-    setPreviewState({});
     setActionState({});
-  }
-
-  function handlePreview() {
-    const fd = new FormData();
-    fd.set("direction", direction);
-    fd.set("nonCnyCurrency", nonCnyCurrency);
-    fd.set("amount", amount);
-    startPreviewing(async () => {
-      const result = await previewCnyRate({}, fd);
-      setPreviewState(result);
-    });
   }
 
   function handleSubmit() {
@@ -136,7 +134,6 @@ export function CnyConvertForm({ wallets }: { wallets: Wallet[] }) {
   function reset() {
     setDone(false);
     setAmount("");
-    setPreviewState({});
     setActionState({});
   }
 
@@ -171,7 +168,7 @@ export function CnyConvertForm({ wallets }: { wallets: Wallet[] }) {
                 direction === d ? "bg-white text-primary-700" : "text-foreground/60 hover:text-foreground"
               }`}
             >
-              {d === "to_cny" ? "Convert to CNY" : "Convert from CNY"}
+              {d === "to_cny" ? "Convert CNY" : "Convert from CNY"}
             </button>
           ))}
         </div>
@@ -233,89 +230,82 @@ export function CnyConvertForm({ wallets }: { wallets: Wallet[] }) {
           )}
         </div>
 
-        {previewState.error && <p className="text-sm text-danger-500">{previewState.error}</p>}
-
-        {!preview ? (
-          <div className="flex flex-col items-start gap-1.5">
-            <Button
-              onClick={handlePreview}
-              loading={isPreviewing}
-              disabled={!amountValid}
-              title={previewButtonReason ?? undefined}
-              className="self-start"
-            >
-              {isPreviewing ? "Fetching rate…" : "Get rate"}
-            </Button>
-            {previewButtonReason && (
-              <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
-                {previewButtonReason}
-              </p>
-            )}
+        {/* You will receive — directly after Amount, live on every keystroke */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground/80">
+            You will receive
+          </label>
+          <div className="flex h-14 items-center rounded-xl border border-border bg-black/[.02] px-3.5">
+            <span className="text-xl font-bold tracking-tight">
+              {!amountEntered
+                ? "—"
+                : isRateLoading
+                  ? "Fetching live rate…"
+                  : receiveAmount != null
+                    ? formatBalance(receiveCurrency, receiveAmount)
+                    : "—"}
+            </span>
           </div>
-        ) : (
-          <>
-            <div className="overflow-hidden rounded-2xl border border-border bg-white">
-              <div className="border-b border-border bg-primary-50 px-6 py-4">
-                <p className="text-sm font-semibold text-primary-800">Rate preview</p>
-              </div>
-              <dl className="divide-y divide-border">
-                {preview.bushaRate != null && (
-                  <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-                    <dt className="shrink-0 text-sm text-foreground/60">Live rate</dt>
-                    <dd className="text-right text-sm font-medium text-foreground">
-                      {`1 ${nonCnyCurrency} = ${preview.bushaRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT`}
-                    </dd>
-                  </div>
-                )}
-                <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-                  <dt className="shrink-0 text-sm text-foreground/60">Reference rate (no margin)</dt>
-                  <dd className="text-right text-sm font-medium text-foreground">
-                    {effectiveRate != null
-                      ? `1 ${nonCnyCurrency} = ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
+        </div>
+
+        {rateError && <p className="text-sm text-danger-500">{rateError}</p>}
+
+        <div className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="border-b border-border bg-primary-50 px-6 py-4">
+            <p className="text-sm font-semibold text-primary-800">Rate details</p>
+          </div>
+          <dl className="divide-y divide-border">
+            {nonCnyCurrency !== "USDT" && (
+              <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+                <dt className="shrink-0 text-sm text-foreground/60">Live rate</dt>
+                <dd className="text-right text-sm font-medium text-foreground">
+                  {isRateLoading
+                    ? "Fetching…"
+                    : bushaRate != null
+                      ? `1 ${nonCnyCurrency} = ${bushaRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT`
                       : "—"}
-                  </dd>
-                </div>
-                <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-                  <dt className="shrink-0 text-sm text-foreground/60">Margin</dt>
-                  <dd className="text-right text-sm font-medium text-foreground">
-                    {(margin * 100).toFixed(0)}%
-                  </dd>
-                </div>
-                <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-                  <dt className="shrink-0 text-sm text-foreground/60">You&rsquo;ll receive</dt>
-                  <dd className="text-right text-sm font-medium text-foreground">
-                    {receiveAmount != null ? formatBalance(receiveCurrency, receiveAmount) : "—"}
-                  </dd>
-                </div>
-              </dl>
+                </dd>
+              </div>
+            )}
+            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+              <dt className="shrink-0 text-sm text-foreground/60">Reference rate (no markup)</dt>
+              <dd className="text-right text-sm font-medium text-foreground">
+                {effectiveRate != null
+                  ? `1 ${nonCnyCurrency} = ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
+                  : "—"}
+              </dd>
             </div>
-
-            {actionState.error && <p className="text-sm text-danger-500">{actionState.error}</p>}
-
-            <div className="flex flex-col items-start gap-1.5">
-              <Button
-                onClick={handleSubmit}
-                loading={isSubmitting}
-                disabled={!amountValid || !preview}
-                title={lockButtonReason ?? undefined}
-                className="self-start"
-              >
-                {isSubmitting
-                  ? "Converting…"
-                  : direction === "to_cny"
-                    ? "Lock in CNY balance"
-                    : `Convert to ${nonCnyCurrency}`}
-              </Button>
-              <button
-                type="button"
-                onClick={() => setPreviewState({})}
-                className="text-xs font-medium text-foreground/50 hover:text-foreground"
-              >
-                Rate changed your mind? Get a fresh rate
-              </button>
+            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+              <dt className="shrink-0 text-sm text-foreground/60">Markup</dt>
+              <dd className="text-right text-sm font-medium text-foreground">
+                {(markupRate * 100).toFixed(2).replace(/\.?0+$/, "")}%
+              </dd>
             </div>
-          </>
-        )}
+          </dl>
+        </div>
+
+        {actionState.error && <p className="text-sm text-danger-500">{actionState.error}</p>}
+
+        <div className="flex flex-col items-start gap-1.5">
+          <Button
+            onClick={handleSubmit}
+            loading={isSubmitting}
+            disabled={!amountValid || !amounts}
+            title={disabledReason ?? undefined}
+            className="self-start"
+          >
+            {isSubmitting
+              ? "Converting…"
+              : direction === "to_cny"
+                ? "Lock in CNY balance"
+                : `Convert to ${nonCnyCurrency}`}
+          </Button>
+          {disabledReason && (
+            <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
+              {disabledReason}
+            </p>
+          )}
+        </div>
       </div>
     </Card>
   );

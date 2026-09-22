@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Wallet, Currency, PayoutMethod, SavedRmbRecipient } from "@/lib/types/database";
+import type {
+  Wallet,
+  Currency,
+  PayoutMethod,
+  SavedRmbRecipient,
+  CnyTierRate,
+} from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
-import { submitRmbExchange, type PaymentsActionState } from "@/lib/actions/payments";
+import { submitRmbExchange, previewLiveBushaRate, type PaymentsActionState } from "@/lib/actions/payments";
+import { computeConversionAmounts, round2 } from "@/lib/cny/tiers";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -58,7 +65,7 @@ const PAYOUT_METHODS: { value: PayoutMethod; label: string; icon: string }[] = [
   { value: "bank", label: "Bank Account", icon: "🏦" },
 ];
 
-// CNY is included as a source since the rate-lock conversion feature (Convert to CNY tab) now
+// CNY is included as a source since the rate-lock conversion feature (Convert CNY tab) now
 // gives it a real path to a nonzero balance — sending from it debits the locked balance same as
 // any other wallet.
 const SEND_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "USDT", "CNY"];
@@ -115,11 +122,15 @@ function SourceStep({
   state,
   onChange,
   onNext,
+  tierRates,
+  markupRate,
 }: {
   wallets: Wallet[];
   state: SendState;
   onChange: (patch: Partial<SendState>) => void;
   onNext: () => void;
+  tierRates: CnyTierRate[];
+  markupRate: number;
 }) {
   const availableCurrencies = SEND_CURRENCIES.filter((c) =>
     wallets.some((w) => w.currency === c),
@@ -134,6 +145,35 @@ function SourceStep({
       : exceedsBalance
         ? `Amount exceeds your available ${state.sourceCurrency} balance`
         : null;
+
+  // No conversion at all when sending an already-locked CNY balance directly — the live rate
+  // card below only applies when there's actually a fiat/USDT -> CNY leg to price.
+  const isCnySource = state.sourceCurrency === "CNY";
+
+  // Same live-rate pattern as Convert CNY/Convert USDT: fetched once per source-currency change
+  // (never per keystroke), then computeConversionAmounts does the rest instantly, client-side.
+  const [bushaRate, setBushaRate] = useState<number | null>(null);
+  const [rateError, setRateError] = useState<string | null>(null);
+  const [isRateLoading, startRateLoading] = useTransition();
+
+  useEffect(() => {
+    setRateError(null);
+    setBushaRate(null);
+    if (isCnySource || state.sourceCurrency === "USDT") return;
+    startRateLoading(async () => {
+      const result = await previewLiveBushaRate(state.sourceCurrency);
+      if (result.error) setRateError(result.error);
+      else setBushaRate(result.rate ?? null);
+    });
+  }, [state.sourceCurrency, isCnySource]);
+
+  const rateReady = isCnySource || state.sourceCurrency === "USDT" || bushaRate != null;
+  const amounts =
+    !isCnySource && amountValid && rateReady
+      ? computeConversionAmounts("to_cny", amountNum, state.sourceCurrency === "USDT" ? null : bushaRate, tierRates)
+      : null;
+  const effectiveRate = amounts && amounts.nonCnyAmount > 0 ? amounts.cnyAmount / amounts.nonCnyAmount : null;
+  const estimatedCny = amounts ? round2(amounts.cnyAmount * (1 - markupRate)) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -192,17 +232,67 @@ function SourceStep({
         )}
       </div>
 
-      <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-white px-4 py-3">
-        <span className="text-lg">⇄</span>
-        <div>
+      {isCnySource ? (
+        <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-white px-4 py-3">
+          <span className="text-lg">⇄</span>
           <p className="text-xs font-medium text-foreground/70">
-            {state.sourceCurrency} → CNY exchange rate
-          </p>
-          <p className="text-xs text-foreground/40">
-            Rate confirmed manually by our team during review
+            No conversion — you&rsquo;re sending your CNY balance directly.
           </p>
         </div>
-      </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="border-b border-border bg-primary-50 px-6 py-4">
+            <p className="text-sm font-semibold text-primary-800">Live rate</p>
+          </div>
+          <dl className="divide-y divide-border">
+            {state.sourceCurrency !== "USDT" && (
+              <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+                <dt className="shrink-0 text-sm text-foreground/60">Live rate</dt>
+                <dd className="text-right text-sm font-medium text-foreground">
+                  {isRateLoading
+                    ? "Fetching…"
+                    : bushaRate != null
+                      ? `1 ${state.sourceCurrency} = ${bushaRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT`
+                      : "—"}
+                </dd>
+              </div>
+            )}
+            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+              <dt className="shrink-0 text-sm text-foreground/60">USDT/CNY anchor rate</dt>
+              <dd className="text-right text-sm font-medium text-foreground">
+                {amounts ? `USDT 1 = CNY ${amounts.tierRate.toLocaleString("en-US", { maximumFractionDigits: 4 })}` : "—"}
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+              <dt className="shrink-0 text-sm text-foreground/60">
+                {state.sourceCurrency} → CNY (est.)
+              </dt>
+              <dd className="text-right text-sm font-medium text-foreground">
+                {effectiveRate != null
+                  ? `1 ${state.sourceCurrency} = ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
+                  : "—"}
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+              <dt className="shrink-0 text-sm text-foreground/60">You&rsquo;ll receive (est.)</dt>
+              <dd className="text-right text-sm font-medium text-foreground">
+                {!amountValid
+                  ? "—"
+                  : isRateLoading
+                    ? "Fetching live rate…"
+                    : estimatedCny != null
+                      ? formatBalance("CNY", estimatedCny)
+                      : "—"}
+              </dd>
+            </div>
+          </dl>
+          {rateError && <p className="px-6 py-2 text-xs text-danger-500">{rateError}</p>}
+          <p className="border-t border-border px-6 py-2 text-xs text-foreground/40">
+            An estimate — the actual transfer is confirmed manually by our team, usually within
+            1–2 business days.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col items-start gap-1.5">
         <Button
@@ -578,9 +668,13 @@ function SuccessScreen({ onReset }: { onReset: () => void }) {
 export function RmbExchangeForm({
   wallets,
   savedRecipients = [],
+  tierRates,
+  markupRate,
 }: {
   wallets: Wallet[];
   savedRecipients?: SavedRmbRecipient[];
+  tierRates: CnyTierRate[];
+  markupRate: number;
 }) {
   const [step, setStep] = useState<Step>("source");
   const [formState, setFormState] = useState<SendState>(DEFAULT_STATE);
@@ -651,6 +745,8 @@ export function RmbExchangeForm({
           state={formState}
           onChange={patch}
           onNext={() => setStep("recipient")}
+          tierRates={tierRates}
+          markupRate={markupRate}
         />
       )}
 

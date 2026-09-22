@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
-import { getSwapQuote, confirmSwap, type BushaActionState } from "@/lib/actions/busha";
+import { executeSwap, type ExecuteSwapState } from "@/lib/actions/busha";
+import { previewLiveBushaRate } from "@/lib/actions/payments";
+import { applyMarkup } from "@/lib/busha/markup";
 import type { Currency } from "@/lib/types/database";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
-import { useCountdown } from "@/lib/hooks/useCountdown";
 
 type Direction =
   | "USDT_TO_NGN"
@@ -56,19 +57,39 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   );
   const [direction, setDirection] = useState<Direction | null>(availableDirections[0]?.value ?? null);
   const [amount, setAmount] = useState("");
-  const [quoteState, setQuoteState] = useState<BushaActionState>({});
-  const [confirmState, setConfirmState] = useState<BushaActionState>({});
   const [done, setDone] = useState(false);
-  const [isQuoting, startQuoting] = useTransition();
-  const [isConfirming, startConfirming] = useTransition();
+  const [actionState, setActionState] = useState<ExecuteSwapState>({});
+  const [isExecuting, startExecuting] = useTransition();
   const router = useRouter();
-  // Called unconditionally (rules of hooks) even though the component may bail out below.
-  const secondsLeft = useCountdown(quoteState.quote?.expiresAt);
 
-  if (!direction) {
+  // The live fiat/USDT rate depends only on which fiat currency is involved, not on the swap
+  // direction or the amount — fetched once per fiat-currency change via the same safe probe
+  // Convert CNY uses (see probeFiatToUsdtRate's header comment). Every keystroke after that is
+  // pure client math, so "you'll receive" is instant with no per-keystroke network call.
+  const config = direction ? DIRECTIONS.find((d) => d.value === direction)! : null;
+  const fiatCurrency = config ? (config.source === "USDT" ? config.target : config.source) : null;
+  const [usdtPerFiat, setUsdtPerFiat] = useState<number | null>(null);
+  const [rateError, setRateError] = useState<string | null>(null);
+  const [isRateLoading, startRateLoading] = useTransition();
+
+  useEffect(() => {
+    setRateError(null);
+    setUsdtPerFiat(null);
+    if (!fiatCurrency) return;
+    startRateLoading(async () => {
+      const result = await previewLiveBushaRate(fiatCurrency);
+      if (result.error) setRateError(result.error);
+      else setUsdtPerFiat(result.rate ?? null);
+    });
+    // Depending on the derived fiat currency (not `direction` itself) avoids an unnecessary
+    // refetch when switching between the two directions of the same pair (e.g. NGN_TO_USDT <->
+    // USDT_TO_NGN both involve NGN).
+  }, [fiatCurrency]);
+
+  if (!direction || !config) {
     return (
       <Card className="p-6 sm:p-8">
-        <h2 className="mb-2 text-base font-semibold">Exchange USDT</h2>
+        <h2 className="mb-2 text-base font-semibold">Convert USDT</h2>
         <p className="text-sm text-foreground/60">
           USDT exchange isn&rsquo;t available without a local currency wallet.
         </p>
@@ -76,39 +97,39 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
     );
   }
 
-  const config = DIRECTIONS.find((d) => d.value === direction)!;
   const sourceWallet = wallets.find((w) => w.currency === config.source);
-  const quoteExpired = quoteState.quote ? secondsLeft <= 0 : false;
   const amountNum = Number(amount) || 0;
   const exceedsBalance = amountNum > 0 && !!sourceWallet && amountNum > sourceWallet.balance;
   const amountValid = amountNum > 0 && !exceedsBalance;
-  const quoteDisabledReason =
-    amountNum <= 0
-      ? "Enter an amount to continue"
-      : exceedsBalance
-        ? `Amount exceeds your available ${config.source} balance`
-        : null;
+  const fiatPerUsdt = usdtPerFiat != null ? 1 / usdtPerFiat : null;
 
-  function handleGetQuote() {
+  // "You will receive": fiat -> USDT multiplies by usdtPerFiat; USDT -> fiat multiplies by
+  // fiatPerUsdt (the inverse) — then the same 0.5% customer-facing markup applied to every
+  // automated swap (src/lib/busha/markup.ts), computed client-side purely for display; the real
+  // amount is always independently recomputed server-side from Busha's own transfer response.
+  const rawTargetAmount =
+    amountValid && usdtPerFiat != null && fiatPerUsdt != null
+      ? config.source === "USDT"
+        ? amountNum * fiatPerUsdt
+        : amountNum * usdtPerFiat
+      : null;
+  const receiveAmount = rawTargetAmount != null ? applyMarkup(rawTargetAmount) : null;
+
+  let disabledReason: string | null = null;
+  if (amountNum <= 0) disabledReason = "Enter an amount to continue";
+  else if (exceedsBalance) disabledReason = `Amount exceeds your available ${config.source} balance`;
+  else if (isRateLoading) disabledReason = "Fetching live rate…";
+  else if (rateError) disabledReason = "Rate unavailable — try again";
+
+  function handleExecute() {
     const fd = new FormData();
-    fd.set("sourceCurrency", config.source);
-    fd.set("targetCurrency", config.target);
+    fd.set("sourceCurrency", config!.source);
+    fd.set("targetCurrency", config!.target);
     fd.set("amount", amount);
 
-    startQuoting(async () => {
-      const result = await getSwapQuote({}, fd);
-      setQuoteState(result);
-    });
-  }
-
-  function handleConfirm() {
-    if (!quoteState.quote) return;
-    const fd = new FormData();
-    fd.set("quoteId", quoteState.quote.id);
-
-    startConfirming(async () => {
-      const result = await confirmSwap({}, fd);
-      setConfirmState(result);
+    startExecuting(async () => {
+      const result = await executeSwap({}, fd);
+      setActionState(result);
       if (result.transactionId && !result.error) {
         setDone(true);
         // Wallet balances shown on this page (and its currency pickers) come from the server
@@ -121,8 +142,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
 
   function reset() {
     setDone(false);
-    setQuoteState({});
-    setConfirmState({});
+    setActionState({});
     setAmount("");
   }
 
@@ -136,123 +156,102 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
 
   return (
     <Card className="p-6 sm:p-8">
-      <h2 className="mb-6 text-base font-semibold">Exchange USDT</h2>
+      <h2 className="mb-6 text-base font-semibold">Convert USDT</h2>
 
-      {!quoteState.quote ? (
-        <div className="flex flex-col gap-6">
-          <div>
-            <p className="mb-2 text-sm font-medium text-foreground/80">Direction</p>
-            <div className="flex flex-wrap gap-2">
-              {availableDirections.map((d) => (
-                <button
-                  key={d.value}
-                  type="button"
-                  onClick={() => {
-                    setDirection(d.value);
-                    setAmount("");
-                  }}
-                  className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-                    direction === d.value
-                      ? "border-primary-400 bg-primary-50 text-primary-700 ring-1 ring-primary-400"
-                      : "border-border bg-white text-foreground/70 hover:border-primary-300"
-                  }`}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-foreground/80">
-              Amount ({config.source})
-            </label>
-            <AmountInput
-              id="amount"
-              symbol={CURRENCY_META[config.source].symbol}
-              value={amount}
-              onChange={setAmount}
-            />
-            {exceedsBalance ? (
-              <p className="mt-1.5 text-xs text-danger-500">
-                Amount exceeds your available {config.source} balance of{" "}
-                {formatBalance(config.source, sourceWallet?.balance ?? 0)}
-              </p>
-            ) : (
-              sourceWallet && (
-                <p className="mt-1.5 text-xs text-foreground/50">
-                  Available: {formatBalance(config.source, sourceWallet.balance)}
-                </p>
-              )
-            )}
-          </div>
-
-          {quoteState.error && <p className="text-sm text-danger-500">{quoteState.error}</p>}
-
-          <div className="flex flex-col items-start gap-1.5">
-            <Button
-              onClick={handleGetQuote}
-              loading={isQuoting}
-              disabled={!amountValid}
-              title={quoteDisabledReason ?? undefined}
-              className="self-start"
-            >
-              Get quote
-            </Button>
-            {quoteDisabledReason && (
-              <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
-                {quoteDisabledReason}
-              </p>
-            )}
+      <div className="flex flex-col gap-6">
+        <div>
+          <p className="mb-2 text-sm font-medium text-foreground/80">Direction</p>
+          <div className="flex flex-wrap gap-2">
+            {availableDirections.map((d) => (
+              <button
+                key={d.value}
+                type="button"
+                onClick={() => {
+                  setDirection(d.value);
+                  setAmount("");
+                }}
+                className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                  direction === d.value
+                    ? "border-primary-400 bg-primary-50 text-primary-700 ring-1 ring-primary-400"
+                    : "border-border bg-white text-foreground/70 hover:border-primary-300"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
           </div>
         </div>
-      ) : (
-        <div className="flex flex-col gap-6">
-          <div className="overflow-hidden rounded-2xl border border-border bg-white">
-            <div className="border-b border-border bg-primary-50 px-6 py-4">
-              <p className="text-sm font-semibold text-primary-800">Quote summary</p>
-            </div>
-            <dl className="divide-y divide-border">
-              {[
-                { label: "You send", value: `${quoteState.quote.sourceAmount} ${quoteState.quote.sourceCurrency}` },
-                { label: "You receive", value: `${quoteState.quote.targetAmount} ${quoteState.quote.targetCurrency}` },
-                { label: "Rate", value: quoteState.quote.rateExplained },
-                { label: "Fee", value: quoteState.quote.feeSummary },
-                {
-                  label: "Quote expires",
-                  value: quoteExpired
-                    ? "Expired"
-                    : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`,
-                },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex items-start justify-between gap-4 px-6 py-3.5">
-                  <dt className="shrink-0 text-sm text-foreground/60">{label}</dt>
-                  <dd className={`text-right text-sm font-medium ${quoteExpired && label === "Quote expires" ? "text-danger-500" : "text-foreground"}`}>
-                    {value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
 
-          {confirmState.error && <p className="text-sm text-danger-500">{confirmState.error}</p>}
-
-          <div className="flex gap-3">
-            <Button variant="secondary" onClick={() => setQuoteState({})} disabled={isConfirming}>
-              Back
-            </Button>
-            {quoteExpired ? (
-              <Button onClick={handleGetQuote} loading={isQuoting}>
-                Get new quote
-              </Button>
-            ) : (
-              <Button onClick={handleConfirm} loading={isConfirming}>
-                {isConfirming ? "Exchanging…" : "Confirm & Exchange"}
-              </Button>
-            )}
-          </div>
+        <div>
+          <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-foreground/80">
+            Amount ({config.source})
+          </label>
+          <AmountInput
+            id="amount"
+            symbol={CURRENCY_META[config.source].symbol}
+            value={amount}
+            onChange={setAmount}
+          />
+          {exceedsBalance ? (
+            <p className="mt-1.5 text-xs text-danger-500">
+              Amount exceeds your available {config.source} balance of{" "}
+              {formatBalance(config.source, sourceWallet?.balance ?? 0)}
+            </p>
+          ) : (
+            sourceWallet && (
+              <p className="mt-1.5 text-xs text-foreground/50">
+                Available: {formatBalance(config.source, sourceWallet.balance)}
+              </p>
+            )
+          )}
         </div>
-      )}
+
+        {/* You will receive — directly after Amount, live on every keystroke */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground/80">
+            You will receive
+          </label>
+          <div className="flex h-14 items-center rounded-xl border border-border bg-black/[.02] px-3.5">
+            <span className="text-xl font-bold tracking-tight">
+              {amountNum <= 0
+                ? "—"
+                : isRateLoading
+                  ? "Fetching live rate…"
+                  : receiveAmount != null
+                    ? formatBalance(config.target, receiveAmount)
+                    : "—"}
+            </span>
+          </div>
+          <p className="mt-1.5 text-xs text-foreground/50">
+            {isRateLoading
+              ? "Fetching live rate…"
+              : fiatPerUsdt != null
+                ? `USDT 1 = ${fiatCurrency} ${fiatPerUsdt.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+                : rateError
+                  ? rateError
+                  : "—"}
+          </p>
+        </div>
+
+        {actionState.error && <p className="text-sm text-danger-500">{actionState.error}</p>}
+
+        <div className="flex flex-col items-start gap-1.5">
+          <Button
+            onClick={handleExecute}
+            loading={isExecuting}
+            disabled={!amountValid || isRateLoading || !!rateError}
+            title={disabledReason ?? undefined}
+            className="self-start"
+          >
+            {isExecuting ? "Exchanging…" : "Confirm & Exchange"}
+          </Button>
+          {disabledReason && (
+            <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
+              {disabledReason}
+            </p>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }

@@ -46,14 +46,20 @@ function SetupForm({ availableCurrencies }: { availableCurrencies: Currency[] })
       />
 
       {currency === "USDT" ? (
-        <Input
-          label="USDT wallet address"
-          id="walletAddress"
-          name="walletAddress"
-          type="text"
-          required
-          placeholder="Your USDT payout wallet address"
-        />
+        <div className="flex flex-col gap-1.5">
+          <Input
+            label="USDT wallet address (BSC network only)"
+            id="walletAddress"
+            name="walletAddress"
+            type="text"
+            required
+            placeholder="Your USDT payout wallet address"
+          />
+          <p className="text-xs text-danger-500">
+            Only send to a BSC (BNB Smart Chain) address — funds sent on any other network
+            (TRC20, ERC20, etc.) cannot be recovered.
+          </p>
+        </div>
       ) : (
         <>
           <Input
@@ -112,7 +118,7 @@ export function WithdrawalRecipientCard({
             </p>
             {recipient.wallet_address ? (
               <p>
-                <span className="text-foreground/60">Wallet address:</span>{" "}
+                <span className="text-foreground/60">Wallet address (BSC):</span>{" "}
                 <span className="break-all font-medium">{recipient.wallet_address}</span>
               </p>
             ) : (

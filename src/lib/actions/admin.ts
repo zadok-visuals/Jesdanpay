@@ -132,6 +132,27 @@ export async function rejectWithdrawal(
   return {};
 }
 
+export async function setCnyMarkupRate(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  await requireAdminUser();
+  const markupPercent = Number(formData.get("markupPercent"));
+
+  if (!Number.isFinite(markupPercent) || markupPercent < 0 || markupPercent >= 100) {
+    return { error: "Enter a valid percentage (0-99)." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("admin_set_cny_markup_rate", {
+    p_markup_rate: markupPercent / 100,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return {};
+}
+
 export async function setCnyTierRate(
   _prevState: AdminActionState,
   formData: FormData,

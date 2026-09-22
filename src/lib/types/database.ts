@@ -117,6 +117,12 @@ export type CnyTierRate = {
   updated_at: string;
 };
 
+export type CnyMarkupRate = {
+  id: boolean;
+  markup_rate: number;
+  updated_at: string;
+};
+
 export type CnyConversionDirection = "to_cny" | "from_cny";
 
 export type CnyConversion = {
@@ -197,6 +203,12 @@ export type Database = {
         Row: CnyTierRate;
         Insert: Partial<CnyTierRate> & Pick<CnyTierRate, "tier_min_cny" | "tier_max_cny" | "usdt_to_cny_rate">;
         Update: Partial<CnyTierRate>;
+        Relationships: [];
+      };
+      cny_markup_rate: {
+        Row: CnyMarkupRate;
+        Insert: Partial<CnyMarkupRate> & Pick<CnyMarkupRate, "markup_rate">;
+        Update: Partial<CnyMarkupRate>;
         Relationships: [];
       };
       cny_conversions: {
@@ -287,6 +299,10 @@ export type Database = {
       };
       admin_set_cny_tier_rate: {
         Args: { p_tier_min: number; p_cny_rate: number };
+        Returns: undefined;
+      };
+      admin_set_cny_markup_rate: {
+        Args: { p_markup_rate: number };
         Returns: undefined;
       };
       set_withdrawal_recipient: {

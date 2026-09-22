@@ -5,33 +5,26 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Currency } from "@/lib/types/database";
 import * as busha from "@/lib/busha/client";
-import { applyMarkup, formatEffectiveRate } from "@/lib/busha/markup";
+import { applyMarkup } from "@/lib/busha/markup";
 import { toCustomerError } from "@/lib/provider-error";
 
-export interface BushaQuoteView {
-  id: string;
-  sourceAmount: string;
-  sourceCurrency: Currency;
-  targetAmount: string;
-  targetCurrency: Currency;
-  rateExplained: string;
-  feeSummary: string;
-  expiresAt: string;
-}
-
-export interface BushaActionState {
+export interface ExecuteSwapState {
   error?: string;
-  quote?: BushaQuoteView;
   transactionId?: string;
 }
 
-// Gets a real Busha swap quote, then applies the 0.5% customer-facing markup on top of it.
-// Busha's own quoted amount is only ever used server-side to compute the effective figure —
-// never echoed back from the client and trusted.
-export async function getSwapQuote(
-  _prevState: BushaActionState,
+// A single atomic action replacing the old two-step "Get quote" (creates a real, separately
+// reviewable Busha quote with its own id/expiry) then "Confirm & Exchange" (executes that exact
+// quote by id). The UI now shows a live *estimate* the whole time (via previewLiveBushaRate +
+// client-side math, no real quote object involved) — so by the time the user actually commits,
+// there's no separate quote sitting around to expire or go stale; this creates a real quote for
+// the *current* typed amount and executes it in the same call. Busha's own transfer-response
+// amounts are still what get credited — never the client's estimate — matching the same
+// never-trust-client-echoed-amounts discipline the old two-step version already had.
+export async function executeSwap(
+  _prevState: ExecuteSwapState,
   formData: FormData,
-): Promise<BushaActionState> {
+): Promise<ExecuteSwapState> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -46,69 +39,23 @@ export async function getSwapQuote(
     return { error: "Enter a valid amount." };
   }
 
-  try {
-    const raw = await busha.createQuote({
-      sourceCurrency,
-      targetCurrency,
-      sourceAmount: amount,
-    });
-
-    const effectiveTargetAmount = applyMarkup(Number(raw.target_amount));
-
-    return {
-      quote: {
-        id: raw.id,
-        sourceAmount: raw.source_amount,
-        sourceCurrency,
-        targetAmount: effectiveTargetAmount.toFixed(2),
-        targetCurrency,
-        rateExplained: formatEffectiveRate(
-          Number(raw.source_amount),
-          effectiveTargetAmount,
-          sourceCurrency,
-          targetCurrency,
-        ),
-        feeSummary: "Included in rate (0.5%)",
-        expiresAt: raw.expires_at,
-      },
-    };
-  } catch (err) {
-    return { error: toCustomerError(err, "busha.getSwapQuote") };
-  }
-}
-
-// Executes the swap with Busha, then creates the internal transaction using Busha's own
-// transfer-response amounts — never the quote amounts the client already has, since those may
-// have expired or (in principle) been tampered with client-side.
-export async function confirmSwap(
-  _prevState: BushaActionState,
-  formData: FormData,
-): Promise<BushaActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const quoteId = String(formData.get("quoteId") ?? "");
-  if (!quoteId) return { error: "Missing quote." };
-
   let transfer;
   try {
-    transfer = await busha.createTransfer(quoteId);
+    const quote = await busha.createQuote({ sourceCurrency, targetCurrency, sourceAmount: amount });
+    transfer = await busha.createTransfer(quote.id);
   } catch (err) {
-    return { error: toCustomerError(err, "busha.confirmSwap") };
+    return { error: toCustomerError(err, "busha.executeSwap") };
   }
 
-  const sourceCurrency = transfer.source_currency.toUpperCase() as Currency;
-  const targetCurrency = transfer.target_currency.toUpperCase() as Currency;
-  const sourceAmount = Number(transfer.source_amount);
+  const txSourceCurrency = transfer.source_currency.toUpperCase() as Currency;
+  const txTargetCurrency = transfer.target_currency.toUpperCase() as Currency;
+  const txSourceAmount = Number(transfer.source_amount);
   const effectiveTargetAmount = applyMarkup(Number(transfer.target_amount));
 
   const { data: transactionId, error: rpcError } = await supabase.rpc("create_busha_swap_transaction", {
-    p_source_currency: sourceCurrency,
-    p_target_currency: targetCurrency,
-    p_source_amount: sourceAmount,
+    p_source_currency: txSourceCurrency,
+    p_target_currency: txTargetCurrency,
+    p_source_amount: txSourceAmount,
     p_target_amount: Number(effectiveTargetAmount.toFixed(2)),
     p_provider_reference: transfer.id,
   });

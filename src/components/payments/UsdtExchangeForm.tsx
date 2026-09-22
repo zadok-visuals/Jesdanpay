@@ -46,17 +46,36 @@ function SuccessScreen({ onReset }: { onReset: () => void }) {
 }
 
 export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
-  const [direction, setDirection] = useState<Direction>("NGN_TO_USDT");
+  // Only offer a direction if the user actually holds both sides of it — e.g. a Nigerian user
+  // only ever sees NGN <-> USDT, never GHS/KES, since wallet-row existence is the same
+  // country-eligibility signal the wallet-provisioning trigger already uses (see
+  // RmbExchangeForm/CnyConvertForm's identical `wallets.some(...)` filtering pattern).
+  const availableDirections = DIRECTIONS.filter(
+    (d) => wallets.some((w) => w.currency === d.source) && wallets.some((w) => w.currency === d.target),
+  );
+  const [direction, setDirection] = useState<Direction | null>(availableDirections[0]?.value ?? null);
   const [amount, setAmount] = useState("");
   const [quoteState, setQuoteState] = useState<BushaActionState>({});
   const [confirmState, setConfirmState] = useState<BushaActionState>({});
   const [done, setDone] = useState(false);
   const [isQuoting, startQuoting] = useTransition();
   const [isConfirming, startConfirming] = useTransition();
+  // Called unconditionally (rules of hooks) even though the component may bail out below.
+  const secondsLeft = useCountdown(quoteState.quote?.expiresAt);
+
+  if (!direction) {
+    return (
+      <Card className="p-6 sm:p-8">
+        <h2 className="mb-2 text-base font-semibold">Exchange USDT</h2>
+        <p className="text-sm text-foreground/60">
+          USDT exchange isn&rsquo;t available without a local currency wallet.
+        </p>
+      </Card>
+    );
+  }
 
   const config = DIRECTIONS.find((d) => d.value === direction)!;
   const sourceWallet = wallets.find((w) => w.currency === config.source);
-  const secondsLeft = useCountdown(quoteState.quote?.expiresAt);
   const quoteExpired = quoteState.quote ? secondsLeft <= 0 : false;
   const amountNum = Number(amount) || 0;
   const exceedsBalance = amountNum > 0 && !!sourceWallet && amountNum > sourceWallet.balance;
@@ -118,7 +137,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
           <div>
             <p className="mb-2 text-sm font-medium text-foreground/80">Direction</p>
             <div className="flex flex-wrap gap-2">
-              {DIRECTIONS.map((d) => (
+              {availableDirections.map((d) => (
                 <button
                   key={d.value}
                   type="button"

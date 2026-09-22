@@ -8,7 +8,7 @@ export function TransactionsTable({ transactions }: { transactions: Transaction[
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-12 text-center">
         <p className="text-sm font-medium text-foreground/60">No transactions yet</p>
         <p className="mt-1 text-xs text-foreground/40">
-          Your RMB and USDT exchanges will show up here once you make one.
+          Your CNY and USDT exchanges will show up here once you make one.
         </p>
       </div>
     );

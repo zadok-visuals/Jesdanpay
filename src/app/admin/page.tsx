@@ -130,10 +130,10 @@ export default async function AdminPage() {
       </section>
 
       <section>
-        <h1 className="mb-6 text-xl font-semibold">RMB Exchange Queue (Manual)</h1>
+        <h1 className="mb-6 text-xl font-semibold">CNY Exchange Queue (Manual)</h1>
         {!rmbTransactions || rmbTransactions.length === 0 ? (
           <Card className="p-10 text-center text-sm text-foreground/50">
-            No RMB exchange requests yet.
+            No CNY exchange requests yet.
           </Card>
         ) : (
           <div className="flex flex-col gap-4">

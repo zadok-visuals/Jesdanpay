@@ -57,7 +57,7 @@ export function AccountsView({
 
         {isCny ? (
           <div className="flex flex-wrap gap-3">
-            <Link href="/payments">
+            <Link href="/pay-to-china">
               <Button>Send to China</Button>
             </Link>
             <Link href="/payments?tab=cny">
@@ -101,7 +101,7 @@ export function AccountsView({
             <Button variant="secondary" onClick={() => setWithdrawOpen((o) => !o)}>
               {withdrawOpen ? "Cancel" : "Withdraw"}
             </Button>
-            <Link href="/payments">
+            <Link href="/pay-to-china">
               <Button variant="secondary">Send to China</Button>
             </Link>
             <Link href="/payments?tab=usdt">
@@ -133,7 +133,7 @@ export function AccountsView({
         </h2>
         <p className="text-sm text-foreground/50">
           {isUsdt
-            ? "USDT is held in your JesDanPay balance. Deposit directly, or use the USDT Exchange flow in Payments to convert to or from NGN, GHS, or KES."
+            ? "USDT is held in your JesDanPay balance. Deposit directly, or use the USDT Exchange flow in Conversions to convert to or from NGN, GHS, or KES."
             : `Use "Add Money" above to deposit ${wallet.currency} — your balance updates once the transfer is confirmed.`}
         </p>
       </Card>

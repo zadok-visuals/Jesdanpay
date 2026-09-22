@@ -38,11 +38,11 @@ export function TransactionsIcon({ className = "" }: IconProps) {
   );
 }
 
-export function CardsIcon({ className = "" }: IconProps) {
+export function PayToChinaIcon({ className = "" }: IconProps) {
   return (
     <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
-      <path d="M2.5 9.5h19" />
+      <path d="M22 2 11 13" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M22 2 15 22l-4-9-9-4 20-7Z" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

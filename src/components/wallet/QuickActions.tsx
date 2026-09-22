@@ -1,12 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/Button";
 
 function PlusIcon() {
   return (
-    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M22 2 11 13" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M22 2 15 22l-4-9-9-4 20-7Z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function WithdrawIcon() {
+  return (
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 5v14M5 12l7 7 7-7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -19,70 +36,53 @@ function SwapIcon() {
   );
 }
 
-const CONVERT_OPTIONS = [
-  { label: "Send to China (RMB)", href: "/payments" },
-  { label: "Exchange USDT", href: "/payments?tab=usdt" },
-  { label: "Convert to CNY", href: "/payments?tab=cny" },
-];
-
-function ConvertAction() {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
+function TradeIcon() {
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium text-foreground/70 transition-colors hover:text-primary-700 sm:w-18 sm:text-xs"
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary-100 sm:h-11 sm:w-11">
-          <SwapIcon />
-        </span>
-        <span className="leading-tight">Convert</span>
-      </button>
-
-      {open && (
-        <div className="absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 rounded-xl border border-foreground/10 bg-background p-1.5 shadow-lg">
-          {CONVERT_OPTIONS.map((option) => (
-            <Link
-              key={option.href}
-              href={option.href}
-              onClick={() => setOpen(false)}
-              className="block rounded-lg px-3 py-2 text-left text-sm font-medium text-foreground/80 hover:bg-primary-50 hover:text-primary-700"
-            >
-              {option.label}
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 12a9 9 0 0 1-15.5 6.3M3 12a9 9 0 0 1 15.5-6.3" strokeLinecap="round" />
+      <path d="M3 16v-4h4M21 8v4h-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
+const SECONDARY_ACTIONS = [
+  { label: "Withdraw", href: "/accounts", Icon: WithdrawIcon },
+  { label: "Convert", href: "/payments?tab=cny", Icon: SwapIcon },
+  { label: "Trade USDT", href: "/payments?tab=usdt", Icon: TradeIcon },
+];
+
 export function QuickActions() {
   return (
-    <div className="flex flex-nowrap justify-center gap-2 sm:gap-3">
-      <Link href="/accounts">
-        <span className="flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium text-foreground/70 transition-colors hover:text-primary-700 sm:w-18 sm:text-xs">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary-100 sm:h-11 sm:w-11">
+    <div className="flex flex-col gap-4">
+      {/* Primary actions — the two most common things a user does */}
+      <div className="flex gap-3">
+        <Link href="/accounts" className="flex-1">
+          <Button className="w-full" size="lg">
             <PlusIcon />
-          </span>
-          <span className="leading-tight">Add Money</span>
-        </span>
-      </Link>
-      <ConvertAction />
+            Add Money
+          </Button>
+        </Link>
+        <Link href="/pay-to-china" className="flex-1">
+          <Button variant="secondary" className="w-full" size="lg">
+            <SendIcon />
+            Send to China
+          </Button>
+        </Link>
+      </div>
+
+      {/* Secondary quick actions — everything else, one tap away, no menu to open first */}
+      <div className="flex flex-nowrap justify-center gap-2 sm:gap-3">
+        {SECONDARY_ACTIONS.map(({ label, href, Icon }) => (
+          <Link key={href} href={href}>
+            <span className="flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium text-foreground/70 transition-colors hover:text-primary-700 sm:w-18 sm:text-xs">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary-100 sm:h-11 sm:w-11">
+                <Icon />
+              </span>
+              <span className="leading-tight">{label}</span>
+            </span>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

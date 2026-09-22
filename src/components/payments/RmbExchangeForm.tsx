@@ -527,7 +527,7 @@ function ConfirmStep({
           </svg>
         </span>
         <p className="text-xs leading-relaxed text-accent-900">
-          RMB transfers are processed manually by our team — the amount above will be held from your
+          CNY transfers are processed manually by our team — the amount above will be held from your
           balance now, and we&rsquo;ll confirm the rate and complete your transfer within 1–2 business
           days.
         </p>

@@ -2,30 +2,23 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { AdminFxRate, SavedRmbRecipient, Wallet } from "@/lib/types/database";
-import { RmbExchangeForm } from "@/components/payments/RmbExchangeForm";
+import type { AdminFxRate, Wallet } from "@/lib/types/database";
 import { UsdtExchangeForm } from "@/components/payments/UsdtExchangeForm";
 import { CnyConvertForm } from "@/components/payments/CnyConvertForm";
 
-type Tab = "RMB Exchange" | "USDT Exchange" | "Convert to CNY";
-const TABS: Tab[] = ["RMB Exchange", "USDT Exchange", "Convert to CNY"];
+type Tab = "USDT Exchange" | "Convert to CNY";
+const TABS: Tab[] = ["USDT Exchange", "Convert to CNY"];
 
 interface PaymentsViewProps {
   wallets: Wallet[];
   fxRates: AdminFxRate[];
-  savedRecipients: SavedRmbRecipient[];
 }
 
-export function PaymentsView({ wallets, fxRates, savedRecipients }: PaymentsViewProps) {
-  // Lets other pages deep-link into a specific tab, e.g. /payments?tab=usdt from the
-  // dashboard's quick actions — falls back to RMB Exchange when absent/unrecognized.
+export function PaymentsView({ wallets, fxRates }: PaymentsViewProps) {
+  // Lets other pages deep-link into a specific tab, e.g. /payments?tab=cny from the
+  // dashboard's quick actions — falls back to USDT Exchange when absent/unrecognized.
   const searchParams = useSearchParams();
-  const initialTab: Tab =
-    searchParams.get("tab") === "usdt"
-      ? "USDT Exchange"
-      : searchParams.get("tab") === "cny"
-        ? "Convert to CNY"
-        : "RMB Exchange";
+  const initialTab: Tab = searchParams.get("tab") === "cny" ? "Convert to CNY" : "USDT Exchange";
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   return (
@@ -49,9 +42,7 @@ export function PaymentsView({ wallets, fxRates, savedRecipients }: PaymentsView
       </div>
 
       {/* Panel */}
-      {activeTab === "RMB Exchange" ? (
-        <RmbExchangeForm wallets={wallets} savedRecipients={savedRecipients} />
-      ) : activeTab === "USDT Exchange" ? (
+      {activeTab === "USDT Exchange" ? (
         <UsdtExchangeForm wallets={wallets} />
       ) : (
         <CnyConvertForm wallets={wallets} fxRates={fxRates} />

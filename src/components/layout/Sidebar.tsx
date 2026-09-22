@@ -6,8 +6,8 @@ import { Wordmark } from "@/components/layout/Wordmark";
 import { logOut } from "@/lib/actions/auth";
 import {
   AccountsIcon,
-  CardsIcon,
   HomeIcon,
+  PayToChinaIcon,
   PaymentsIcon,
   ReportsIcon,
   TransactionsIcon,
@@ -16,9 +16,9 @@ import {
 const NAV_ITEMS = [
   { href: "/home", label: "Home", Icon: HomeIcon },
   { href: "/accounts", label: "Accounts", Icon: AccountsIcon },
-  { href: "/payments", label: "Payments", Icon: PaymentsIcon },
+  { href: "/pay-to-china", label: "Pay to China", Icon: PayToChinaIcon },
+  { href: "/payments", label: "Conversions", Icon: PaymentsIcon },
   { href: "/transactions", label: "Transactions", Icon: TransactionsIcon },
-  { href: "/cards", label: "Cards", Icon: CardsIcon },
   { href: "/reports", label: "Reports", Icon: ReportsIcon },
 ] as const;
 

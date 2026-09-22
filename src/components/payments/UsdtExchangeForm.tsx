@@ -59,7 +59,14 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const secondsLeft = useCountdown(quoteState.quote?.expiresAt);
   const quoteExpired = quoteState.quote ? secondsLeft <= 0 : false;
   const amountNum = Number(amount) || 0;
-  const amountValid = amountNum > 0 && amountNum <= (sourceWallet?.balance ?? 0);
+  const exceedsBalance = amountNum > 0 && !!sourceWallet && amountNum > sourceWallet.balance;
+  const amountValid = amountNum > 0 && !exceedsBalance;
+  const quoteDisabledReason =
+    amountNum <= 0
+      ? "Enter an amount to continue"
+      : exceedsBalance
+        ? `Amount exceeds your available ${config.source} balance`
+        : null;
 
   function handleGetQuote() {
     const fd = new FormData();
@@ -141,23 +148,38 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
               value={amount}
               onChange={setAmount}
             />
-            {sourceWallet && (
-              <p className="mt-1.5 text-xs text-foreground/50">
-                Available: {formatBalance(config.source, sourceWallet.balance)}
+            {exceedsBalance ? (
+              <p className="mt-1.5 text-xs text-danger-500">
+                Amount exceeds your available {config.source} balance of{" "}
+                {formatBalance(config.source, sourceWallet?.balance ?? 0)}
               </p>
+            ) : (
+              sourceWallet && (
+                <p className="mt-1.5 text-xs text-foreground/50">
+                  Available: {formatBalance(config.source, sourceWallet.balance)}
+                </p>
+              )
             )}
           </div>
 
           {quoteState.error && <p className="text-sm text-danger-500">{quoteState.error}</p>}
 
-          <Button
-            onClick={handleGetQuote}
-            loading={isQuoting}
-            disabled={!amountValid}
-            className="self-start"
-          >
-            Get quote
-          </Button>
+          <div className="flex flex-col items-start gap-1.5">
+            <Button
+              onClick={handleGetQuote}
+              loading={isQuoting}
+              disabled={!amountValid}
+              title={quoteDisabledReason ?? undefined}
+              className="self-start"
+            >
+              Get quote
+            </Button>
+            {quoteDisabledReason && (
+              <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
+                {quoteDisabledReason}
+              </p>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-6">

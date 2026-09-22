@@ -28,7 +28,14 @@ export function WithdrawForm({
   const amountNum = parseFloat(amount) || 0;
   const fee = Math.round(amountNum * WITHDRAWAL_FEE_RATE * 100) / 100;
   const netAmount = amountNum - fee;
-  const amountValid = amountNum > 0 && amountNum <= balance;
+  const exceedsBalance = amountNum > 0 && amountNum > balance;
+  const amountValid = amountNum > 0 && !exceedsBalance;
+  const submitDisabledReason =
+    amountNum <= 0
+      ? "Enter an amount to continue"
+      : exceedsBalance
+        ? `Amount exceeds your available ${currency} balance`
+        : null;
 
   function handleSubmit() {
     const fd = new FormData();
@@ -113,7 +120,15 @@ export function WithdrawForm({
           value={amount}
           onChange={setAmount}
         />
-        <p className="mt-1.5 text-xs text-foreground/50">Available: {formatBalance(currency, balance)}</p>
+        {exceedsBalance ? (
+          <p className="mt-1.5 text-xs text-danger-500">
+            Amount exceeds your available {currency} balance of {formatBalance(currency, balance)}
+          </p>
+        ) : (
+          <p className="mt-1.5 text-xs text-foreground/50">
+            Available: {formatBalance(currency, balance)}
+          </p>
+        )}
       </div>
 
       {amountNum > 0 && (
@@ -131,9 +146,22 @@ export function WithdrawForm({
 
       {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
 
-      <Button onClick={handleSubmit} loading={isPending} disabled={!amountValid} className="self-start">
-        {isPending ? "Submitting…" : "Request withdrawal"}
-      </Button>
+      <div className="flex flex-col items-start gap-1.5">
+        <Button
+          onClick={handleSubmit}
+          loading={isPending}
+          disabled={!amountValid}
+          title={submitDisabledReason ?? undefined}
+          className="self-start"
+        >
+          {isPending ? "Submitting…" : "Request withdrawal"}
+        </Button>
+        {submitDisabledReason && (
+          <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
+            {submitDisabledReason}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

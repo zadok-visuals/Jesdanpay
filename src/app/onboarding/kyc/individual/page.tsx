@@ -22,6 +22,19 @@ export default function IndividualKycPage() {
   const canContinueStep1 = phone.trim().length > 0;
   const canContinueStep2 = bvnOrNin.trim().length > 0 && selfie !== null;
 
+  let continueDisabledReason: string | null = null;
+  if (step === 1 && !canContinueStep1) {
+    continueDisabledReason = "Enter your phone number to continue";
+  } else if (step === 2 && !canContinueStep2) {
+    if (!bvnOrNin.trim() && !selfie) {
+      continueDisabledReason = "Enter your BVN or NIN and upload a selfie to continue";
+    } else if (!bvnOrNin.trim()) {
+      continueDisabledReason = "Enter your BVN or NIN to continue";
+    } else {
+      continueDisabledReason = "Upload a selfie to continue";
+    }
+  }
+
   return (
     <Card className="p-6 sm:p-8">
       <StepIndicator step={step} total={TOTAL_STEPS} />
@@ -87,13 +100,19 @@ export default function IndividualKycPage() {
           )}
 
           {step < TOTAL_STEPS ? (
-            <Button
-              type="button"
-              disabled={step === 1 ? !canContinueStep1 : !canContinueStep2}
-              onClick={() => setStep(step + 1)}
-            >
-              Continue
-            </Button>
+            <div className="flex flex-col items-end gap-1.5">
+              <Button
+                type="button"
+                disabled={step === 1 ? !canContinueStep1 : !canContinueStep2}
+                onClick={() => setStep(step + 1)}
+                title={continueDisabledReason ?? undefined}
+              >
+                Continue
+              </Button>
+              {continueDisabledReason && (
+                <p className="text-xs text-foreground/50">{continueDisabledReason}</p>
+              )}
+            </div>
           ) : (
             <Button type="submit" loading={pending}>
               {pending ? "Submitting…" : "Submit for review"}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { AdminFxRate, Currency, Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { convertToCny, type CnyConvertActionState } from "@/lib/actions/payments";
@@ -41,6 +42,8 @@ export function CnyConvertForm({ wallets, fxRates }: { wallets: Wallet[]; fxRate
   const [done, setDone] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [actionState, setActionState] = useState<CnyConvertActionState>({});
+  const [isRefreshing, startRefreshing] = useTransition();
+  const router = useRouter();
 
   const sourceWallet = wallets.find((w) => w.currency === sourceCurrency);
   const rateRow = fxRates.find((r) => r.source_currency === sourceCurrency);
@@ -49,9 +52,20 @@ export function CnyConvertForm({ wallets, fxRates }: { wallets: Wallet[]; fxRate
   const lockedRate = publishedRate != null ? publishedRate * (1 - margin) : null;
 
   const amountNum = parseFloat(amount) || 0;
-  const amountValid = amountNum > 0 && amountNum <= (sourceWallet?.balance ?? 0);
+  const amountEntered = amountNum > 0;
+  const exceedsBalance = amountEntered && !!sourceWallet && amountNum > sourceWallet.balance;
+  const amountValid = amountEntered && !exceedsBalance;
   const rateAvailable = lockedRate != null;
   const lockedCnyAmount = lockedRate != null ? amountNum * lockedRate : 0;
+
+  let lockButtonReason: string | null = null;
+  if (!amountEntered) {
+    lockButtonReason = "Enter an amount to continue";
+  } else if (exceedsBalance) {
+    lockButtonReason = `Amount exceeds your available ${sourceCurrency} balance`;
+  } else if (!rateAvailable) {
+    lockButtonReason = `Rate not available for ${sourceCurrency} yet — try refreshing`;
+  }
 
   function reset() {
     setDone(false);
@@ -131,10 +145,17 @@ export function CnyConvertForm({ wallets, fxRates }: { wallets: Wallet[]; fxRate
             value={amount}
             onChange={setAmount}
           />
-          {sourceWallet && (
-            <p className="mt-1.5 text-xs text-foreground/50">
-              Available: {formatBalance(sourceCurrency, sourceWallet.balance)}
+          {exceedsBalance ? (
+            <p className="mt-1.5 text-xs text-danger-500">
+              Amount exceeds your available {sourceCurrency} balance of{" "}
+              {formatBalance(sourceCurrency, sourceWallet?.balance ?? 0)}
             </p>
+          ) : (
+            sourceWallet && (
+              <p className="mt-1.5 text-xs text-foreground/50">
+                Available: {formatBalance(sourceCurrency, sourceWallet.balance)}
+              </p>
+            )
           )}
         </div>
 
@@ -143,37 +164,66 @@ export function CnyConvertForm({ wallets, fxRates }: { wallets: Wallet[]; fxRate
             <p className="text-sm font-semibold text-primary-800">Locked-rate preview</p>
           </div>
           <dl className="divide-y divide-border">
-            {[
-              {
-                label: "Locked rate",
-                value: rateAvailable
-                  ? `1 ${sourceCurrency} = ${lockedRate!.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
-                  : "Not available right now",
-              },
-              { label: "Margin", value: `${(margin * 100).toFixed(0)}%` },
-              {
-                label: "You'll receive (CNY balance)",
-                value: rateAvailable ? formatBalance("CNY", lockedCnyAmount) : "—",
-              },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex items-start justify-between gap-4 px-6 py-3.5">
-                <dt className="shrink-0 text-sm text-foreground/60">{label}</dt>
-                <dd className="text-right text-sm font-medium text-foreground">{value}</dd>
-              </div>
-            ))}
+            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+              <dt className="shrink-0 text-sm text-foreground/60">Locked rate</dt>
+              <dd className="text-right text-sm font-medium text-foreground">
+                {!amountEntered ? (
+                  <span className="text-foreground/40">Enter an amount to see your rate</span>
+                ) : exceedsBalance ? (
+                  <span className="text-foreground/40">Fix the amount above first</span>
+                ) : rateAvailable ? (
+                  `1 ${sourceCurrency} = ${lockedRate!.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
+                ) : (
+                  <span className="flex items-center gap-2 text-danger-500">
+                    Rate not set for {sourceCurrency} yet
+                    <button
+                      type="button"
+                      onClick={() => startRefreshing(() => router.refresh())}
+                      className="font-semibold text-primary-600 underline hover:text-primary-700"
+                    >
+                      {isRefreshing ? "Checking…" : "Refresh"}
+                    </button>
+                  </span>
+                )}
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+              <dt className="shrink-0 text-sm text-foreground/60">Margin</dt>
+              <dd className="text-right text-sm font-medium text-foreground">
+                {(margin * 100).toFixed(0)}%
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+              <dt className="shrink-0 text-sm text-foreground/60">You&rsquo;ll receive (CNY balance)</dt>
+              <dd className="text-right text-sm font-medium text-foreground">
+                {amountEntered && !exceedsBalance && rateAvailable
+                  ? formatBalance("CNY", lockedCnyAmount)
+                  : "—"}
+              </dd>
+            </div>
           </dl>
         </div>
 
         {actionState.error && <p className="text-sm text-danger-500">{actionState.error}</p>}
 
-        <Button
-          onClick={handleSubmit}
-          loading={isPending}
-          disabled={!amountValid || !rateAvailable}
-          className="self-start"
-        >
-          {isPending ? "Locking rate…" : "Lock in CNY balance"}
-        </Button>
+        <div className="flex flex-col items-start gap-1.5">
+          <Button
+            onClick={handleSubmit}
+            loading={isPending}
+            disabled={!amountValid || !rateAvailable}
+            title={lockButtonReason ?? undefined}
+            className="self-start"
+          >
+            {isPending ? "Locking rate…" : "Lock in CNY balance"}
+          </Button>
+          {lockButtonReason && (
+            <p
+              className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}
+            >
+              {lockButtonReason}
+            </p>
+          )}
+        </div>
       </div>
     </Card>
   );

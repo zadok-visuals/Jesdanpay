@@ -114,14 +114,20 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
 
       {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
 
-      <Button
-        onClick={handleDeposit}
-        loading={isDepositing}
-        disabled={!amount || Number(amount) <= 0}
-        className="self-start"
-      >
-        Deposit now
-      </Button>
+      <div className="flex flex-col items-start gap-1.5">
+        <Button
+          onClick={handleDeposit}
+          loading={isDepositing}
+          disabled={!amount || Number(amount) <= 0}
+          title={!amount || Number(amount) <= 0 ? "Enter an amount to continue" : undefined}
+          className="self-start"
+        >
+          Deposit now
+        </Button>
+        {(!amount || Number(amount) <= 0) && (
+          <p className="text-xs text-foreground/50">Enter an amount to continue</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -308,12 +314,13 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
 
       {depositState.error && <p className="text-sm text-danger-500">{depositState.error}</p>}
 
-      <div className="flex gap-3">
+      <div className="flex flex-col items-start gap-1.5">
         {!quoteState.quoteId ? (
           <Button
             onClick={handleGetQuote}
             loading={isQuoting}
             disabled={!amount || Number(amount) <= 0}
+            title={!amount || Number(amount) <= 0 ? "Enter an amount to continue" : undefined}
             className="self-start"
           >
             Preview
@@ -322,6 +329,9 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
           <Button onClick={handleDeposit} loading={isDepositing} className="self-start">
             Deposit now
           </Button>
+        )}
+        {!quoteState.quoteId && (!amount || Number(amount) <= 0) && (
+          <p className="text-xs text-foreground/50">Enter an amount to continue</p>
         )}
       </div>
     </div>

@@ -27,6 +27,23 @@ export default function BusinessKycPage() {
     3: directorId !== null,
   };
 
+  let continueDisabledReason: string | null = null;
+  if (step === 1 && !canContinue[1]) {
+    if (!businessName.trim() && !tin.trim()) {
+      continueDisabledReason = "Enter your business name and TIN to continue";
+    } else if (!businessName.trim()) {
+      continueDisabledReason = "Enter your registered business name to continue";
+    } else {
+      continueDisabledReason = "Enter your TIN to continue";
+    }
+  } else if (step === 2 && !canContinue[2]) {
+    continueDisabledReason = "Upload your CAC certificate to continue";
+  } else if (step === 3 && !canContinue[3]) {
+    continueDisabledReason = "Upload the director's ID to continue";
+  }
+  const submitDisabledReason =
+    proofOfBusinessAddress === null ? "Upload proof of business address to submit" : null;
+
   return (
     <Card className="p-6 sm:p-8">
       <StepIndicator step={step} total={TOTAL_STEPS} />
@@ -106,17 +123,33 @@ export default function BusinessKycPage() {
           )}
 
           {step < TOTAL_STEPS ? (
-            <Button
-              type="button"
-              disabled={canContinue[step] === false}
-              onClick={() => setStep(step + 1)}
-            >
-              Continue
-            </Button>
+            <div className="flex flex-col items-end gap-1.5">
+              <Button
+                type="button"
+                disabled={canContinue[step] === false}
+                onClick={() => setStep(step + 1)}
+                title={continueDisabledReason ?? undefined}
+              >
+                Continue
+              </Button>
+              {continueDisabledReason && (
+                <p className="text-xs text-foreground/50">{continueDisabledReason}</p>
+              )}
+            </div>
           ) : (
-            <Button type="submit" loading={pending} disabled={proofOfBusinessAddress === null}>
-              {pending ? "Submitting…" : "Submit for review"}
-            </Button>
+            <div className="flex flex-col items-end gap-1.5">
+              <Button
+                type="submit"
+                loading={pending}
+                disabled={proofOfBusinessAddress === null}
+                title={submitDisabledReason ?? undefined}
+              >
+                {pending ? "Submitting…" : "Submit for review"}
+              </Button>
+              {submitDisabledReason && (
+                <p className="text-xs text-foreground/50">{submitDisabledReason}</p>
+              )}
+            </div>
           )}
         </div>
       </form>

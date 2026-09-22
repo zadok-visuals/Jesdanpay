@@ -125,7 +125,14 @@ function SourceStep({
   );
   const sourceWallet = wallets.find((w) => w.currency === state.sourceCurrency);
   const amountNum = parseFloat(state.amount) || 0;
-  const amountValid = amountNum > 0 && amountNum <= (sourceWallet?.balance ?? 0);
+  const exceedsBalance = amountNum > 0 && !!sourceWallet && amountNum > sourceWallet.balance;
+  const amountValid = amountNum > 0 && !exceedsBalance;
+  const nextDisabledReason =
+    amountNum <= 0
+      ? "Enter an amount to continue"
+      : exceedsBalance
+        ? `Amount exceeds your available ${state.sourceCurrency} balance`
+        : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -170,10 +177,17 @@ function SourceStep({
           value={state.amount}
           onChange={(v) => onChange({ amount: v })}
         />
-        {sourceWallet && (
-          <p className="mt-1.5 text-xs text-foreground/50">
-            Available: {formatBalance(state.sourceCurrency, sourceWallet.balance)}
+        {exceedsBalance ? (
+          <p className="mt-1.5 text-xs text-danger-500">
+            Amount exceeds your available {state.sourceCurrency} balance of{" "}
+            {formatBalance(state.sourceCurrency, sourceWallet?.balance ?? 0)}
           </p>
+        ) : (
+          sourceWallet && (
+            <p className="mt-1.5 text-xs text-foreground/50">
+              Available: {formatBalance(state.sourceCurrency, sourceWallet.balance)}
+            </p>
+          )
         )}
       </div>
 
@@ -189,9 +203,21 @@ function SourceStep({
         </div>
       </div>
 
-      <Button disabled={!amountValid} onClick={onNext} className="self-start">
-        Next — Recipient details
-      </Button>
+      <div className="flex flex-col items-start gap-1.5">
+        <Button
+          disabled={!amountValid}
+          onClick={onNext}
+          title={nextDisabledReason ?? undefined}
+          className="self-start"
+        >
+          Next — Recipient details
+        </Button>
+        {nextDisabledReason && (
+          <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
+            {nextDisabledReason}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -225,6 +251,27 @@ function RecipientStep({
           state.recipientBankName.trim().length > 0 &&
           state.recipientAccountHolderName.trim().length > 0;
   const isValid = recipientValid && (!state.saveRecipient || state.saveLabel.trim().length > 0);
+
+  let nextDisabledReason: string | null = null;
+  if (!recipientValid) {
+    if (state.payoutMethod === "alipay") {
+      nextDisabledReason = state.useQrCode
+        ? "Upload a QR code to continue"
+        : "Enter the recipient's Alipay ID";
+    } else if (state.payoutMethod === "wechat") {
+      nextDisabledReason = state.useQrCode
+        ? "Upload a QR code to continue"
+        : "Enter the recipient's WeChat ID";
+    } else if (!state.recipientBankAccountNumber.trim()) {
+      nextDisabledReason = "Enter the recipient's bank account number";
+    } else if (!state.recipientBankName.trim()) {
+      nextDisabledReason = "Enter the recipient's bank name";
+    } else if (!state.recipientAccountHolderName.trim()) {
+      nextDisabledReason = "Enter the recipient's account holder name";
+    }
+  } else if (state.saveRecipient && !state.saveLabel.trim()) {
+    nextDisabledReason = "Name this recipient to save it";
+  }
 
   function applySavedRecipient(recipient: SavedRmbRecipient) {
     onChange({
@@ -398,13 +445,18 @@ function RecipientStep({
         )}
       </div>
 
-      <div className="flex gap-3">
-        <Button variant="secondary" onClick={onBack}>
-          Back
-        </Button>
-        <Button disabled={!isValid} onClick={onNext}>
-          Next — Review
-        </Button>
+      <div className="flex flex-col items-start gap-1.5">
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={onBack}>
+            Back
+          </Button>
+          <Button disabled={!isValid} onClick={onNext} title={nextDisabledReason ?? undefined}>
+            Next — Review
+          </Button>
+        </div>
+        {nextDisabledReason && (
+          <p className="text-xs text-foreground/50">{nextDisabledReason}</p>
+        )}
       </div>
     </div>
   );

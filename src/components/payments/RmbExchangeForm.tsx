@@ -44,11 +44,10 @@ const PAYOUT_METHODS: { value: PayoutMethod; label: string; icon: string }[] = [
   { value: "bank", label: "Bank Account", icon: "🏦" },
 ];
 
-// CNY is deliberately excluded — no deposit or swap path ever credits a user's CNY wallet
-// (Busha and Klasha both reject CNY outright, and completing a manual RMB request only
-// records what was delivered as metadata, never credits a balance), so it can never be a
-// valid source here.
-const SEND_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "USDT"];
+// CNY is included as a source since the rate-lock conversion feature (Convert to CNY tab) now
+// gives it a real path to a nonzero balance — sending from it debits the locked balance same as
+// any other wallet.
+const SEND_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "USDT", "CNY"];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

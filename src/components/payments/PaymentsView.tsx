@@ -2,22 +2,29 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { Wallet } from "@/lib/types/database";
+import type { AdminFxRate, Wallet } from "@/lib/types/database";
 import { RmbExchangeForm } from "@/components/payments/RmbExchangeForm";
 import { UsdtExchangeForm } from "@/components/payments/UsdtExchangeForm";
+import { CnyConvertForm } from "@/components/payments/CnyConvertForm";
 
-type Tab = "RMB Exchange" | "USDT Exchange";
-const TABS: Tab[] = ["RMB Exchange", "USDT Exchange"];
+type Tab = "RMB Exchange" | "USDT Exchange" | "Convert to CNY";
+const TABS: Tab[] = ["RMB Exchange", "USDT Exchange", "Convert to CNY"];
 
 interface PaymentsViewProps {
   wallets: Wallet[];
+  fxRates: AdminFxRate[];
 }
 
-export function PaymentsView({ wallets }: PaymentsViewProps) {
+export function PaymentsView({ wallets, fxRates }: PaymentsViewProps) {
   // Lets other pages deep-link into a specific tab, e.g. /payments?tab=usdt from the
   // dashboard's quick actions — falls back to RMB Exchange when absent/unrecognized.
   const searchParams = useSearchParams();
-  const initialTab: Tab = searchParams.get("tab") === "usdt" ? "USDT Exchange" : "RMB Exchange";
+  const initialTab: Tab =
+    searchParams.get("tab") === "usdt"
+      ? "USDT Exchange"
+      : searchParams.get("tab") === "cny"
+        ? "Convert to CNY"
+        : "RMB Exchange";
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   return (
@@ -43,8 +50,10 @@ export function PaymentsView({ wallets }: PaymentsViewProps) {
       {/* Panel */}
       {activeTab === "RMB Exchange" ? (
         <RmbExchangeForm wallets={wallets} />
-      ) : (
+      ) : activeTab === "USDT Exchange" ? (
         <UsdtExchangeForm wallets={wallets} />
+      ) : (
+        <CnyConvertForm wallets={wallets} fxRates={fxRates} />
       )}
     </div>
   );

@@ -9,16 +9,15 @@ export default async function PaymentsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: wallets } = await supabase
-    .from("wallets")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("currency");
+  const [{ data: wallets }, { data: fxRates }] = await Promise.all([
+    supabase.from("wallets").select("*").eq("user_id", user.id).order("currency"),
+    supabase.from("admin_fx_rates").select("*"),
+  ]);
 
   return (
     <div>
       <h1 className="mb-6 text-xl font-semibold">Payments</h1>
-      <PaymentsView wallets={wallets ?? []} />
+      <PaymentsView wallets={wallets ?? []} fxRates={fxRates ?? []} />
     </div>
   );
 }

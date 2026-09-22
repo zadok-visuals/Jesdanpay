@@ -4,6 +4,10 @@ import { Pill, statusTone } from "@/components/ui/Pill";
 import { formatBalance } from "@/lib/currency";
 import { RmbQueueActions } from "@/components/admin/RmbQueueActions";
 import { KycQueueActions } from "@/components/admin/KycQueueActions";
+import { FxRateForm } from "@/components/admin/FxRateForm";
+import type { Currency } from "@/lib/types/database";
+
+const FX_SOURCE_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "USDT"];
 
 const PAYOUT_LABELS: Record<string, string> = {
   alipay: "Alipay",
@@ -14,10 +18,12 @@ const PAYOUT_LABELS: Record<string, string> = {
 export default async function AdminPage() {
   const admin = createAdminClient();
 
-  const [{ data: rmbTransactions }, { data: pendingProfiles }] = await Promise.all([
+  const [{ data: rmbTransactions }, { data: pendingProfiles }, { data: fxRates }] = await Promise.all([
     admin.from("transactions").select("*").eq("type", "rmb_manual").order("created_at", { ascending: false }),
     admin.from("profiles").select("id, email, full_name, kyc_type").eq("kyc_status", "pending"),
+    admin.from("admin_fx_rates").select("*"),
   ]);
+  const fxRateByCurrency = new Map((fxRates ?? []).map((r) => [r.source_currency, r.cny_rate]));
 
   const txIds = (rmbTransactions ?? []).map((t) => t.id);
   const userIds = [...new Set((rmbTransactions ?? []).map((t) => t.user_id))];
@@ -52,6 +58,22 @@ export default async function AdminPage() {
 
   return (
     <div className="flex flex-col gap-10">
+      <section>
+        <h1 className="mb-6 text-xl font-semibold">CNY Conversion Rates</h1>
+        <Card className="flex flex-col gap-4 p-5">
+          <p className="text-xs text-foreground/50">
+            The rate users convert against when locking a CNY balance (before the margin is
+            applied). Update these regularly — conversion is blocked for a currency until a rate
+            is set here.
+          </p>
+          <div className="flex flex-wrap gap-6">
+            {FX_SOURCE_CURRENCIES.map((currency) => (
+              <FxRateForm key={currency} currency={currency} cnyRate={fxRateByCurrency.get(currency) ?? null} />
+            ))}
+          </div>
+        </Card>
+      </section>
+
       <section>
         <h1 className="mb-6 text-xl font-semibold">KYC Review</h1>
         {!pendingProfiles || pendingProfiles.length === 0 ? (

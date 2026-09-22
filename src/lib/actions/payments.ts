@@ -78,3 +78,34 @@ export async function submitRmbExchange(
 
   return { transactionId: transactionId ?? undefined };
 }
+
+export interface CnyConvertActionState {
+  error?: string;
+  conversionId?: string;
+}
+
+export async function convertToCny(
+  _prevState: CnyConvertActionState,
+  formData: FormData,
+): Promise<CnyConvertActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const sourceCurrency = String(formData.get("sourceCurrency") ?? "") as Currency;
+  const amount = Number(formData.get("amount"));
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Enter a valid amount." };
+  }
+
+  const { data: conversionId, error } = await supabase.rpc("convert_to_cny_locked", {
+    p_source_currency: sourceCurrency,
+    p_source_amount: amount,
+  });
+
+  if (error) return { error: error.message };
+  return { conversionId: conversionId ?? undefined };
+}

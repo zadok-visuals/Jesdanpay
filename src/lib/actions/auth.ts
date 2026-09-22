@@ -14,8 +14,9 @@ export async function signUp(
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("fullName") ?? "");
+  const country = String(formData.get("country") ?? "");
 
-  if (!email || !password || !fullName) {
+  if (!email || !password || !fullName || !country) {
     return { error: "All fields are required." };
   }
 
@@ -23,7 +24,7 @@ export async function signUp(
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName } },
+    options: { data: { full_name: fullName, country } },
   });
 
   if (error) {

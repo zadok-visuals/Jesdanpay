@@ -56,6 +56,25 @@ export default function SignupPage() {
             showStrength
             placeholder="At least 8 characters"
           />
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="country" className="text-sm font-medium text-foreground/80">
+              Country
+            </label>
+            <select
+              id="country"
+              name="country"
+              required
+              defaultValue=""
+              className="h-11 rounded-lg border border-foreground/15 bg-background px-3 text-sm outline-none focus:border-primary-500"
+            >
+              <option value="" disabled>
+                Select your country
+              </option>
+              <option value="NG">Nigeria</option>
+              <option value="GH">Ghana</option>
+              <option value="KE">Kenya</option>
+            </select>
+          </div>
 
           {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
 

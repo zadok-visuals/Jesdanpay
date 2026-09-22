@@ -4,6 +4,7 @@ export type KycTier = "individual_tier_1" | "individual_tier_2" | "individual_ti
 export type Currency = "USD" | "NGN" | "CNY" | "USDT" | "GHS" | "KES";
 export type DocumentStatus = "pending" | "approved" | "rejected";
 export type PayoutMethod = "alipay" | "wechat" | "bank";
+export type CountryCode = "NG" | "GH" | "KE";
 
 export type TransactionType = "rmb_manual" | "rmb_auto" | "usdt_ngn";
 export type TransactionProvider = "klasha" | "busha" | "quidax";
@@ -21,6 +22,7 @@ export type Profile = {
   business_name: string | null;
   kyc_type: KycType | null;
   kyc_status: KycStatus;
+  country: CountryCode | null;
   created_at: string;
 };
 
@@ -91,6 +93,24 @@ export type Deposit = {
   created_at: string;
 };
 
+export type AdminFxRate = {
+  source_currency: Currency;
+  cny_rate: number | null;
+  updated_at: string;
+};
+
+export type CnyConversion = {
+  id: string;
+  user_id: string;
+  source_currency: Currency;
+  source_amount: number;
+  published_rate: number;
+  margin_rate: number;
+  locked_rate: number;
+  locked_cny_amount: number;
+  created_at: string;
+};
+
 export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13";
@@ -141,6 +161,19 @@ export type Database = {
         Update: Partial<Deposit>;
         Relationships: [];
       };
+      admin_fx_rates: {
+        Row: AdminFxRate;
+        Insert: Partial<AdminFxRate> & Pick<AdminFxRate, "source_currency">;
+        Update: Partial<AdminFxRate>;
+        Relationships: [];
+      };
+      cny_conversions: {
+        Row: CnyConversion;
+        Insert: Partial<CnyConversion> &
+          Pick<CnyConversion, "user_id" | "source_currency" | "source_amount" | "published_rate" | "margin_rate" | "locked_rate" | "locked_cny_amount">;
+        Update: Partial<CnyConversion>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -188,6 +221,14 @@ export type Database = {
       };
       admin_reject_kyc: {
         Args: { p_user_id: string };
+        Returns: undefined;
+      };
+      convert_to_cny_locked: {
+        Args: { p_source_currency: Currency; p_source_amount: number };
+        Returns: string;
+      };
+      admin_set_fx_rate: {
+        Args: { p_source_currency: Currency; p_cny_rate: number };
         Returns: undefined;
       };
     };

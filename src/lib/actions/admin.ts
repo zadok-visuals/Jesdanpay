@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Currency } from "@/lib/types/database";
 
 export interface AdminActionState {
   error?: string;
@@ -96,6 +97,29 @@ export async function rejectKyc(
 
   const admin = createAdminClient();
   const { error } = await admin.rpc("admin_reject_kyc", { p_user_id: userId });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return {};
+}
+
+export async function setFxRate(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  await requireAdminUser();
+  const sourceCurrency = String(formData.get("sourceCurrency") ?? "");
+  const cnyRate = Number(formData.get("cnyRate"));
+
+  if (!Number.isFinite(cnyRate) || cnyRate <= 0) {
+    return { error: "Enter a valid rate." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("admin_set_fx_rate", {
+    p_source_currency: sourceCurrency as Currency,
+    p_cny_rate: cnyRate,
+  });
 
   if (error) return { error: error.message };
   revalidatePath("/admin");

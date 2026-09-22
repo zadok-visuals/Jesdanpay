@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Wallet, Currency, PayoutMethod } from "@/lib/types/database";
+import type { Wallet, Currency, PayoutMethod, SavedRmbRecipient } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { submitRmbExchange, type PaymentsActionState } from "@/lib/actions/payments";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { AmountInput } from "@/components/ui/AmountInput";
+import { FileDropzone } from "@/components/ui/FileDropzone";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,13 @@ interface SendState {
   recipientBankAccountNumber: string;
   recipientBankName: string;
   recipientAccountHolderName: string;
+  // QR code, as an alternative to typing the Alipay/WeChat ID
+  useQrCode: boolean;
+  qrCodeFile: File | null;
+  qrCodeFileName: string;
+  // Save for next time
+  saveRecipient: boolean;
+  saveLabel: string;
 }
 
 const DEFAULT_STATE: SendState = {
@@ -36,6 +44,11 @@ const DEFAULT_STATE: SendState = {
   recipientBankAccountNumber: "",
   recipientBankName: "",
   recipientAccountHolderName: "",
+  useQrCode: false,
+  qrCodeFile: null,
+  qrCodeFileName: "",
+  saveRecipient: false,
+  saveLabel: "",
 };
 
 const PAYOUT_METHODS: { value: PayoutMethod; label: string; icon: string }[] = [
@@ -190,24 +203,64 @@ function RecipientStep({
   onChange,
   onBack,
   onNext,
+  savedRecipients,
 }: {
   state: SendState;
   onChange: (patch: Partial<SendState>) => void;
   onBack: () => void;
   onNext: () => void;
+  savedRecipients: SavedRmbRecipient[];
 }) {
   // Validation per method
-  const isValid =
+  const recipientValid =
     state.payoutMethod === "alipay"
-      ? state.recipientAlipayId.trim().length > 0
+      ? state.useQrCode
+        ? state.qrCodeFile !== null
+        : state.recipientAlipayId.trim().length > 0
       : state.payoutMethod === "wechat"
-        ? state.recipientWechatId.trim().length > 0
+        ? state.useQrCode
+          ? state.qrCodeFile !== null
+          : state.recipientWechatId.trim().length > 0
         : state.recipientBankAccountNumber.trim().length > 0 &&
           state.recipientBankName.trim().length > 0 &&
           state.recipientAccountHolderName.trim().length > 0;
+  const isValid = recipientValid && (!state.saveRecipient || state.saveLabel.trim().length > 0);
+
+  function applySavedRecipient(recipient: SavedRmbRecipient) {
+    onChange({
+      payoutMethod: recipient.payout_method,
+      recipientAlipayId: recipient.recipient_alipay_id ?? "",
+      recipientWechatId: recipient.recipient_wechat_id ?? "",
+      recipientBankAccountNumber: recipient.recipient_bank_account_number ?? "",
+      recipientBankName: recipient.recipient_bank_name ?? "",
+      recipientAccountHolderName: recipient.recipient_account_holder_name ?? "",
+      useQrCode: false,
+      qrCodeFile: null,
+      qrCodeFileName: "",
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Saved beneficiaries */}
+      {savedRecipients.length > 0 && (
+        <div>
+          <p className="mb-2 text-sm font-medium text-foreground/80">Use a saved recipient</p>
+          <div className="flex flex-wrap gap-2">
+            {savedRecipients.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => applySavedRecipient(r)}
+                className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium text-foreground/70 transition-colors hover:border-primary-300 hover:text-primary-700"
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Payout method selector */}
       <div>
         <p className="mb-2 text-sm font-medium text-foreground/80">Payout method</p>
@@ -234,28 +287,59 @@ function RecipientStep({
       </div>
 
       {/* Per-method fields */}
-      {state.payoutMethod === "alipay" && (
-        <Input
-          label="Recipient Alipay ID"
-          id="recipientAlipayId"
-          name="recipientAlipayId"
-          type="text"
-          placeholder="Phone number or Alipay handle"
-          value={state.recipientAlipayId}
-          onChange={(e) => onChange({ recipientAlipayId: e.target.value })}
-        />
-      )}
+      {(state.payoutMethod === "alipay" || state.payoutMethod === "wechat") && (
+        <div className="flex flex-col gap-3">
+          <div className="inline-flex w-fit items-center gap-1 rounded-lg bg-black/[.04] p-1">
+            <button
+              type="button"
+              onClick={() => onChange({ useQrCode: false })}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                !state.useQrCode ? "bg-white text-primary-700" : "text-foreground/60"
+              }`}
+            >
+              Enter manually
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ useQrCode: true })}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                state.useQrCode ? "bg-white text-primary-700" : "text-foreground/60"
+              }`}
+            >
+              Upload QR code
+            </button>
+          </div>
 
-      {state.payoutMethod === "wechat" && (
-        <Input
-          label="Recipient WeChat Pay ID"
-          id="recipientWechatId"
-          name="recipientWechatId"
-          type="text"
-          placeholder="WeChat ID"
-          value={state.recipientWechatId}
-          onChange={(e) => onChange({ recipientWechatId: e.target.value })}
-        />
+          {state.useQrCode ? (
+            <FileDropzone
+              label={`${state.payoutMethod === "alipay" ? "Alipay" : "WeChat Pay"} QR code`}
+              accept="image/*"
+              onFileSelected={(file) =>
+                onChange({ qrCodeFile: file, qrCodeFileName: file?.name ?? "" })
+              }
+            />
+          ) : state.payoutMethod === "alipay" ? (
+            <Input
+              label="Recipient Alipay ID"
+              id="recipientAlipayId"
+              name="recipientAlipayId"
+              type="text"
+              placeholder="Phone number or Alipay handle"
+              value={state.recipientAlipayId}
+              onChange={(e) => onChange({ recipientAlipayId: e.target.value })}
+            />
+          ) : (
+            <Input
+              label="Recipient WeChat Pay ID"
+              id="recipientWechatId"
+              name="recipientWechatId"
+              type="text"
+              placeholder="WeChat ID"
+              value={state.recipientWechatId}
+              onChange={(e) => onChange({ recipientWechatId: e.target.value })}
+            />
+          )}
+        </div>
       )}
 
       {state.payoutMethod === "bank" && (
@@ -290,6 +374,30 @@ function RecipientStep({
         </div>
       )}
 
+      {/* Save for next time */}
+      <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border bg-white px-4 py-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-foreground/80">
+          <input
+            type="checkbox"
+            checked={state.saveRecipient}
+            onChange={(e) => onChange({ saveRecipient: e.target.checked })}
+            className="h-4 w-4 rounded border-border text-primary-600"
+          />
+          Save this recipient for next time
+        </label>
+        {state.saveRecipient && (
+          <Input
+            label="Name this recipient"
+            id="saveLabel"
+            name="saveLabel"
+            type="text"
+            placeholder="e.g. Mum's supplier"
+            value={state.saveLabel}
+            onChange={(e) => onChange({ saveLabel: e.target.value })}
+          />
+        )}
+      </div>
+
       <div className="flex gap-3">
         <Button variant="secondary" onClick={onBack}>
           Back
@@ -322,9 +430,9 @@ function ConfirmStep({
 
   const recipientSummary =
     state.payoutMethod === "alipay"
-      ? state.recipientAlipayId
+      ? state.recipientAlipayId || `QR code: ${state.qrCodeFileName}`
       : state.payoutMethod === "wechat"
-        ? state.recipientWechatId
+        ? state.recipientWechatId || `QR code: ${state.qrCodeFileName}`
         : `${state.recipientBankName} · ${state.recipientBankAccountNumber}`;
 
   const rows: { label: string; value: string }[] = [
@@ -414,7 +522,13 @@ function SuccessScreen({ onReset }: { onReset: () => void }) {
 
 // ─── Root component ───────────────────────────────────────────────────────────
 
-export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
+export function RmbExchangeForm({
+  wallets,
+  savedRecipients = [],
+}: {
+  wallets: Wallet[];
+  savedRecipients?: SavedRmbRecipient[];
+}) {
   const [step, setStep] = useState<Step>("source");
   const [formState, setFormState] = useState<SendState>(DEFAULT_STATE);
   const [done, setDone] = useState(false);
@@ -435,6 +549,9 @@ export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
     fd.set("recipientBankAccountNumber", formState.recipientBankAccountNumber);
     fd.set("recipientBankName", formState.recipientBankName);
     fd.set("recipientAccountHolderName", formState.recipientAccountHolderName);
+    if (formState.qrCodeFile) fd.set("qrCodeFile", formState.qrCodeFile);
+    fd.set("saveRecipient", String(formState.saveRecipient));
+    fd.set("saveLabel", formState.saveLabel);
 
     startTransition(async () => {
       const result = await submitRmbExchange({}, fd);
@@ -485,6 +602,7 @@ export function RmbExchangeForm({ wallets }: { wallets: Wallet[] }) {
           onChange={patch}
           onBack={() => setStep("source")}
           onNext={() => setStep("confirm")}
+          savedRecipients={savedRecipients}
         />
       )}
 

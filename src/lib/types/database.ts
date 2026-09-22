@@ -79,6 +79,21 @@ export type RmbRecipient = {
   recipient_bank_account_number: string | null;
   recipient_bank_name: string | null;
   recipient_account_holder_name: string | null;
+  qr_code_ref: string | null;
+  created_at: string;
+};
+
+export type SavedRmbRecipient = {
+  id: string;
+  user_id: string;
+  label: string;
+  payout_method: PayoutMethod;
+  recipient_alipay_id: string | null;
+  recipient_wechat_id: string | null;
+  recipient_bank_account_number: string | null;
+  recipient_bank_name: string | null;
+  recipient_account_holder_name: string | null;
+  qr_code_ref: string | null;
   created_at: string;
 };
 
@@ -172,6 +187,12 @@ export type Database = {
         Insert: Partial<CnyConversion> &
           Pick<CnyConversion, "user_id" | "source_currency" | "source_amount" | "published_rate" | "margin_rate" | "locked_rate" | "locked_cny_amount">;
         Update: Partial<CnyConversion>;
+        Relationships: [];
+      };
+      saved_rmb_recipients: {
+        Row: SavedRmbRecipient;
+        Insert: Partial<SavedRmbRecipient> & Pick<SavedRmbRecipient, "user_id" | "label" | "payout_method">;
+        Update: Partial<SavedRmbRecipient>;
         Relationships: [];
       };
     };

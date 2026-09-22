@@ -43,17 +43,29 @@ export default async function AdminPage() {
 
   const recipientByTx = new Map((recipients ?? []).map((r) => [r.transaction_id, r]));
   const profileByUser = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  // Signed URLs so admin can view an uploaded recipient QR code without the bucket being public.
+  const qrRefs = (recipients ?? []).map((r) => r.qr_code_ref).filter((ref): ref is string => !!ref);
+  const qrSignedUrlByRef = new Map<string, string>();
+  if (qrRefs.length) {
+    const { data: signedUrls } = await admin.storage
+      .from("rmb-recipient-qr")
+      .createSignedUrls(qrRefs, 3600);
+    for (const entry of signedUrls ?? []) {
+      if (entry.signedUrl) qrSignedUrlByRef.set(entry.path ?? "", entry.signedUrl);
+    }
+  }
   const documentsByUser = new Map<string, typeof kycDocuments>();
   for (const doc of kycDocuments ?? []) {
     documentsByUser.set(doc.user_id, [...(documentsByUser.get(doc.user_id) ?? []), doc]);
   }
 
   function recipientSummary(recipient: NonNullable<ReturnType<typeof recipientByTx.get>>) {
-    return recipient.payout_method === "alipay"
-      ? recipient.recipient_alipay_id
-      : recipient.payout_method === "wechat"
-        ? recipient.recipient_wechat_id
-        : `${recipient.recipient_bank_name} · ${recipient.recipient_bank_account_number} · ${recipient.recipient_account_holder_name}`;
+    if (recipient.payout_method === "alipay" || recipient.payout_method === "wechat") {
+      const id = recipient.payout_method === "alipay" ? recipient.recipient_alipay_id : recipient.recipient_wechat_id;
+      return id || (recipient.qr_code_ref ? "QR code uploaded (see link below)" : "—");
+    }
+    return `${recipient.recipient_bank_name} · ${recipient.recipient_bank_account_number} · ${recipient.recipient_account_holder_name}`;
   }
 
   return (
@@ -129,6 +141,19 @@ export default async function AdminPage() {
                     <p className="text-xs text-foreground/50">
                       {recipient ? PAYOUT_LABELS[recipient.payout_method] : "—"} ·{" "}
                       {recipient ? recipientSummary(recipient) : "—"}
+                      {recipient?.qr_code_ref && qrSignedUrlByRef.has(recipient.qr_code_ref) && (
+                        <>
+                          {" · "}
+                          <a
+                            href={qrSignedUrlByRef.get(recipient.qr_code_ref)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-primary-600 hover:underline"
+                          >
+                            View QR code
+                          </a>
+                        </>
+                      )}
                     </p>
                     <p className="text-xs text-foreground/40">
                       {new Date(tx.created_at).toLocaleString()}

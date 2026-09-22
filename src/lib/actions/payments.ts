@@ -9,6 +9,17 @@ export interface PaymentsActionState {
   transactionId?: string;
 }
 
+async function uploadRecipientQrCode(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  file: File,
+) {
+  const path = `${userId}/qr-${Date.now()}-${file.name}`;
+  const { error } = await supabase.storage.from("rmb-recipient-qr").upload(path, file);
+  if (error) throw error;
+  return path;
+}
+
 export async function submitRmbExchange(
   _prevState: PaymentsActionState,
   formData: FormData,
@@ -22,6 +33,9 @@ export async function submitRmbExchange(
   const payoutMethod = String(formData.get("payoutMethod") ?? "") as PayoutMethod;
   const sourceCurrency = String(formData.get("sourceCurrency") ?? "") as Currency;
   const amount = Number(formData.get("amount"));
+  const qrCodeFile = formData.get("qrCodeFile") as File | null;
+  const saveRecipient = formData.get("saveRecipient") === "true";
+  const saveLabel = String(formData.get("saveLabel") ?? "").trim();
 
   if (!["alipay", "wechat", "bank"].includes(payoutMethod)) {
     return { error: "Invalid payout method." };
@@ -29,20 +43,33 @@ export async function submitRmbExchange(
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid amount." };
   }
+  if (saveRecipient && !saveLabel) {
+    return { error: "Give this saved recipient a name." };
+  }
+
+  let qrCodeRef: string | undefined;
+  if (qrCodeFile && qrCodeFile.size > 0) {
+    try {
+      qrCodeRef = await uploadRecipientQrCode(supabase, user.id, qrCodeFile);
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Could not upload the QR code image." };
+    }
+  }
 
   let recipientInsert: Partial<RmbRecipient> & Pick<RmbRecipient, "user_id" | "payout_method"> = {
     user_id: user.id,
     payout_method: payoutMethod,
+    qr_code_ref: qrCodeRef,
   };
 
   if (payoutMethod === "alipay") {
     const alipayId = String(formData.get("recipientAlipayId") ?? "").trim();
-    if (!alipayId) return { error: "Recipient Alipay ID is required." };
-    recipientInsert = { ...recipientInsert, recipient_alipay_id: alipayId };
+    if (!alipayId && !qrCodeRef) return { error: "Recipient Alipay ID or a QR code is required." };
+    recipientInsert = { ...recipientInsert, recipient_alipay_id: alipayId || null };
   } else if (payoutMethod === "wechat") {
     const wechatId = String(formData.get("recipientWechatId") ?? "").trim();
-    if (!wechatId) return { error: "Recipient WeChat Pay ID is required." };
-    recipientInsert = { ...recipientInsert, recipient_wechat_id: wechatId };
+    if (!wechatId && !qrCodeRef) return { error: "Recipient WeChat Pay ID or a QR code is required." };
+    recipientInsert = { ...recipientInsert, recipient_wechat_id: wechatId || null };
   } else {
     const accountNumber = String(formData.get("recipientBankAccountNumber") ?? "").trim();
     const bankName = String(formData.get("recipientBankName") ?? "").trim();
@@ -74,6 +101,21 @@ export async function submitRmbExchange(
     // Keep the recipients table clean if the transaction couldn't be created.
     await supabase.from("rmb_recipients").delete().eq("id", recipient.id);
     return { error: rpcError.message };
+  }
+
+  if (saveRecipient) {
+    await supabase.from("saved_rmb_recipients").insert({
+      user_id: user.id,
+      label: saveLabel,
+      payout_method: payoutMethod,
+      recipient_alipay_id: recipientInsert.recipient_alipay_id ?? null,
+      recipient_wechat_id: recipientInsert.recipient_wechat_id ?? null,
+      recipient_bank_account_number: recipientInsert.recipient_bank_account_number ?? null,
+      recipient_bank_name: recipientInsert.recipient_bank_name ?? null,
+      recipient_account_holder_name: recipientInsert.recipient_account_holder_name ?? null,
+      qr_code_ref: qrCodeRef ?? null,
+    });
+    // Best-effort — a failed save shouldn't fail the transfer that already succeeded above.
   }
 
   return { transactionId: transactionId ?? undefined };

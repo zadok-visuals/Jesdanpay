@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { getSwapQuote, confirmSwap, type BushaActionState } from "@/lib/actions/busha";
@@ -60,6 +61,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const [done, setDone] = useState(false);
   const [isQuoting, startQuoting] = useTransition();
   const [isConfirming, startConfirming] = useTransition();
+  const router = useRouter();
   // Called unconditionally (rules of hooks) even though the component may bail out below.
   const secondsLeft = useCountdown(quoteState.quote?.expiresAt);
 
@@ -109,6 +111,10 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
       setConfirmState(result);
       if (result.transactionId && !result.error) {
         setDone(true);
+        // Wallet balances shown on this page (and its currency pickers) come from the server
+        // component's initial fetch — refresh so the next exchange sees the real post-trade
+        // balance instead of a stale pre-trade number.
+        router.refresh();
       }
     });
   }

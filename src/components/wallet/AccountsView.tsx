@@ -19,8 +19,10 @@ export function AccountsView({
 }) {
   const currencies = wallets.map((w) => w.currency);
   const [selected, setSelected] = useState(currencies[0] ?? "NGN");
-  const [depositOpen, setDepositOpen] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  // Only one action panel (Deposit or Withdraw) can be open at a time — previously these were
+  // two independent booleans, so both could be open together and each trigger button flipped to
+  // "Cancel" on its own, making it impossible to tell which "Cancel" closed which panel.
+  const [activePanel, setActivePanel] = useState<"deposit" | "withdraw" | null>(null);
   const wallet = wallets.find((w) => w.currency === selected);
 
   if (!wallet) return null;
@@ -31,6 +33,15 @@ export function AccountsView({
   const isUsdt = wallet.currency === "USDT";
   const isCny = wallet.currency === "CNY";
   const canWithdraw = !isCny;
+  const depositOpen = activePanel === "deposit";
+  const withdrawOpen = activePanel === "withdraw";
+
+  function toggleDeposit() {
+    setActivePanel((p) => (p === "deposit" ? null : "deposit"));
+  }
+  function toggleWithdraw() {
+    setActivePanel((p) => (p === "withdraw" ? null : "withdraw"));
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,8 +50,7 @@ export function AccountsView({
         value={selected}
         onChange={(c) => {
           setSelected(c);
-          setDepositOpen(false);
-          setWithdrawOpen(false);
+          setActivePanel(null);
         }}
       />
 
@@ -56,12 +66,14 @@ export function AccountsView({
         </div>
 
         {isCny ? (
-          <div className="flex flex-wrap gap-3">
-            <Link href="/pay-to-china">
-              <Button>Send to China</Button>
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+            <Link href="/pay-to-china" className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto">Send to China</Button>
             </Link>
-            <Link href="/payments?tab=cny">
-              <Button variant="secondary">Convert more to CNY</Button>
+            <Link href="/payments?tab=cny" className="w-full sm:w-auto">
+              <Button variant="secondary" className="w-full sm:w-auto">
+                Convert more to CNY
+              </Button>
             </Link>
           </div>
         ) : isUsdt ? (
@@ -81,31 +93,37 @@ export function AccountsView({
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => setDepositOpen((o) => !o)}>
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+              <Button className="w-full sm:w-auto" onClick={toggleDeposit}>
                 {depositOpen ? "Cancel" : "Add Money"}
               </Button>
-              <Button variant="secondary" onClick={() => setWithdrawOpen((o) => !o)}>
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={toggleWithdraw}>
                 {withdrawOpen ? "Cancel" : "Withdraw"}
               </Button>
-              <Link href="/payments?tab=usdt">
-                <Button variant="secondary">Exchange USDT</Button>
+              <Link href="/payments?tab=usdt" className="w-full sm:w-auto">
+                <Button variant="secondary" className="w-full sm:w-auto">
+                  Exchange USDT
+                </Button>
               </Link>
             </div>
           </>
         ) : (
-          <div className="flex flex-wrap gap-3">
-            <Button onClick={() => setDepositOpen((o) => !o)}>
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+            <Button className="w-full sm:w-auto" onClick={toggleDeposit}>
               {depositOpen ? "Cancel" : "Add Money"}
             </Button>
-            <Button variant="secondary" onClick={() => setWithdrawOpen((o) => !o)}>
+            <Button variant="secondary" className="w-full sm:w-auto" onClick={toggleWithdraw}>
               {withdrawOpen ? "Cancel" : "Withdraw"}
             </Button>
-            <Link href="/pay-to-china">
-              <Button variant="secondary">Send to China</Button>
+            <Link href="/pay-to-china" className="w-full sm:w-auto">
+              <Button variant="secondary" className="w-full sm:w-auto">
+                Send to China
+              </Button>
             </Link>
-            <Link href="/payments?tab=usdt">
-              <Button variant="secondary">Exchange to USDT</Button>
+            <Link href="/payments?tab=usdt" className="w-full sm:w-auto">
+              <Button variant="secondary" className="w-full sm:w-auto">
+                Exchange to USDT
+              </Button>
             </Link>
           </div>
         )}
@@ -113,7 +131,7 @@ export function AccountsView({
         {depositOpen && (
           <DepositForm
             currency={wallet.currency as "NGN" | "GHS" | "KES" | "USDT"}
-            onClose={() => setDepositOpen(false)}
+            onClose={() => setActivePanel(null)}
           />
         )}
 
@@ -122,7 +140,7 @@ export function AccountsView({
             currency={wallet.currency}
             balance={wallet.balance}
             recipient={withdrawalRecipient}
-            onClose={() => setWithdrawOpen(false)}
+            onClose={() => setActivePanel(null)}
           />
         )}
       </Card>

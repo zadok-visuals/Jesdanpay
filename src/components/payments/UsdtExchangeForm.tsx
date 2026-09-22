@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { getSwapQuote, confirmSwap, type BushaActionState } from "@/lib/actions/busha";
@@ -8,6 +8,7 @@ import type { Currency } from "@/lib/types/database";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
+import { useCountdown } from "@/lib/hooks/useCountdown";
 
 type Direction =
   | "USDT_TO_NGN"
@@ -25,23 +26,6 @@ const DIRECTIONS: { value: Direction; source: Currency; target: Currency; label:
   { value: "KES_TO_USDT", source: "KES", target: "USDT", label: "KES → USDT" },
   { value: "USDT_TO_KES", source: "USDT", target: "KES", label: "USDT → KES" },
 ];
-
-function useCountdown(expiresAt: string | undefined) {
-  const [secondsLeft, setSecondsLeft] = useState(0);
-
-  useEffect(() => {
-    if (!expiresAt) return;
-    const tick = () => {
-      const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
-      setSecondsLeft(Math.max(diff, 0));
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [expiresAt]);
-
-  return secondsLeft;
-}
 
 function SuccessScreen({ onReset }: { onReset: () => void }) {
   return (

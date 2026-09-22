@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useEffect, useState, useTransition } from "react";
 import {
   getDepositQuote,
   initiateDeposit,
+  checkDepositStatus,
   type DepositQuoteState,
   type DepositActionState,
 } from "@/lib/actions/busha";
@@ -11,7 +13,32 @@ import { initiateKlashaDeposit, type KlashaDepositState } from "@/lib/actions/kl
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
+import { useCountdown, formatCountdown } from "@/lib/hooks/useCountdown";
 import type { Currency } from "@/lib/types/database";
+
+const STATUS_POLL_INTERVAL_MS = 10_000;
+
+function DepositSuccessScreen({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="mt-4 flex flex-col items-center gap-4 rounded-xl border border-border bg-white p-6 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-2xl">✅</div>
+      <div>
+        <p className="text-base font-semibold">Deposit confirmed!</p>
+        <p className="mt-1 text-sm text-foreground/60">
+          Your balance has been updated. You can see it now on your Accounts page.
+        </p>
+      </div>
+      <div className="flex gap-3">
+        <Link href="/accounts">
+          <Button>View balance</Button>
+        </Link>
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 type DepositableCurrency = "NGN" | "GHS" | "KES" | "USDT";
 
@@ -106,6 +133,28 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
   const [depositState, setDepositState] = useState<DepositActionState>({});
   const [isQuoting, startQuoting] = useTransition();
   const [isDepositing, startDepositing] = useTransition();
+  const [confirmed, setConfirmed] = useState(false);
+
+  const expiresAt = depositState.bankDetails?.expiresAt || depositState.cryptoAddress?.expiresAt;
+  const secondsLeft = useCountdown(expiresAt);
+  const expired = expiresAt ? secondsLeft <= 0 : false;
+
+  // Poll for the webhook (or reconciliation cron) crediting this deposit, so the success state
+  // appears without the user needing to refresh.
+  useEffect(() => {
+    if (!depositState.depositId || confirmed) return;
+    const interval = setInterval(async () => {
+      const result = await checkDepositStatus(depositState.depositId!);
+      if (result.status === "completed") {
+        setConfirmed(true);
+      }
+    }, STATUS_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [depositState.depositId, confirmed]);
+
+  if (confirmed) {
+    return <DepositSuccessScreen onClose={onClose} />;
+  }
 
   function handleGetQuote() {
     const fd = new FormData();
@@ -131,7 +180,7 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
   }
 
   if (depositState.bankDetails) {
-    const { accountName, accountNumber, bankName, expiresAt } = depositState.bankDetails;
+    const { accountName, accountNumber, bankName } = depositState.bankDetails;
     return (
       <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
         <div className="flex items-center justify-between">
@@ -140,6 +189,21 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
             Close
           </button>
         </div>
+
+        <div className="flex flex-col items-center gap-1 rounded-xl bg-primary-50 py-5 text-center">
+          <p className="text-xs font-medium uppercase tracking-wide text-primary-700/70">
+            Transfer exactly
+          </p>
+          <p className="text-3xl font-bold text-primary-800">
+            {formatBalance(currency as Currency, Number(quoteState.amount))}
+          </p>
+          {expiresAt && (
+            <p className={`text-xs font-medium ${expired ? "text-danger-500" : "text-primary-700/70"}`}>
+              {expired ? "Expired" : `Expires in ${formatCountdown(secondsLeft)}`}
+            </p>
+          )}
+        </div>
+
         <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
           {[
             { label: "Bank", value: bankName },
@@ -153,16 +217,15 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
           ))}
         </dl>
         <p className="text-xs text-foreground/50">
-          Transfer exactly {formatBalance(currency as Currency, Number(quoteState.amount))} to the account
-          above{expiresAt ? ` before ${new Date(expiresAt).toLocaleString()}` : ""}. Your wallet is
-          credited automatically once the transfer is confirmed.
+          Your wallet is credited automatically once the transfer is confirmed — usually within a
+          few minutes.
         </p>
       </div>
     );
   }
 
   if (depositState.cryptoAddress) {
-    const { address, network, expiresAt } = depositState.cryptoAddress;
+    const { address, network } = depositState.cryptoAddress;
     return (
       <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
         <div className="flex items-center justify-between">
@@ -171,6 +234,18 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
             Close
           </button>
         </div>
+        <div className="flex flex-col items-center gap-1 rounded-xl bg-primary-50 py-5 text-center">
+          <p className="text-xs font-medium uppercase tracking-wide text-primary-700/70">
+            Send exactly
+          </p>
+          <p className="text-3xl font-bold text-primary-800">{quoteState.amount} USDT</p>
+          {expiresAt && (
+            <p className={`text-xs font-medium ${expired ? "text-danger-500" : "text-primary-700/70"}`}>
+              {expired ? "Expired" : `Expires in ${formatCountdown(secondsLeft)}`}
+            </p>
+          )}
+        </div>
+
         <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
           <div className="flex items-center justify-between gap-4 px-4 py-3">
             <dt className="text-sm text-foreground/60">Network</dt>
@@ -182,9 +257,7 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
           </div>
         </dl>
         <p className="text-xs text-foreground/50">
-          Send exactly {quoteState.amount} USDT to the address above
-          {expiresAt ? ` before ${new Date(expiresAt).toLocaleString()}` : ""}. Your wallet is credited
-          automatically once the deposit is confirmed on-chain.
+          Your wallet is credited automatically once the deposit is confirmed on-chain.
         </p>
       </div>
     );
@@ -217,13 +290,19 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
       {quoteState.error && <p className="text-sm text-danger-500">{quoteState.error}</p>}
 
       {quoteState.quoteId ? (
-        <div className="overflow-hidden rounded-xl border border-border">
-          <dl className="divide-y divide-border">
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-sm text-foreground/60">Fee</dt>
-              <dd className="text-sm font-medium">{formatBalance(currency as Currency, Number(quoteState.fee))}</dd>
-            </div>
-          </dl>
+        <div className="flex items-center justify-between gap-4 rounded-xl bg-primary-50 px-4 py-3.5">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-primary-700/70">You deposit</p>
+            <p className="text-xl font-bold text-primary-800">
+              {formatBalance(currency as Currency, Number(quoteState.amount))}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-primary-700/70">Fee</p>
+            <p className="text-sm font-semibold text-primary-800">
+              {formatBalance(currency as Currency, Number(quoteState.fee))}
+            </p>
+          </div>
         </div>
       ) : null}
 

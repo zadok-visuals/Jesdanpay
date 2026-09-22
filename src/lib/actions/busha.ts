@@ -173,6 +173,7 @@ export async function getDepositQuote(
 
 export interface DepositActionState {
   error?: string;
+  depositId?: string;
   bankDetails?: { accountName: string; accountNumber: string; bankName: string; expiresAt: string };
   cryptoAddress?: { address: string; network: string; expiresAt: string };
 }
@@ -207,17 +208,22 @@ export async function initiateDeposit(
   // not the gross amount the client asked to deposit — confirmed live that a ₦2,000 deposit
   // quote returns `target_amount: "1900"` after a ₦100 fee, so crediting the raw requested
   // amount would over-credit the user by the fee every time.
-  const { error: insertError } = await admin.from("deposits").insert({
-    user_id: user.id,
-    currency,
-    amount: Number(transfer.target_amount),
-    provider: "busha",
-    provider_reference: transfer.id,
-  });
+  const { data: deposit, error: insertError } = await admin
+    .from("deposits")
+    .insert({
+      user_id: user.id,
+      currency,
+      amount: Number(transfer.target_amount),
+      provider: "busha",
+      provider_reference: transfer.id,
+    })
+    .select("id")
+    .single();
   if (insertError) return { error: insertError.message };
 
   if (transfer.pay_in.address) {
     return {
+      depositId: deposit.id,
       cryptoAddress: {
         address: transfer.pay_in.address,
         network: transfer.pay_in.network ?? "",
@@ -228,6 +234,7 @@ export async function initiateDeposit(
 
   const details = transfer.pay_in.recipient_details;
   return {
+    depositId: deposit.id,
     bankDetails: {
       accountName: details?.account_name ?? "",
       accountNumber: details?.account_number ?? "",
@@ -235,4 +242,30 @@ export async function initiateDeposit(
       expiresAt: transfer.pay_in.expires_at ?? "",
     },
   };
+}
+
+export interface DepositStatusState {
+  status?: "pending" | "processing" | "completed" | "failed";
+  error?: string;
+}
+
+// Lightweight poll target for the deposit instructions screen — lets the UI notice a webhook
+// (or the reconciliation cron) crediting the deposit without the user needing to refresh.
+export async function checkDepositStatus(depositId: string): Promise<DepositStatusState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data, error } = await supabase
+    .from("deposits")
+    .select("status")
+    .eq("id", depositId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!data) return { error: "Deposit not found." };
+  return { status: data.status };
 }

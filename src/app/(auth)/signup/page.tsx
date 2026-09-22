@@ -25,7 +25,7 @@ export default function SignupPage() {
       <Card className="p-6 sm:p-8">
         <h1 className="mb-1 text-xl font-semibold">Create your account</h1>
         <p className="mb-6 text-sm text-foreground/60">
-          Start moving money between Nigeria and China.
+          Facilitating suppliers payment to China.
         </p>
 
         <form action={formAction} className="flex flex-col gap-4">

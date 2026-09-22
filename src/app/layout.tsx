@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "JesDanPay",
-  description: "Cross-border currency exchange between Nigeria and China.",
+  description: "Facilitating suppliers payment to China.",
 };
 
 export default function RootLayout({

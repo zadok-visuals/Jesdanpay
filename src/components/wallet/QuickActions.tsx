@@ -57,13 +57,23 @@ export function QuickActions() {
       {/* Primary actions — the two most common things a user does */}
       <div className="flex gap-3">
         <Link href="/accounts" className="flex-1">
-          <Button className="w-full" size="lg">
+          {/* Overrides size="lg"'s default px-6/text-base — at 390px width that combo forces
+              "Send to China" onto two uneven lines. !-prefixed to reliably win over the size
+              classes regardless of Tailwind's compiled rule order. */}
+          <Button
+            className="w-full !gap-1.5 !whitespace-nowrap !px-3 !text-xs sm:!gap-2 sm:!px-6 sm:!text-base"
+            size="lg"
+          >
             <PlusIcon />
             Add Money
           </Button>
         </Link>
         <Link href="/pay-to-china" className="flex-1">
-          <Button variant="secondary" className="w-full" size="lg">
+          <Button
+            variant="secondary"
+            className="w-full !gap-1.5 !whitespace-nowrap !px-3 !text-xs sm:!gap-2 sm:!px-6 sm:!text-base"
+            size="lg"
+          >
             <SendIcon />
             Send to China
           </Button>

@@ -21,7 +21,7 @@ export function AuthShell({ imageSrc, imageAlt, imageWidth, imageHeight, childre
 
         <div className="p-10 pt-10">
           <p className="max-w-xs text-3xl font-bold leading-tight text-white">
-            Move money between Nigeria and China with ease.
+            Facilitating suppliers payment to China.
           </p>
           <p className="mt-4 text-sm text-white/60">© {new Date().getFullYear()} JesDanPay</p>
         </div>

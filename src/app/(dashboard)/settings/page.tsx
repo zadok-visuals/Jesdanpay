@@ -20,13 +20,14 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: withdrawalRecipient }] = await Promise.all([
+  const [{ data: profile }, { data: withdrawalRecipient }, { data: wallets }] = await Promise.all([
     supabase
       .from("profiles")
       .select("full_name, email, phone, business_name, kyc_type, kyc_status, created_at")
       .eq("id", user.id)
       .single(),
     supabase.from("withdrawal_recipients").select("*").eq("user_id", user.id).maybeSingle(),
+    supabase.from("wallets").select("currency").eq("user_id", user.id),
   ]);
 
   return (
@@ -72,7 +73,12 @@ export default async function SettingsPage() {
           </div>
         </Card>
 
-        <WithdrawalRecipientCard recipient={withdrawalRecipient ?? null} />
+        <WithdrawalRecipientCard
+          recipient={withdrawalRecipient ?? null}
+          availableCurrencies={(wallets ?? [])
+            .map((w) => w.currency)
+            .filter((c) => c === "NGN" || c === "GHS" || c === "KES" || c === "USDT")}
+        />
 
         <Card className="p-6">
           <h2 className="mb-1 text-base font-semibold">Notifications & security</h2>

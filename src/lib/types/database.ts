@@ -4,7 +4,9 @@ export type KycTier = "individual_tier_1" | "individual_tier_2" | "individual_ti
 export type Currency = "USD" | "NGN" | "CNY" | "USDT" | "GHS" | "KES";
 export type DocumentStatus = "pending" | "approved" | "rejected";
 export type PayoutMethod = "alipay" | "wechat" | "bank";
-export type CountryCode = "NG" | "GH" | "KE";
+// Free-form ISO 3166-1 alpha-2 code, not a fixed enum — see migration 0020. Only NG/GH/KE get a
+// local-currency wallet auto-provisioned; every other value is still stored as-is.
+export type CountryCode = string;
 
 export type TransactionType = "rmb_manual" | "rmb_auto" | "usdt_ngn" | "withdrawal";
 export type TransactionProvider = "klasha" | "busha" | "quidax" | "manual";

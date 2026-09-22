@@ -7,19 +7,18 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import type { Currency, WithdrawalRecipient } from "@/lib/types/database";
 
-const CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "USDT"];
 const initialState: WithdrawalActionState = {};
 
-function SetupForm() {
+function SetupForm({ availableCurrencies }: { availableCurrencies: Currency[] }) {
   const [state, formAction, pending] = useActionState(setWithdrawalRecipient, initialState);
-  const [currency, setCurrency] = useState<Currency>("NGN");
+  const [currency, setCurrency] = useState<Currency>(availableCurrencies[0] ?? "USDT");
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <div>
         <p className="mb-2 text-sm font-medium text-foreground/80">Currency</p>
         <div className="flex flex-wrap gap-2">
-          {CURRENCIES.map((c) => (
+          {availableCurrencies.map((c) => (
             <button
               key={c}
               type="button"
@@ -85,7 +84,13 @@ function SetupForm() {
   );
 }
 
-export function WithdrawalRecipientCard({ recipient }: { recipient: WithdrawalRecipient | null }) {
+export function WithdrawalRecipientCard({
+  recipient,
+  availableCurrencies,
+}: {
+  recipient: WithdrawalRecipient | null;
+  availableCurrencies: Currency[];
+}) {
   return (
     <Card className="p-6">
       <h2 className="mb-1 text-base font-semibold">Payout recipient</h2>
@@ -132,7 +137,7 @@ export function WithdrawalRecipientCard({ recipient }: { recipient: WithdrawalRe
           </div>
         </div>
       ) : (
-        <SetupForm />
+        <SetupForm availableCurrencies={availableCurrencies} />
       )}
     </Card>
   );

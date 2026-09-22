@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { AuthShell } from "@/components/layout/AuthShell";
+import { COUNTRIES } from "@/lib/countries";
 
 const initialState: AuthActionState = {};
 
@@ -70,10 +71,16 @@ export default function SignupPage() {
               <option value="" disabled>
                 Select your country
               </option>
-              <option value="NG">Nigeria</option>
-              <option value="GH">Ghana</option>
-              <option value="KE">Kenya</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
             </select>
+            <p className="text-xs text-foreground/40">
+              NGN, GHS, or KES wallets are only available for Nigeria, Ghana, or Kenya — every
+              account still gets USDT and CNY.
+            </p>
           </div>
 
           {state.error && <p className="text-sm text-danger-500">{state.error}</p>}

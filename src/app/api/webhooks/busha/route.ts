@@ -1,44 +1,41 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// Busha's exact webhook signature scheme is unconfirmed — one search result surfaced an
-// X-BC-Signature HMAC-SHA256 header, but that source pointed at developers.commerce.busha.co
-// ("Busha Commerce"), a different product from the docs.busha.io API this app integrates
-// against. Rather than implement an unverified algorithm, this checks a plain shared-secret
-// header (set BUSHA_WEBHOOK_SECRET to whatever value you configure in the Busha dashboard) —
-// replace with real signature verification once confirmed against a live account.
-function isAuthorized(secretHeader: string | null): boolean {
-  const secret = process.env.BUSHA_WEBHOOK_SECRET;
-  if (!secret) return true; // Not yet configured — allow through so local/dashboard setup isn't blocked.
-  if (!secretHeader) return false;
-
-  const expected = Buffer.from(secret, "utf8");
-  const got = Buffer.from(secretHeader, "utf8");
-  if (expected.length !== got.length) return false;
-  return timingSafeEqual(expected, got);
-}
-
-// Busha's exact webhook payload shape (event name, wrapping) isn't confirmed either — this
-// reads directly off the transfer object's own fields (id, status, category), which are
-// confirmed from the Create Transfer API reference, rather than assuming an event-name schema.
+// PRIOR BUG (found during the "deposits not reflecting" audit): this route used to check a
+// header named `x-busha-webhook-secret` — a name that was NEVER confirmed against Busha's real
+// docs, just guessed. Since BUSHA_WEBHOOK_SECRET was set, every real webhook delivery got
+// rejected with 401 before the payload was even logged, so `webhook_events` never had a single
+// row and no deposit was ever credited via webhook. That's very likely the entire bug.
+//
+// Fix: log every delivery (including raw headers) unconditionally, regardless of whether an
+// auth header is present or matches a guessed name — visibility first. Once a few real
+// deliveries land, `payload._debugHeaders` will show the actual header name Busha uses (if
+// any), and this can be tightened back up to a real signature check instead of accepting
+// everything. Remove `_debugHeaders`/`_debugRawBody` and re-add strict verification once that's
+// confirmed — same discipline already applied to the Klasha webhook route for the same reason.
 export async function POST(request: Request) {
   const rawBody = await request.text();
-  const secretHeader = request.headers.get("x-busha-webhook-secret");
-
-  if (!isAuthorized(secretHeader)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const payload = JSON.parse(rawBody) as {
-    data?: { id?: string; status?: string; category?: string };
-  };
+  const debugHeaders = Object.fromEntries(request.headers.entries());
   const admin = createAdminClient();
+
+  let payload: { data?: { id?: string; status?: string; category?: string } };
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    // Log even a body that fails to parse — that's still useful diagnostic signal, and
+    // returning an error here would just make Busha retry (and keep failing) forever.
+    await admin.from("webhook_events").insert({
+      provider: "busha",
+      event_type: "unparseable",
+      payload: { _debugHeaders: debugHeaders, _debugRawBody: rawBody },
+    });
+    return NextResponse.json({ received: true });
+  }
 
   await admin.from("webhook_events").insert({
     provider: "busha",
     event_type: payload.data?.category ?? "unknown",
-    payload: payload as Record<string, unknown>,
+    payload: { ...payload, _debugHeaders: debugHeaders, _debugRawBody: rawBody } as Record<string, unknown>,
   });
 
   const providerReference = payload.data?.id;

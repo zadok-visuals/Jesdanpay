@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useActionState } from "react";
+import { Suspense, useActionState, useState } from "react";
 import { logIn, type AuthActionState } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -25,6 +25,7 @@ function ResetSuccessBanner() {
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(logIn, initialState);
+  const [email, setEmail] = useState("");
 
   return (
     <AuthShell
@@ -50,6 +51,8 @@ export default function LoginPage() {
             required
             autoComplete="email"
             placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
           <div className="flex flex-col gap-1.5">
             <PasswordInput

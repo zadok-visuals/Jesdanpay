@@ -12,10 +12,11 @@ const TABS: Tab[] = ["Convert USDT", "Convert CNY"];
 interface PaymentsViewProps {
   wallets: Wallet[];
   tierRates: CnyTierRate[];
-  markupRate: number;
+  fiatMarkupRate: number;
+  usdtMarkupRate: number;
 }
 
-export function PaymentsView({ wallets, tierRates, markupRate }: PaymentsViewProps) {
+export function PaymentsView({ wallets, tierRates, fiatMarkupRate, usdtMarkupRate }: PaymentsViewProps) {
   // Lets other pages deep-link into a specific tab, e.g. /payments?tab=cny from the
   // dashboard's quick actions — falls back to Convert USDT when absent/unrecognized. The query
   // param values themselves ("usdt"/"cny") are independent internal ids, unrelated to these
@@ -48,7 +49,12 @@ export function PaymentsView({ wallets, tierRates, markupRate }: PaymentsViewPro
       {activeTab === "Convert USDT" ? (
         <UsdtExchangeForm wallets={wallets} />
       ) : (
-        <CnyConvertForm wallets={wallets} tierRates={tierRates} markupRate={markupRate} />
+        <CnyConvertForm
+          wallets={wallets}
+          tierRates={tierRates}
+          fiatMarkupRate={fiatMarkupRate}
+          usdtMarkupRate={usdtMarkupRate}
+        />
       )}
     </div>
   );

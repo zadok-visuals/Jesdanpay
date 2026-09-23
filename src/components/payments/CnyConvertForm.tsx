@@ -42,11 +42,13 @@ function SuccessScreen({ direction, onReset }: { direction: CnyDirection; onRese
 export function CnyConvertForm({
   wallets,
   tierRates,
-  markupRate,
+  fiatMarkupRate,
+  usdtMarkupRate,
 }: {
   wallets: Wallet[];
   tierRates: CnyTierRate[];
-  markupRate: number;
+  fiatMarkupRate: number;
+  usdtMarkupRate: number;
 }) {
   const availableCurrencies = NON_CNY_CURRENCIES.filter((c) => wallets.some((w) => w.currency === c));
   const cnyWallet = wallets.find((w) => w.currency === "CNY");
@@ -88,17 +90,23 @@ export function CnyConvertForm({
   const exceedsBalance = amountEntered && !!spendWallet && amountNum > spendWallet.balance;
   const amountValid = amountEntered && !exceedsBalance;
   const rateReady = nonCnyCurrency === "USDT" || bushaRate != null;
+  const markupRate = nonCnyCurrency === "USDT" ? usdtMarkupRate : fiatMarkupRate;
 
+  // Gated on rateReady alone (not amountValid) so the rate/fee preview keeps showing real numbers
+  // even when the typed amount exceeds the user's balance — only the submit button below is
+  // gated on amountValid, since that's the only thing insufficient balance should actually block.
   const amounts =
-    amountValid && rateReady
+    amountEntered && rateReady
       ? computeConversionAmounts(direction, amountNum, bushaRate, tierRates)
       : null;
 
   const effectiveRate = amounts && amounts.nonCnyAmount > 0 ? amounts.cnyAmount / amounts.nonCnyAmount : null;
+  const finalRate = effectiveRate != null ? effectiveRate * (1 - markupRate) : null;
   const receiveCurrency: Currency = direction === "to_cny" ? "CNY" : nonCnyCurrency;
   const receiveAmount = amounts
     ? round2((direction === "to_cny" ? amounts.cnyAmount : amounts.nonCnyAmount) * (1 - markupRate))
     : null;
+  const feeAmount = amountEntered ? round2(amountNum * markupRate) : null;
 
   let disabledReason: string | null = null;
   if (!amountEntered) disabledReason = "Enter an amount to continue";
@@ -255,30 +263,30 @@ export function CnyConvertForm({
             <p className="text-sm font-semibold text-primary-800">Rate details</p>
           </div>
           <dl className="divide-y divide-border">
-            {nonCnyCurrency !== "USDT" && (
-              <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-                <dt className="shrink-0 text-sm text-foreground/60">Live rate</dt>
-                <dd className="text-right text-sm font-medium text-foreground">
-                  {isRateLoading
-                    ? "Fetching…"
-                    : bushaRate != null
-                      ? `1 ${nonCnyCurrency} = ${bushaRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT`
-                      : "—"}
-                </dd>
-              </div>
-            )}
             <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-              <dt className="shrink-0 text-sm text-foreground/60">Reference rate (no markup)</dt>
+              <dt className="shrink-0 text-sm text-foreground/60">Reference price (before fee)</dt>
               <dd className="text-right text-sm font-medium text-foreground">
                 {effectiveRate != null
-                  ? `1 ${nonCnyCurrency} = ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
+                  ? nonCnyCurrency === "USDT"
+                    ? `USDT 1 = CNY ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })}`
+                    : `1 ${nonCnyCurrency} = ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
                   : "—"}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-              <dt className="shrink-0 text-sm text-foreground/60">Markup</dt>
+              <dt className="shrink-0 text-sm text-foreground/60">Price after fee</dt>
               <dd className="text-right text-sm font-medium text-foreground">
-                {(markupRate * 100).toFixed(2).replace(/\.?0+$/, "")}%
+                {finalRate != null
+                  ? nonCnyCurrency === "USDT"
+                    ? `USDT 1 = CNY ${finalRate.toLocaleString("en-US", { maximumFractionDigits: 6 })}`
+                    : `1 ${nonCnyCurrency} = ${finalRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
+                  : "—"}
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
+              <dt className="shrink-0 text-sm text-foreground/60">Conversion fee</dt>
+              <dd className="text-right text-sm font-medium text-foreground">
+                {feeAmount != null ? formatBalance(spendCurrency, feeAmount) : "—"}
               </dd>
             </div>
           </dl>

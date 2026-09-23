@@ -7,20 +7,37 @@ import { Input } from "@/components/ui/Input";
 
 const initialState: AdminActionState = {};
 
-export function CnyMarkupForm({ markupRate }: { markupRate: number }) {
+export function CnyMarkupForm({
+  fiatMarkupRate,
+  usdtMarkupRate,
+}: {
+  fiatMarkupRate: number;
+  usdtMarkupRate: number;
+}) {
   const [state, formAction, pending] = useActionState(setCnyMarkupRate, initialState);
 
   return (
-    <form action={formAction} className="flex items-end gap-2">
+    <form action={formAction} className="flex flex-wrap items-end gap-2">
       <Input
-        label="CNY markup (%)"
-        id="cnyMarkupPercent"
-        name="markupPercent"
+        label="Fiat markup — NGN/GHS/KES (%)"
+        id="fiatMarkupPercent"
+        name="fiatMarkupPercent"
         type="number"
         min="0"
         max="99"
         step="0.01"
-        defaultValue={markupRate * 100}
+        defaultValue={fiatMarkupRate * 100}
+        className="w-56"
+      />
+      <Input
+        label="USDT markup (%)"
+        id="usdtMarkupPercent"
+        name="usdtMarkupPercent"
+        type="number"
+        min="0"
+        max="99"
+        step="0.01"
+        defaultValue={usdtMarkupRate * 100}
         className="w-40"
       />
       <Button type="submit" size="sm" loading={pending}>

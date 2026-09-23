@@ -63,6 +63,20 @@ export function TransactionDetailModal({
           {detail.description && <Row label="Description" value={detail.description} />}
           {detail.reference && <Row label="Reference" value={detail.reference} />}
           {(() => {
+            const isMismatchedDeposit =
+              detail.source === "deposit" &&
+              detail.confirmedAmount != null &&
+              detail.confirmedAmount !== detail.sourceAmount;
+            if (isMismatchedDeposit) {
+              return (
+                <>
+                  <Row label="Requested" value={formatBalance(detail.sourceCurrency, detail.sourceAmount)} />
+                  <Row label="Received" value={formatBalance(detail.sourceCurrency, detail.confirmedAmount!)} />
+                  <Row label="Credited" value={formatBalance(detail.sourceCurrency, detail.confirmedAmount!)} />
+                </>
+              );
+            }
+
             const isConversion =
               detail.type !== "withdrawal" &&
               detail.targetCurrency != null &&

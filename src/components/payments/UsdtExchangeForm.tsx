@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { executeSwap, checkSwapStatus, previewSwapRate, type ExecuteSwapState } from "@/lib/actions/busha";
-import { applyMarkup } from "@/lib/busha/markup";
+import { applyMarkup, MARKUP_RATE } from "@/lib/busha/markup";
+import { round2 } from "@/lib/cny/tiers";
 import type { Currency } from "@/lib/types/database";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -167,9 +168,14 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   // Then the same 0.5% customer-facing markup applied to every automated swap
   // (src/lib/busha/markup.ts), computed client-side purely for display; the real amount is always
   // independently recomputed server-side from Busha's own transfer response.
+  // Gated on activeRate alone (not amountValid) so the preview keeps showing real numbers even
+  // when the typed amount exceeds the user's balance — only the submit button is gated on
+  // amountValid, since that's the only thing insufficient balance should actually block.
+  const amountEntered = amountNum > 0;
   const rawTargetAmount =
-    amountValid && activeRate != null ? (isSelling ? amountNum * activeRate : amountNum / activeRate) : null;
+    amountEntered && activeRate != null ? (isSelling ? amountNum * activeRate : amountNum / activeRate) : null;
   const receiveAmount = rawTargetAmount != null ? applyMarkup(rawTargetAmount) : null;
+  const feeAmount = amountEntered ? round2(amountNum * MARKUP_RATE) : null;
 
   let disabledReason: string | null = null;
   if (amountNum <= 0) disabledReason = "Enter an amount to continue";
@@ -291,6 +297,11 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
                   ? rateError
                   : "—"}
           </p>
+          {feeAmount != null && (
+            <p className="mt-1 text-xs text-foreground/50">
+              Conversion fee: {formatBalance(config.source, feeAmount)}
+            </p>
+          )}
         </div>
 
         {actionState.error && <p className="text-sm text-danger-500">{actionState.error}</p>}

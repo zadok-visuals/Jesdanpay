@@ -196,13 +196,18 @@ async function computeCnyRate(
   }
 }
 
-// The one admin-configurable markup applied on top of the live rate + tiered rate before a user
-// ever sees a final number — single source of truth for all fiat-to-CNY pricing across the app
-// (Convert CNY, Pay to China), replacing the old per-currency-type margin that risked drifting
-// out of sync between pages. Falls back to 0 (never blocks a conversion) if somehow unset.
-async function getCnyMarkupRate(supabase: Awaited<ReturnType<typeof createClient>>): Promise<number> {
-  const { data } = await supabase.from("cny_markup_rate").select("markup_rate").single();
-  return data?.markup_rate ?? 0;
+// The admin-configurable markup applied on top of the live rate + tiered rate before a user ever
+// sees a final number — one shared row so Convert CNY and Pay to China can't drift out of sync,
+// but split by currency type (fiat vs USDT) since they're genuinely different agreed rates (2%
+// fiat, 1% USDT) — collapsing them into one value was a regression from an earlier patch this
+// session. Falls back to 0 (never blocks a conversion) if somehow unset.
+async function getCnyMarkupRate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  nonCnyCurrency: Currency,
+): Promise<number> {
+  const { data } = await supabase.from("cny_markup_rate").select("fiat_markup_rate, usdt_markup_rate").single();
+  if (!data) return 0;
+  return nonCnyCurrency === "USDT" ? data.usdt_markup_rate : data.fiat_markup_rate;
 }
 
 export interface LiveRateState {
@@ -256,7 +261,7 @@ export async function submitCnyConversion(
   if ("error" in result) return { error: result.error };
   const { preview } = result;
 
-  const margin = await getCnyMarkupRate(supabase);
+  const margin = await getCnyMarkupRate(supabase, nonCnyCurrency);
   const fromCurrency: Currency = direction === "to_cny" ? nonCnyCurrency : "CNY";
   const fromAmount = direction === "to_cny" ? preview.nonCnyAmount : preview.cnyAmount;
   const toCurrency: Currency = direction === "to_cny" ? "CNY" : nonCnyCurrency;

@@ -160,15 +160,20 @@ export async function setCnyMarkupRate(
   formData: FormData,
 ): Promise<AdminActionState> {
   await requireAdminUser();
-  const markupPercent = Number(formData.get("markupPercent"));
+  const fiatMarkupPercent = Number(formData.get("fiatMarkupPercent"));
+  const usdtMarkupPercent = Number(formData.get("usdtMarkupPercent"));
 
-  if (!Number.isFinite(markupPercent) || markupPercent < 0 || markupPercent >= 100) {
-    return { error: "Enter a valid percentage (0-99)." };
+  if (!Number.isFinite(fiatMarkupPercent) || fiatMarkupPercent < 0 || fiatMarkupPercent >= 100) {
+    return { error: "Enter a valid fiat markup percentage (0-99)." };
+  }
+  if (!Number.isFinite(usdtMarkupPercent) || usdtMarkupPercent < 0 || usdtMarkupPercent >= 100) {
+    return { error: "Enter a valid USDT markup percentage (0-99)." };
   }
 
   const admin = createAdminClient();
   const { error } = await admin.rpc("admin_set_cny_markup_rate", {
-    p_markup_rate: markupPercent / 100,
+    p_fiat_markup_rate: fiatMarkupPercent / 100,
+    p_usdt_markup_rate: usdtMarkupPercent / 100,
   });
 
   if (error) return { error: error.message };

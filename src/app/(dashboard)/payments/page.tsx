@@ -21,7 +21,8 @@ export default async function PaymentsPage() {
       <PaymentsView
         wallets={wallets ?? []}
         tierRates={tierRates ?? []}
-        markupRate={markupRow?.markup_rate ?? 0}
+        fiatMarkupRate={markupRow?.fiat_markup_rate ?? 0}
+        usdtMarkupRate={markupRow?.usdt_markup_rate ?? 0}
       />
     </div>
   );

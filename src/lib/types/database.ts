@@ -128,7 +128,8 @@ export type CnyTierRate = {
 
 export type CnyMarkupRate = {
   id: boolean;
-  markup_rate: number;
+  fiat_markup_rate: number;
+  usdt_markup_rate: number;
   updated_at: string;
 };
 
@@ -227,7 +228,7 @@ export type Database = {
       };
       cny_markup_rate: {
         Row: CnyMarkupRate;
-        Insert: Partial<CnyMarkupRate> & Pick<CnyMarkupRate, "markup_rate">;
+        Insert: Partial<CnyMarkupRate> & Pick<CnyMarkupRate, "fiat_markup_rate" | "usdt_markup_rate">;
         Update: Partial<CnyMarkupRate>;
         Relationships: [];
       };
@@ -329,7 +330,7 @@ export type Database = {
         Returns: undefined;
       };
       admin_set_cny_markup_rate: {
-        Args: { p_markup_rate: number };
+        Args: { p_fiat_markup_rate: number; p_usdt_markup_rate: number };
         Returns: undefined;
       };
       set_withdrawal_recipient: {

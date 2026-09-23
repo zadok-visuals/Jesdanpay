@@ -157,7 +157,10 @@ export default async function AdminPage({
               Applied on top of the tiered rate above before it's shown to any user — the single
               markup Convert CNY and Pay to China both use, so they can never quote differently.
             </p>
-            <CnyMarkupForm markupRate={markupRow?.markup_rate ?? 0} />
+            <CnyMarkupForm
+              fiatMarkupRate={markupRow?.fiat_markup_rate ?? 0}
+              usdtMarkupRate={markupRow?.usdt_markup_rate ?? 0}
+            />
           </div>
         </Card>
       </section>

@@ -11,7 +11,7 @@ import type {
 } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { submitRmbExchange, previewLiveBushaRate, type PaymentsActionState } from "@/lib/actions/payments";
-import { computeConversionAmounts, round2 } from "@/lib/cny/tiers";
+import { computeConversionAmounts } from "@/lib/cny/tiers";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -25,6 +25,9 @@ type Step = "source" | "recipient" | "confirm";
 interface SendState {
   sourceCurrency: Currency;
   amount: string;
+  // Set when leaving step 1, carried forward so every later step (and the breadcrumb) can show
+  // the same real estimate instead of a vague placeholder — never recomputed downstream.
+  estimatedCny: number | null;
   payoutMethod: PayoutMethod;
   // Alipay
   recipientAlipayId: string;
@@ -49,6 +52,7 @@ interface SendState {
 const DEFAULT_STATE: SendState = {
   sourceCurrency: "NGN",
   amount: "",
+  estimatedCny: null,
   payoutMethod: "alipay",
   recipientAlipayId: "",
   recipientWechatId: "",
@@ -107,16 +111,23 @@ function StepDots({ current }: { current: Step }) {
   );
 }
 
-function StepLabel({ step }: { step: Step }) {
+function StepLabel({ step, estimatedCny }: { step: Step; estimatedCny: number | null }) {
   const labels: Record<Step, string> = {
     source: "Amount & source",
     recipient: "Recipient details",
     confirm: "Review & confirm",
   };
   return (
-    <p className="mt-2 text-xs font-medium text-foreground/50 uppercase tracking-wide">
-      {labels[step]}
-    </p>
+    <div className="mt-2 flex items-center gap-2">
+      <p className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
+        {labels[step]}
+      </p>
+      {step !== "source" && estimatedCny != null && (
+        <p className="text-xs font-medium text-primary-700">
+          ≈ {formatBalance("CNY", estimatedCny)} to your vendor
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -128,22 +139,21 @@ function SourceStep({
   onChange,
   onNext,
   tierRates,
-  markupRate,
 }: {
   wallets: Wallet[];
   state: SendState;
   onChange: (patch: Partial<SendState>) => void;
   onNext: () => void;
   tierRates: CnyTierRate[];
-  markupRate: number;
 }) {
   const availableCurrencies = SEND_CURRENCIES.filter((c) =>
     wallets.some((w) => w.currency === c),
   );
   const sourceWallet = wallets.find((w) => w.currency === state.sourceCurrency);
   const amountNum = parseFloat(state.amount) || 0;
-  const exceedsBalance = amountNum > 0 && !!sourceWallet && amountNum > sourceWallet.balance;
-  const amountValid = amountNum > 0 && !exceedsBalance;
+  const amountEntered = amountNum > 0;
+  const exceedsBalance = amountEntered && !!sourceWallet && amountNum > sourceWallet.balance;
+  const amountValid = amountEntered && !exceedsBalance;
   const nextDisabledReason =
     amountNum <= 0
       ? "Enter an amount to continue"
@@ -173,12 +183,58 @@ function SourceStep({
   }, [state.sourceCurrency, isCnySource]);
 
   const rateReady = isCnySource || state.sourceCurrency === "USDT" || bushaRate != null;
+  // Gated on amountEntered alone (not amountValid) so the rate card keeps showing real numbers
+  // even when the typed amount exceeds the user's balance — only the "Next" button below is
+  // gated on amountValid.
   const amounts =
-    !isCnySource && amountValid && rateReady
+    !isCnySource && amountEntered && rateReady
       ? computeConversionAmounts("to_cny", amountNum, state.sourceCurrency === "USDT" ? null : bushaRate, tierRates)
       : null;
   const effectiveRate = amounts && amounts.nonCnyAmount > 0 ? amounts.cnyAmount / amounts.nonCnyAmount : null;
-  const estimatedCny = amounts ? round2(amounts.cnyAmount * (1 - markupRate)) : null;
+  // No markup applied here — Pay to China's profit comes purely from the tiered rate spread
+  // (6.5/6.6), not a stacked fee, and settlement is always manual anyway (the admin enters the
+  // real delivered CNY afterward), so this estimate is the tier rate's own output, unmarked-up.
+  const estimatedCny = amounts ? amounts.cnyAmount : null;
+
+  // Dual-input bidirectional CNY field: state.amount (the source-currency amount) stays the
+  // canonical value threaded through every later step; this local string mirrors it in CNY terms
+  // so the user can type into either box. `activeField` decides which direction drives the other
+  // — typing fiat recomputes CNY every render below; typing CNY calls computeConversionAmounts in
+  // the reverse direction and writes the result back into state.amount via onChange.
+  const [activeField, setActiveField] = useState<"fiat" | "cny">("fiat");
+  const [cnyInput, setCnyInput] = useState("");
+
+  useEffect(() => {
+    if (activeField === "cny") return;
+    setCnyInput(amounts ? String(amounts.cnyAmount) : "");
+  }, [amounts, activeField]);
+
+  function handleFiatInput(v: string) {
+    setActiveField("fiat");
+    onChange({ amount: v });
+  }
+
+  function handleCnyInput(v: string) {
+    setActiveField("cny");
+    setCnyInput(v);
+    const cnyNum = parseFloat(v) || 0;
+    if (cnyNum <= 0 || !rateReady) {
+      onChange({ amount: "" });
+      return;
+    }
+    const result = computeConversionAmounts(
+      "from_cny",
+      cnyNum,
+      state.sourceCurrency === "USDT" ? null : bushaRate,
+      tierRates,
+    );
+    onChange({ amount: result ? String(result.nonCnyAmount) : "" });
+  }
+
+  function handleNext() {
+    onChange({ estimatedCny });
+    onNext();
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -212,28 +268,47 @@ function SourceStep({
         </div>
       </div>
 
-      {/* Amount */}
-      <div>
-        <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-foreground/80">
-          Amount ({state.sourceCurrency})
-        </label>
-        <AmountInput
-          id="amount"
-          symbol={CURRENCY_META[state.sourceCurrency].symbol}
-          value={state.amount}
-          onChange={(v) => onChange({ amount: v })}
-        />
-        {exceedsBalance ? (
-          <p className="mt-1.5 text-xs text-danger-500">
-            Amount exceeds your available {state.sourceCurrency} balance of{" "}
-            {formatBalance(state.sourceCurrency, sourceWallet?.balance ?? 0)}
-          </p>
-        ) : (
-          sourceWallet && (
-            <p className="mt-1.5 text-xs text-foreground/50">
-              Available: {formatBalance(state.sourceCurrency, sourceWallet.balance)}
+      {/* Amount — dual-linked with CNY below when a conversion actually applies */}
+      <div className={isCnySource ? "" : "grid grid-cols-1 gap-4 sm:grid-cols-2"}>
+        <div>
+          <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-foreground/80">
+            Amount ({state.sourceCurrency})
+          </label>
+          <AmountInput
+            id="amount"
+            symbol={CURRENCY_META[state.sourceCurrency].symbol}
+            value={state.amount}
+            onChange={handleFiatInput}
+          />
+          {exceedsBalance ? (
+            <p className="mt-1.5 text-xs text-danger-500">
+              Amount exceeds your available {state.sourceCurrency} balance of{" "}
+              {formatBalance(state.sourceCurrency, sourceWallet?.balance ?? 0)}
             </p>
-          )
+          ) : (
+            sourceWallet && (
+              <p className="mt-1.5 text-xs text-foreground/50">
+                Available: {formatBalance(state.sourceCurrency, sourceWallet.balance)}
+              </p>
+            )
+          )}
+        </div>
+
+        {!isCnySource && (
+          <div>
+            <label htmlFor="cnyAmount" className="mb-1.5 block text-sm font-medium text-foreground/80">
+              Your vendor receives (CNY)
+            </label>
+            <AmountInput
+              id="cnyAmount"
+              symbol={CURRENCY_META.CNY.symbol}
+              value={cnyInput}
+              onChange={handleCnyInput}
+            />
+            <p className="mt-1.5 text-xs text-foreground/50">
+              Type in either field — the other updates automatically at today&rsquo;s rate.
+            </p>
+          </div>
         )}
       </div>
 
@@ -251,14 +326,6 @@ function SourceStep({
           </div>
           <dl className="divide-y divide-border">
             <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-              <dt className="shrink-0 text-sm text-foreground/60">USDT/CNY anchor rate</dt>
-              <dd className="text-right text-sm font-medium text-foreground">
-                {amounts
-                  ? `CNY 1 = ${(1 / amounts.tierRate).toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT`
-                  : "—"}
-              </dd>
-            </div>
-            <div className="flex items-start justify-between gap-4 px-6 py-3.5">
               <dt className="shrink-0 text-sm text-foreground/60">
                 CNY → {state.sourceCurrency} (est.)
               </dt>
@@ -269,9 +336,9 @@ function SourceStep({
               </dd>
             </div>
             <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-              <dt className="shrink-0 text-sm text-foreground/60">You&rsquo;ll receive (est.)</dt>
+              <dt className="shrink-0 text-sm text-foreground/60">Your vendor receives</dt>
               <dd className="text-right text-sm font-medium text-foreground">
-                {!amountValid
+                {!amountEntered
                   ? "—"
                   : isRateLoading
                     ? "Fetching live rate…"
@@ -292,7 +359,7 @@ function SourceStep({
       <div className="flex flex-col items-start gap-1.5">
         <Button
           disabled={!amountValid}
-          onClick={onNext}
+          onClick={handleNext}
           title={nextDisabledReason ?? undefined}
           className="self-start"
         >
@@ -611,7 +678,10 @@ function ConfirmStep({
       label: "You send",
       value: `${CURRENCY_META[state.sourceCurrency].symbol}${amountNum.toLocaleString("en-US", { minimumFractionDigits: 2 })} ${state.sourceCurrency}`,
     },
-    { label: "Rate & fee", value: "Confirmed by our team during review" },
+    {
+      label: "Your vendor receives",
+      value: state.estimatedCny != null ? formatBalance("CNY", state.estimatedCny) : "Estimate unavailable",
+    },
     { label: "Payout method", value: methodLabel },
     { label: "Recipient", value: recipientSummary },
     ...(isAlipayOrWechat
@@ -700,12 +770,10 @@ export function RmbExchangeForm({
   wallets,
   savedRecipients = [],
   tierRates,
-  markupRate,
 }: {
   wallets: Wallet[];
   savedRecipients?: SavedRmbRecipient[];
   tierRates: CnyTierRate[];
-  markupRate: number;
 }) {
   const [step, setStep] = useState<Step>("source");
   const [formState, setFormState] = useState<SendState>(DEFAULT_STATE);
@@ -769,7 +837,7 @@ export function RmbExchangeForm({
           <h2 className="text-base font-semibold">Send to China</h2>
           <StepDots current={step} />
         </div>
-        <StepLabel step={step} />
+        <StepLabel step={step} estimatedCny={formState.estimatedCny} />
       </div>
 
       {step === "source" && (
@@ -779,7 +847,6 @@ export function RmbExchangeForm({
           onChange={patch}
           onNext={() => setStep("recipient")}
           tierRates={tierRates}
-          markupRate={markupRate}
         />
       )}
 

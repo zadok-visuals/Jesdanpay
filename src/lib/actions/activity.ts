@@ -22,6 +22,9 @@ export interface ActivityDetail {
   fee: number | null;
   reference: string | null;
   description: string | null;
+  // Only set for deposits where the amount actually confirmed on-chain (or via the payment
+  // provider) differs from what was originally requested — see migration 0028.
+  confirmedAmount: number | null;
 }
 
 export interface ActivityDetailState {
@@ -61,6 +64,7 @@ export async function getActivityDetail(
         fee: null,
         reference: data.provider_reference,
         description: null,
+        confirmedAmount: data.confirmed_amount,
       },
     };
   }
@@ -87,6 +91,7 @@ export async function getActivityDetail(
         fee: null,
         reference: null,
         description: data.direction === "to_cny" ? "Converted to CNY" : "Converted from CNY",
+        confirmedAmount: null,
       },
     };
   }
@@ -139,6 +144,7 @@ export async function getActivityDetail(
       fee,
       reference: tx.provider_reference,
       description,
+      confirmedAmount: null,
     },
   };
 }

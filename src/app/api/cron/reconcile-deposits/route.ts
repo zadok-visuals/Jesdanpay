@@ -48,7 +48,12 @@ export async function GET(request: Request) {
     try {
       const transfer = await getTransfer(deposit.provider_reference);
       if (transfer.status === "funds_received") {
-        const { error } = await admin.rpc("credit_deposit", { p_deposit_id: deposit.id });
+        // Credit whatever was actually confirmed on-chain, not the amount originally requested
+        // (see migration 0028) — Busha's own transfer amount self-corrects once funds arrive.
+        const { error } = await admin.rpc("credit_deposit", {
+          p_deposit_id: deposit.id,
+          p_actual_amount: Number(transfer.target_amount),
+        });
         if (error) {
           console.error("[reconcile-deposits] credit_deposit RPC failed", { deposit, error });
           results.push({ depositId: deposit.id, outcome: `credit failed: ${error.message}` });

@@ -112,6 +112,7 @@ export type Deposit = {
   user_id: string;
   currency: Currency;
   amount: number;
+  confirmed_amount: number | null;
   status: TransactionStatus;
   provider: TransactionProvider;
   provider_reference: string | null;
@@ -295,7 +296,7 @@ export type Database = {
         Returns: undefined;
       };
       credit_deposit: {
-        Args: { p_deposit_id: string };
+        Args: { p_deposit_id: string; p_actual_amount: number | null };
         Returns: undefined;
       };
       fail_deposit: {

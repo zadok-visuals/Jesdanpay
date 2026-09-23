@@ -252,8 +252,14 @@ export async function checkDepositStatus(depositId: string): Promise<DepositStat
       const transfer = await busha.getTransfer(data.provider_reference);
       if (transfer.status === "funds_received") {
         const admin = createAdminClient();
+        // Busha's transfer amount self-corrects to whatever was actually confirmed on-chain —
+        // never assume it matches what was originally requested (confirmed live: a user can
+        // request 10 USDT and send 12, and Busha reports source_amount/target_amount as 12 once
+        // received). Credit the real amount, not the stale deposits.amount recorded at request
+        // time.
         const { error: creditError } = await admin.rpc("credit_deposit", {
           p_deposit_id: depositId,
+          p_actual_amount: Number(transfer.target_amount),
         });
         if (creditError) {
           console.error("[checkDepositStatus] credit_deposit RPC failed", {

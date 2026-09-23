@@ -44,7 +44,9 @@ export async function POST(request: Request) {
       .eq("provider_reference", payload.data.tnxRef)
       .maybeSingle();
     if (deposit) {
-      await admin.rpc("credit_deposit", { p_deposit_id: deposit.id });
+      // Klasha (bank-transfer deposits) has no equivalent "re-check the real confirmed amount"
+      // step — null falls back to the originally requested amount, same as before migration 0028.
+      await admin.rpc("credit_deposit", { p_deposit_id: deposit.id, p_actual_amount: null });
     }
   }
 

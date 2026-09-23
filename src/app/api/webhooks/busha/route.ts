@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getTransfer } from "@/lib/busha/client";
 
 // PRIOR BUG (found during the "deposits not reflecting" audit): this route used to check a
 // header named `x-busha-webhook-secret` — a name that was NEVER confirmed against Busha's real
@@ -91,7 +92,25 @@ export async function POST(request: Request) {
       .eq("provider_reference", providerReference)
       .maybeSingle();
     if (deposit) {
-      const { error } = await admin.rpc("credit_deposit", { p_deposit_id: deposit.id });
+      // The webhook payload's own amount fields (if any) aren't confirmed against real Busha
+      // docs — never trust them blindly. Re-fetch the transfer directly and credit whatever it
+      // reports as actually confirmed on-chain (see migration 0028's header comment for why this
+      // can differ from the amount originally requested).
+      let actualAmount: number | null = null;
+      try {
+        const transfer = await getTransfer(providerReference);
+        actualAmount = Number(transfer.target_amount);
+      } catch (err) {
+        console.error("[busha webhook] could not re-fetch transfer for actual amount", {
+          eventId: eventRow?.id,
+          providerReference,
+          error: err instanceof Error ? err.message : err,
+        });
+      }
+      const { error } = await admin.rpc("credit_deposit", {
+        p_deposit_id: deposit.id,
+        p_actual_amount: actualAmount,
+      });
       if (error) {
         console.error("[busha webhook] credit_deposit RPC failed", {
           eventId: eventRow?.id,

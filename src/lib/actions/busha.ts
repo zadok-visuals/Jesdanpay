@@ -5,8 +5,29 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Currency } from "@/lib/types/database";
 import * as busha from "@/lib/busha/client";
+import { getUsdtPairRates } from "@/lib/busha/rate";
 import { applyMarkup } from "@/lib/busha/markup";
 import { toCustomerError } from "@/lib/provider-error";
+
+export interface SwapRateState {
+  buyRate?: number;
+  sellRate?: number;
+  error?: string;
+}
+
+// Live buy AND sell rates for a USDT/<fiat> pair, via Busha's balance-independent /v1/pairs
+// lookup (see getUsdtPairRates's header comment) — genuinely different numbers, not one rate
+// inverted for display. Fetched once per fiat-currency change; UsdtExchangeForm picks whichever
+// side applies to the direction currently selected.
+export async function previewSwapRate(fiatCurrency: Currency): Promise<SwapRateState> {
+  try {
+    const rates = await getUsdtPairRates(fiatCurrency);
+    if (!rates) return { error: `USDT/${fiatCurrency} isn't available on Busha right now.` };
+    return { buyRate: rates.buyRate, sellRate: rates.sellRate };
+  } catch (err) {
+    return { error: toCustomerError(err, "busha.previewSwapRate") };
+  }
+}
 
 export interface ExecuteSwapState {
   error?: string;

@@ -40,3 +40,24 @@ export async function probeFiatToUsdtRate(fiatCurrency: string): Promise<number>
     throw err;
   }
 }
+
+export interface UsdtPairRates {
+  // Fiat cost to buy 1 USDT, and fiat received for selling 1 USDT — genuinely different numbers
+  // (Busha's real bid/ask spread), not one rate inverted. See getPair's header comment for why
+  // this endpoint (not /v1/quotes) is what makes the sell side obtainable at all.
+  buyRate: number;
+  sellRate: number;
+}
+
+// The direct USDT<->fiat swap feature (src/lib/actions/busha.ts, UsdtExchangeForm.tsx) needs a
+// real rate for whichever direction the user actually picked — buying USDT with fiat uses
+// Busha's buy price, selling USDT for fiat uses Busha's sell price. Returns null when Busha has
+// no pair for this currency at all (confirmed live: GHS has no USDT pair on this account today).
+export async function getUsdtPairRates(fiatCurrency: string): Promise<UsdtPairRates | null> {
+  const pair = await busha.getPair("USDT", fiatCurrency);
+  if (!pair) return null;
+  return {
+    buyRate: Number(pair.buy_price.amount),
+    sellRate: Number(pair.sell_price.amount),
+  };
+}

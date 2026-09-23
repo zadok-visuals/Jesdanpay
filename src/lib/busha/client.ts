@@ -176,6 +176,28 @@ export function createTransfer(quoteId: string): Promise<BushaTransfer> {
   return request("/v1/transfers", { method: "POST", body: { quote_id: quoteId } });
 }
 
+export type BushaPair = {
+  id: string;
+  base: string;
+  counter: string;
+  buy_price: { amount: string; currency: string };
+  sell_price: { amount: string; currency: string };
+  is_buy_supported: boolean;
+  is_sell_supported: boolean;
+};
+
+// GET /v1/pairs — confirmed against docs.busha.io/api-reference/pairs/list-trading-pairs and
+// live against the real account. Unlike /v1/quotes, this needs no balance and no amount — it's a
+// live market lookup, not a reservation — and returns buy_price/sell_price as two genuinely
+// different numbers (confirmed live: USDT/NGN buy 1380.72, sell 1364.26 — a real ~1.2% spread).
+// This is what makes a real sell-side (USDT -> fiat) rate obtainable at all: /v1/quotes for that
+// direction fails "insufficient balance" whenever this account's real USDT float is low, but
+// /v1/pairs is unaffected since it never reserves or moves anything.
+export async function getPair(base: string, counter: string): Promise<BushaPair | null> {
+  const data = await request<BushaPair[]>(`/v1/pairs?base=${base}&counter=${counter}`, { method: "GET" });
+  return data[0] ?? null;
+}
+
 // GET /v1/transfers/{id} — polling fallback if the webhook hasn't fired yet.
 export function getTransfer(transferId: string): Promise<BushaTransfer> {
   return request(`/v1/transfers/${transferId}`, { method: "GET" });

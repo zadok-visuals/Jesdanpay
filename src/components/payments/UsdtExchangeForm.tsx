@@ -4,8 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
-import { executeSwap, checkSwapStatus, type ExecuteSwapState } from "@/lib/actions/busha";
-import { previewLiveBushaRate } from "@/lib/actions/payments";
+import { executeSwap, checkSwapStatus, previewSwapRate, type ExecuteSwapState } from "@/lib/actions/busha";
 import { applyMarkup } from "@/lib/busha/markup";
 import type { Currency } from "@/lib/types/database";
 import { Card } from "@/components/ui/Card";
@@ -117,28 +116,32 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
     };
   }, [done, actionState.transactionId, swapStatus, router]);
 
-  // The live fiat/USDT rate depends only on which fiat currency is involved, not on the swap
-  // direction or the amount — fetched once per fiat-currency change via the same safe probe
-  // Convert CNY uses (see probeFiatToUsdtRate's header comment). Every keystroke after that is
-  // pure client math, so "you'll receive" is instant with no per-keystroke network call.
+  // Busha quotes a different rate depending on which side of the trade you're on — buying USDT
+  // with fiat uses their buy price, selling USDT for fiat uses their sell price (confirmed live:
+  // USDT/NGN buy 1380.72, sell 1364.26 — a real ~1.2% spread, not the same number). Both are
+  // fetched together once per fiat-currency change (not per direction, so switching between the
+  // two directions of the same pair — e.g. NGN_TO_USDT <-> USDT_TO_NGN — doesn't refetch), and
+  // the component picks whichever one applies to the direction currently selected.
   const config = direction ? DIRECTIONS.find((d) => d.value === direction)! : null;
   const fiatCurrency = config ? (config.source === "USDT" ? config.target : config.source) : null;
-  const [usdtPerFiat, setUsdtPerFiat] = useState<number | null>(null);
+  const [buyRate, setBuyRate] = useState<number | null>(null);
+  const [sellRate, setSellRate] = useState<number | null>(null);
   const [rateError, setRateError] = useState<string | null>(null);
   const [isRateLoading, startRateLoading] = useTransition();
 
   useEffect(() => {
     setRateError(null);
-    setUsdtPerFiat(null);
+    setBuyRate(null);
+    setSellRate(null);
     if (!fiatCurrency) return;
     startRateLoading(async () => {
-      const result = await previewLiveBushaRate(fiatCurrency);
+      const result = await previewSwapRate(fiatCurrency);
       if (result.error) setRateError(result.error);
-      else setUsdtPerFiat(result.rate ?? null);
+      else {
+        setBuyRate(result.buyRate ?? null);
+        setSellRate(result.sellRate ?? null);
+      }
     });
-    // Depending on the derived fiat currency (not `direction` itself) avoids an unnecessary
-    // refetch when switching between the two directions of the same pair (e.g. NGN_TO_USDT <->
-    // USDT_TO_NGN both involve NGN).
   }, [fiatCurrency]);
 
   if (!direction || !config) {
@@ -156,18 +159,16 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const amountNum = Number(amount) || 0;
   const exceedsBalance = amountNum > 0 && !!sourceWallet && amountNum > sourceWallet.balance;
   const amountValid = amountNum > 0 && !exceedsBalance;
-  const fiatPerUsdt = usdtPerFiat != null ? 1 / usdtPerFiat : null;
+  const isSelling = config.source === "USDT"; // selling USDT for fiat vs buying USDT with fiat
+  const activeRate = isSelling ? sellRate : buyRate;
 
-  // "You will receive": fiat -> USDT multiplies by usdtPerFiat; USDT -> fiat multiplies by
-  // fiatPerUsdt (the inverse) — then the same 0.5% customer-facing markup applied to every
-  // automated swap (src/lib/busha/markup.ts), computed client-side purely for display; the real
-  // amount is always independently recomputed server-side from Busha's own transfer response.
+  // "You will receive": buying USDT divides the fiat amount by the buy rate (fiat cost per 1
+  // USDT); selling USDT multiplies the USDT amount by the sell rate (fiat received per 1 USDT).
+  // Then the same 0.5% customer-facing markup applied to every automated swap
+  // (src/lib/busha/markup.ts), computed client-side purely for display; the real amount is always
+  // independently recomputed server-side from Busha's own transfer response.
   const rawTargetAmount =
-    amountValid && usdtPerFiat != null && fiatPerUsdt != null
-      ? config.source === "USDT"
-        ? amountNum * fiatPerUsdt
-        : amountNum * usdtPerFiat
-      : null;
+    amountValid && activeRate != null ? (isSelling ? amountNum * activeRate : amountNum / activeRate) : null;
   const receiveAmount = rawTargetAmount != null ? applyMarkup(rawTargetAmount) : null;
 
   let disabledReason: string | null = null;
@@ -282,15 +283,10 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
           <p className="mt-1.5 text-xs text-foreground/50">
             {isRateLoading
               ? "Fetching live rate…"
-              : fiatPerUsdt != null
-                ? `USDT 1 = ${fiatCurrency} ${fiatPerUsdt.toLocaleString("en-US", { maximumFractionDigits: 2 })}${
-                    // Busha never quotes a real USDT->fiat rate directly (this account holds no
-                    // USDT float to probe a sell-side quote with) — this figure is the buy-side
-                    // rate inverted client-side, which can diverge from Busha's real sell rate if
-                    // their spread isn't symmetric. Flagged as an estimate only when it's actually
-                    // driving this direction's calculation.
-                    config.source === "USDT" ? " (est.)" : ""
-                  }`
+              : activeRate != null
+                ? `USDT 1 = ${fiatCurrency} ${activeRate.toLocaleString("en-US", { maximumFractionDigits: 2 })} (${
+                    isSelling ? "sell" : "buy"
+                  })`
                 : rateError
                   ? rateError
                   : "—"}

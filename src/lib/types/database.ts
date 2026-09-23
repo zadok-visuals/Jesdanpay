@@ -78,6 +78,8 @@ export type RmbRecipient = {
   payout_method: PayoutMethod;
   recipient_alipay_id: string | null;
   recipient_wechat_id: string | null;
+  recipient_first_name: string | null;
+  recipient_last_name: string | null;
   recipient_bank_account_number: string | null;
   recipient_bank_name: string | null;
   recipient_account_holder_name: string | null;
@@ -92,6 +94,8 @@ export type SavedRmbRecipient = {
   payout_method: PayoutMethod;
   recipient_alipay_id: string | null;
   recipient_wechat_id: string | null;
+  recipient_first_name: string | null;
+  recipient_last_name: string | null;
   recipient_bank_account_number: string | null;
   recipient_bank_name: string | null;
   recipient_account_holder_name: string | null;

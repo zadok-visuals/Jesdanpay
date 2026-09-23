@@ -30,6 +30,9 @@ interface SendState {
   recipientAlipayId: string;
   // WeChat
   recipientWechatId: string;
+  // Recipient full name — required for Alipay/WeChat, regardless of manual vs. QR code entry
+  recipientFirstName: string;
+  recipientLastName: string;
   // Bank
   recipientBankAccountNumber: string;
   recipientBankName: string;
@@ -49,6 +52,8 @@ const DEFAULT_STATE: SendState = {
   payoutMethod: "alipay",
   recipientAlipayId: "",
   recipientWechatId: "",
+  recipientFirstName: "",
+  recipientLastName: "",
   recipientBankAccountNumber: "",
   recipientBankName: "",
   recipientAccountHolderName: "",
@@ -328,31 +333,39 @@ function RecipientStep({
   onNext: () => void;
   savedRecipients: SavedRmbRecipient[];
 }) {
-  // Validation per method
-  const recipientValid =
-    state.payoutMethod === "alipay"
-      ? state.useQrCode
-        ? state.qrCodeFile !== null
-        : state.recipientAlipayId.trim().length > 0
-      : state.payoutMethod === "wechat"
-        ? state.useQrCode
-          ? state.qrCodeFile !== null
-          : state.recipientWechatId.trim().length > 0
-        : state.recipientBankAccountNumber.trim().length > 0 &&
-          state.recipientBankName.trim().length > 0 &&
-          state.recipientAccountHolderName.trim().length > 0;
+  // Validation per method. For Alipay/WeChat, the contact detail (text or QR) and the two name
+  // fields are independent requirements — a QR upload satisfies the contact detail but never
+  // waives the name fields.
+  const isAlipayOrWechat = state.payoutMethod === "alipay" || state.payoutMethod === "wechat";
+  const contactValid = isAlipayOrWechat
+    ? state.useQrCode
+      ? state.qrCodeFile !== null
+      : state.payoutMethod === "alipay"
+        ? state.recipientAlipayId.trim().length > 0
+        : state.recipientWechatId.trim().length > 0
+    : true;
+  const namesValid = isAlipayOrWechat
+    ? state.recipientFirstName.trim().length > 0 && state.recipientLastName.trim().length > 0
+    : true;
+  const recipientValid = isAlipayOrWechat
+    ? contactValid && namesValid
+    : state.recipientBankAccountNumber.trim().length > 0 &&
+      state.recipientBankName.trim().length > 0 &&
+      state.recipientAccountHolderName.trim().length > 0;
   const isValid = recipientValid && (!state.saveRecipient || state.saveLabel.trim().length > 0);
 
   let nextDisabledReason: string | null = null;
   if (!recipientValid) {
-    if (state.payoutMethod === "alipay") {
-      nextDisabledReason = state.useQrCode
-        ? "Upload a QR code to continue"
-        : "Enter the recipient's Alipay ID";
-    } else if (state.payoutMethod === "wechat") {
-      nextDisabledReason = state.useQrCode
-        ? "Upload a QR code to continue"
-        : "Enter the recipient's WeChat ID";
+    if (isAlipayOrWechat) {
+      if (!contactValid) {
+        nextDisabledReason = state.useQrCode
+          ? "Upload a QR code to continue"
+          : `Enter the recipient's ${state.payoutMethod === "alipay" ? "Alipay ID" : "WeChat ID"}`;
+      } else if (!state.recipientLastName.trim()) {
+        nextDisabledReason = "Enter the recipient's last name";
+      } else if (!state.recipientFirstName.trim()) {
+        nextDisabledReason = "Enter the recipient's first name";
+      }
     } else if (!state.recipientBankAccountNumber.trim()) {
       nextDisabledReason = "Enter the recipient's bank account number";
     } else if (!state.recipientBankName.trim()) {
@@ -369,6 +382,8 @@ function RecipientStep({
       payoutMethod: recipient.payout_method,
       recipientAlipayId: recipient.recipient_alipay_id ?? "",
       recipientWechatId: recipient.recipient_wechat_id ?? "",
+      recipientFirstName: recipient.recipient_first_name ?? "",
+      recipientLastName: recipient.recipient_last_name ?? "",
       recipientBankAccountNumber: recipient.recipient_bank_account_number ?? "",
       recipientBankName: recipient.recipient_bank_name ?? "",
       recipientAccountHolderName: recipient.recipient_account_holder_name ?? "",
@@ -448,33 +463,57 @@ function RecipientStep({
             </button>
           </div>
 
-          {state.useQrCode ? (
+          {!state.useQrCode &&
+            (state.payoutMethod === "alipay" ? (
+              <Input
+                label="Recipient phone number or email"
+                id="recipientAlipayId"
+                name="recipientAlipayId"
+                type="text"
+                placeholder="Phone number or email"
+                value={state.recipientAlipayId}
+                onChange={(e) => onChange({ recipientAlipayId: e.target.value })}
+              />
+            ) : (
+              <Input
+                label="Recipient phone number or email"
+                id="recipientWechatId"
+                name="recipientWechatId"
+                type="text"
+                placeholder="Phone number or email"
+                value={state.recipientWechatId}
+                onChange={(e) => onChange({ recipientWechatId: e.target.value })}
+              />
+            ))}
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Last name"
+              id="recipientLastName"
+              name="recipientLastName"
+              type="text"
+              placeholder="Last name"
+              value={state.recipientLastName}
+              onChange={(e) => onChange({ recipientLastName: e.target.value })}
+            />
+            <Input
+              label="First name"
+              id="recipientFirstName"
+              name="recipientFirstName"
+              type="text"
+              placeholder="First name"
+              value={state.recipientFirstName}
+              onChange={(e) => onChange({ recipientFirstName: e.target.value })}
+            />
+          </div>
+
+          {state.useQrCode && (
             <FileDropzone
               label={`${state.payoutMethod === "alipay" ? "Alipay" : "WeChat Pay"} QR code`}
               accept="image/*"
               onFileSelected={(file) =>
                 onChange({ qrCodeFile: file, qrCodeFileName: file?.name ?? "" })
               }
-            />
-          ) : state.payoutMethod === "alipay" ? (
-            <Input
-              label="Recipient Alipay ID"
-              id="recipientAlipayId"
-              name="recipientAlipayId"
-              type="text"
-              placeholder="Phone number or Alipay handle"
-              value={state.recipientAlipayId}
-              onChange={(e) => onChange({ recipientAlipayId: e.target.value })}
-            />
-          ) : (
-            <Input
-              label="Recipient WeChat Pay ID"
-              id="recipientWechatId"
-              name="recipientWechatId"
-              type="text"
-              placeholder="WeChat ID"
-              value={state.recipientWechatId}
-              onChange={(e) => onChange({ recipientWechatId: e.target.value })}
             />
           )}
         </div>
@@ -571,12 +610,11 @@ function ConfirmStep({
   const amountNum = parseFloat(state.amount) || 0;
   const methodLabel = PAYOUT_METHODS.find((m) => m.value === state.payoutMethod)?.label ?? "";
 
-  const recipientSummary =
-    state.payoutMethod === "alipay"
-      ? state.recipientAlipayId || `QR code: ${state.qrCodeFileName}`
-      : state.payoutMethod === "wechat"
-        ? state.recipientWechatId || `QR code: ${state.qrCodeFileName}`
-        : `${state.recipientBankName} · ${state.recipientBankAccountNumber}`;
+  const isAlipayOrWechat = state.payoutMethod === "alipay" || state.payoutMethod === "wechat";
+  const recipientSummary = isAlipayOrWechat
+    ? (state.payoutMethod === "alipay" ? state.recipientAlipayId : state.recipientWechatId) ||
+      `QR code: ${state.qrCodeFileName}`
+    : `${state.recipientBankName} · ${state.recipientBankAccountNumber}`;
 
   const rows: { label: string; value: string }[] = [
     {
@@ -586,6 +624,9 @@ function ConfirmStep({
     { label: "Rate & fee", value: "Confirmed by our team during review" },
     { label: "Payout method", value: methodLabel },
     { label: "Recipient", value: recipientSummary },
+    ...(isAlipayOrWechat
+      ? [{ label: "Recipient name", value: `${state.recipientFirstName} ${state.recipientLastName}`.trim() }]
+      : []),
     ...(state.payoutMethod === "bank"
       ? [{ label: "Account holder", value: state.recipientAccountHolderName }]
       : []),
@@ -694,6 +735,8 @@ export function RmbExchangeForm({
     fd.set("payoutMethod", formState.payoutMethod);
     fd.set("recipientAlipayId", formState.recipientAlipayId);
     fd.set("recipientWechatId", formState.recipientWechatId);
+    fd.set("recipientFirstName", formState.recipientFirstName);
+    fd.set("recipientLastName", formState.recipientLastName);
     fd.set("recipientBankAccountNumber", formState.recipientBankAccountNumber);
     fd.set("recipientBankName", formState.recipientBankName);
     fd.set("recipientAccountHolderName", formState.recipientAccountHolderName);

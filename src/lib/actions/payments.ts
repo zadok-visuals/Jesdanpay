@@ -65,14 +65,27 @@ export async function submitRmbExchange(
     qr_code_ref: qrCodeRef,
   };
 
-  if (payoutMethod === "alipay") {
-    const alipayId = String(formData.get("recipientAlipayId") ?? "").trim();
-    if (!alipayId && !qrCodeRef) return { error: "Recipient Alipay ID or a QR code is required." };
-    recipientInsert = { ...recipientInsert, recipient_alipay_id: alipayId || null };
-  } else if (payoutMethod === "wechat") {
-    const wechatId = String(formData.get("recipientWechatId") ?? "").trim();
-    if (!wechatId && !qrCodeRef) return { error: "Recipient WeChat Pay ID or a QR code is required." };
-    recipientInsert = { ...recipientInsert, recipient_wechat_id: wechatId || null };
+  if (payoutMethod === "alipay" || payoutMethod === "wechat") {
+    const firstName = String(formData.get("recipientFirstName") ?? "").trim();
+    const lastName = String(formData.get("recipientLastName") ?? "").trim();
+    if (!firstName || !lastName) {
+      return { error: "Recipient first and last name are required." };
+    }
+    recipientInsert = {
+      ...recipientInsert,
+      recipient_first_name: firstName,
+      recipient_last_name: lastName,
+    };
+
+    if (payoutMethod === "alipay") {
+      const alipayId = String(formData.get("recipientAlipayId") ?? "").trim();
+      if (!alipayId && !qrCodeRef) return { error: "Recipient phone number, email, or a QR code is required." };
+      recipientInsert = { ...recipientInsert, recipient_alipay_id: alipayId || null };
+    } else {
+      const wechatId = String(formData.get("recipientWechatId") ?? "").trim();
+      if (!wechatId && !qrCodeRef) return { error: "Recipient phone number, email, or a QR code is required." };
+      recipientInsert = { ...recipientInsert, recipient_wechat_id: wechatId || null };
+    }
   } else {
     const accountNumber = String(formData.get("recipientBankAccountNumber") ?? "").trim();
     const bankName = String(formData.get("recipientBankName") ?? "").trim();
@@ -113,6 +126,8 @@ export async function submitRmbExchange(
       payout_method: payoutMethod,
       recipient_alipay_id: recipientInsert.recipient_alipay_id ?? null,
       recipient_wechat_id: recipientInsert.recipient_wechat_id ?? null,
+      recipient_first_name: recipientInsert.recipient_first_name ?? null,
+      recipient_last_name: recipientInsert.recipient_last_name ?? null,
       recipient_bank_account_number: recipientInsert.recipient_bank_account_number ?? null,
       recipient_bank_name: recipientInsert.recipient_bank_name ?? null,
       recipient_account_holder_name: recipientInsert.recipient_account_holder_name ?? null,

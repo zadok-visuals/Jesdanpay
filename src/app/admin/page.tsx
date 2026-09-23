@@ -74,7 +74,9 @@ export default async function AdminPage() {
   function recipientSummary(recipient: NonNullable<ReturnType<typeof recipientByTx.get>>) {
     if (recipient.payout_method === "alipay" || recipient.payout_method === "wechat") {
       const id = recipient.payout_method === "alipay" ? recipient.recipient_alipay_id : recipient.recipient_wechat_id;
-      return id || (recipient.qr_code_ref ? "QR code uploaded (see link below)" : "—");
+      const contact = id || (recipient.qr_code_ref ? "QR code uploaded (see link below)" : "—");
+      const name = [recipient.recipient_first_name, recipient.recipient_last_name].filter(Boolean).join(" ");
+      return name ? `${name} · ${contact}` : contact;
     }
     return `${recipient.recipient_bank_name} · ${recipient.recipient_bank_account_number} · ${recipient.recipient_account_holder_name}`;
   }

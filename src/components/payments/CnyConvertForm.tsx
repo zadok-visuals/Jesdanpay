@@ -168,7 +168,7 @@ export function CnyConvertForm({
                 direction === d ? "bg-white text-primary-700" : "text-foreground/60 hover:text-foreground"
               }`}
             >
-              {d === "to_cny" ? "Convert CNY" : "Convert from CNY"}
+              {d === "to_cny" ? "Convert to CNY" : "Convert from CNY"}
             </button>
           ))}
         </div>

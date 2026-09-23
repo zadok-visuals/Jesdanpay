@@ -60,6 +60,17 @@ function SetupForm({ availableCurrencies }: { availableCurrencies: Currency[] })
             (TRC20, ERC20, etc.) cannot be recovered.
           </p>
         </div>
+      ) : currency === "KES" ? (
+        // KES payouts go out over M-Pesa, not a bank rail — the phone number is stored in the
+        // same bankAccountNumber field (no schema/mapping change needed), just relabeled here.
+        <Input
+          label="M-Pesa phone number"
+          id="bankAccountNumber"
+          name="bankAccountNumber"
+          type="tel"
+          required
+          placeholder="e.g. +254712345678"
+        />
       ) : (
         <>
           <Input
@@ -78,6 +89,16 @@ function SetupForm({ availableCurrencies }: { availableCurrencies: Currency[] })
             required
             placeholder="Bank name"
           />
+          {currency === "NGN" && (
+            <Input
+              label="Bank code"
+              id="bankCode"
+              name="bankCode"
+              type="text"
+              required
+              placeholder="Found in your bank's app or from your bank directly"
+            />
+          )}
         </>
       )}
 
@@ -121,6 +142,11 @@ export function WithdrawalRecipientCard({
                 <span className="text-foreground/60">Wallet address (BSC):</span>{" "}
                 <span className="break-all font-medium">{recipient.wallet_address}</span>
               </p>
+            ) : recipient.currency === "KES" ? (
+              <p>
+                <span className="text-foreground/60">M-Pesa phone number:</span>{" "}
+                <span className="font-medium">{recipient.bank_account_number}</span>
+              </p>
             ) : (
               <>
                 <p>
@@ -131,6 +157,12 @@ export function WithdrawalRecipientCard({
                   <span className="text-foreground/60">Account number:</span>{" "}
                   <span className="font-medium">{recipient.bank_account_number}</span>
                 </p>
+                {recipient.bank_code && (
+                  <p>
+                    <span className="text-foreground/60">Bank code:</span>{" "}
+                    <span className="font-medium">{recipient.bank_code}</span>
+                  </p>
+                )}
               </>
             )}
           </div>

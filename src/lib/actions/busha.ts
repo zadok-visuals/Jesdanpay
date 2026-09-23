@@ -50,7 +50,8 @@ export async function executeSwap(
   const txSourceCurrency = transfer.source_currency.toUpperCase() as Currency;
   const txTargetCurrency = transfer.target_currency.toUpperCase() as Currency;
   const txSourceAmount = Number(transfer.source_amount);
-  const effectiveTargetAmount = applyMarkup(Number(transfer.target_amount));
+  const rawTargetAmount = Number(transfer.target_amount);
+  const effectiveTargetAmount = applyMarkup(rawTargetAmount);
 
   const { data: transactionId, error: rpcError } = await supabase.rpc("create_busha_swap_transaction", {
     p_source_currency: txSourceCurrency,
@@ -58,6 +59,9 @@ export async function executeSwap(
     p_source_amount: txSourceAmount,
     p_target_amount: Number(effectiveTargetAmount.toFixed(2)),
     p_provider_reference: transfer.id,
+    // Busha's real, pre-markup amount — kept for the admin markup-collected audit trail (see
+    // migration 0025) even though the customer is only ever shown/credited the marked-up figure.
+    p_raw_target_amount: Number(rawTargetAmount.toFixed(2)),
   });
 
   if (rpcError) return { error: rpcError.message };
@@ -257,6 +261,81 @@ export async function checkDepositStatus(depositId: string): Promise<DepositStat
       // whatever our own DB currently says, and log so a persistent failure is visible.
       console.error("[checkDepositStatus] Busha reconciliation check failed", {
         depositId,
+        providerReference: data.provider_reference,
+        error: err instanceof Error ? err.message : err,
+      });
+    }
+  }
+
+  return { status: data.status };
+}
+
+export interface SwapStatusState {
+  status?: "pending" | "processing" | "completed" | "failed";
+  error?: string;
+}
+
+// Live poll target for the swap confirmation screen — same rationale as checkDepositStatus.
+// executeSwap only completes synchronously on an unambiguous funds_converted/funds_delivered
+// response; anything else was left pending for a webhook that, like the deposit one, can't be
+// relied on to ever arrive. This checks Busha's own transfer status directly on every poll and
+// self-heals within one poll cycle, independent of both the webhook and the reconciliation cron.
+export async function checkSwapStatus(transactionId: string): Promise<SwapStatusState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("status, provider, provider_reference")
+    .eq("id", transactionId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!data) return { error: "Transaction not found." };
+
+  if (
+    (data.status === "pending" || data.status === "processing") &&
+    data.provider === "busha" &&
+    data.provider_reference
+  ) {
+    try {
+      const transfer = await busha.getTransfer(data.provider_reference);
+      if (transfer.status === "funds_converted" || transfer.status === "funds_delivered") {
+        const admin = createAdminClient();
+        const { error: completeError } = await admin.rpc("complete_busha_swap_transaction", {
+          p_transaction_id: transactionId,
+        });
+        if (completeError) {
+          console.error("[checkSwapStatus] complete_busha_swap_transaction RPC failed", {
+            transactionId,
+            providerReference: data.provider_reference,
+            error: completeError,
+          });
+        } else {
+          return { status: "completed" };
+        }
+      } else if (transfer.status === "cancelled" || transfer.status === "funds_not_delivered") {
+        const admin = createAdminClient();
+        const { error: failError } = await admin.rpc("fail_busha_swap_transaction", {
+          p_transaction_id: transactionId,
+        });
+        if (failError) {
+          console.error("[checkSwapStatus] fail_busha_swap_transaction RPC failed", {
+            transactionId,
+            providerReference: data.provider_reference,
+            error: failError,
+          });
+        } else {
+          return { status: "failed" };
+        }
+      }
+    } catch (err) {
+      console.error("[checkSwapStatus] Busha reconciliation check failed", {
+        transactionId,
         providerReference: data.provider_reference,
         error: err instanceof Error ? err.message : err,
       });

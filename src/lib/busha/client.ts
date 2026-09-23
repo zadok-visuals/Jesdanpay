@@ -117,8 +117,13 @@ export type BushaTransfer = {
 export function createQuote(params: {
   sourceCurrency: string;
   targetCurrency: string;
-  sourceAmount: string;
+  sourceAmount?: string;
+  targetAmount?: string;
   isDeposit?: boolean;
+  // A payout: pays a quote's proceeds out to a pre-created Recipient (see createRecipient below)
+  // instead of crediting Busha's own balance. Confirmed against docs.busha.io's payout guide —
+  // `pay_out: { type: "bank_transfer" | "mobile_money" | "address", recipient_id }`.
+  payOut?: { type: string; recipientId: string };
 }): Promise<BushaQuote> {
   const currency = params.sourceCurrency.toUpperCase();
   const payIn = params.isDeposit
@@ -126,16 +131,43 @@ export function createQuote(params: {
       ? { pay_in: { type: "address", network: "BSC" } }
       : { pay_in: { type: "temporary_bank_account" } }
     : {};
+  const payOut = params.payOut
+    ? { pay_out: { type: params.payOut.type, recipient_id: params.payOut.recipientId } }
+    : {};
 
   return request("/v1/quotes", {
     method: "POST",
     body: {
       source_currency: currency,
       target_currency: params.targetCurrency.toUpperCase(),
-      source_amount: params.sourceAmount,
+      ...(params.sourceAmount ? { source_amount: params.sourceAmount } : {}),
+      ...(params.targetAmount ? { target_amount: params.targetAmount } : {}),
       ...payIn,
+      ...payOut,
     },
   });
+}
+
+export type BushaRecipient = {
+  id: string;
+  type: string;
+  currency?: string;
+  country_code?: string;
+  account_name?: string;
+  account_number?: string;
+  bank_name?: string;
+  bank_code?: string;
+  phone_number?: string;
+  address?: string;
+  network?: string;
+};
+
+// POST /v1/recipients — confirmed against docs.busha.io/api-reference/recipients/create-a-recipient.
+// Field shape depends on `type` (ngn_bank/kes_bank need bank_name+bank_code+account_number+
+// account_name; mpesa_mobile_money/mtn_mobile_money need phone_number+account_name; crypto needs
+// address+network+account_name) — see src/lib/busha/payout.ts for the currency->type mapping.
+export function createRecipient(body: Record<string, string>): Promise<BushaRecipient> {
+  return request("/v1/recipients", { method: "POST", body });
 }
 
 // POST /v1/transfers — executes a quote. For a deposit quote, the response's `pay_in` carries

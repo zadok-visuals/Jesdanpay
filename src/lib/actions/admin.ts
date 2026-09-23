@@ -132,6 +132,29 @@ export async function rejectWithdrawal(
   return {};
 }
 
+// Above-threshold withdrawals (see AUTOMATED_PAYOUT_USDT_THRESHOLD in
+// src/lib/actions/withdrawals.ts) can't be marked paid out until this runs — the exact
+// verification mechanism (re-uploaded ID, video call, OTP) is still TBD with the client, so this
+// only records that the admin confirmed it happened out-of-band, same "gate it, don't fake it"
+// approach already used for changing a saved withdrawal recipient.
+export async function confirmWithdrawalVerification(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const admin_user = await requireAdminUser();
+  const transactionId = String(formData.get("transactionId") ?? "");
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("admin_confirm_withdrawal_verification", {
+    p_transaction_id: transactionId,
+    p_admin_id: admin_user.id,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return {};
+}
+
 export async function setCnyMarkupRate(
   _prevState: AdminActionState,
   formData: FormData,

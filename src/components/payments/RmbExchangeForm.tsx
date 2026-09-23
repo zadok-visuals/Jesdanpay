@@ -250,31 +250,21 @@ function SourceStep({
             <p className="text-sm font-semibold text-primary-800">Live rate</p>
           </div>
           <dl className="divide-y divide-border">
-            {state.sourceCurrency !== "USDT" && (
-              <div className="flex items-start justify-between gap-4 px-6 py-3.5">
-                <dt className="shrink-0 text-sm text-foreground/60">Live rate</dt>
-                <dd className="text-right text-sm font-medium text-foreground">
-                  {isRateLoading
-                    ? "Fetching…"
-                    : bushaRate != null
-                      ? `1 ${state.sourceCurrency} = ${bushaRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT`
-                      : "—"}
-                </dd>
-              </div>
-            )}
             <div className="flex items-start justify-between gap-4 px-6 py-3.5">
               <dt className="shrink-0 text-sm text-foreground/60">USDT/CNY anchor rate</dt>
               <dd className="text-right text-sm font-medium text-foreground">
-                {amounts ? `USDT 1 = CNY ${amounts.tierRate.toLocaleString("en-US", { maximumFractionDigits: 4 })}` : "—"}
+                {amounts
+                  ? `CNY 1 = ${(1 / amounts.tierRate).toLocaleString("en-US", { maximumFractionDigits: 6 })} USDT`
+                  : "—"}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-4 px-6 py-3.5">
               <dt className="shrink-0 text-sm text-foreground/60">
-                {state.sourceCurrency} → CNY (est.)
+                CNY → {state.sourceCurrency} (est.)
               </dt>
               <dd className="text-right text-sm font-medium text-foreground">
                 {effectiveRate != null
-                  ? `1 ${state.sourceCurrency} = ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
+                  ? `CNY 1 = ${(1 / effectiveRate).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${state.sourceCurrency}`
                   : "—"}
               </dd>
             </div>
@@ -294,7 +284,7 @@ function SourceStep({
           {rateError && <p className="px-6 py-2 text-xs text-danger-500">{rateError}</p>}
           <p className="border-t border-border px-6 py-2 text-xs text-foreground/40">
             An estimate — the actual transfer is confirmed manually by our team, usually within
-            1–2 business days.
+            1–2 hours.
           </p>
         </div>
       )}
@@ -660,8 +650,8 @@ function ConfirmStep({
         </span>
         <p className="text-xs leading-relaxed text-accent-900">
           CNY transfers are processed manually by our team — the amount above will be held from your
-          balance now, and we&rsquo;ll confirm the rate and complete your transfer within 1–2 business
-          days.
+          balance now, and we&rsquo;ll confirm the rate and complete your transfer within 1–2
+          hours.
         </p>
       </div>
 
@@ -693,7 +683,7 @@ function SuccessScreen({ onReset }: { onReset: () => void }) {
         <p className="text-base font-semibold">Request submitted!</p>
         <p className="mt-1 text-sm text-foreground/60">
           We&rsquo;ve received your transfer request and held the funds from your balance. Our team
-          will confirm the rate and complete it within 1–2 business days — track its status on the
+          will confirm the rate and complete it within 1–2 hours — track its status on the
           Transactions page.
         </p>
       </div>

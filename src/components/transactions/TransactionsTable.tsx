@@ -1,8 +1,16 @@
+"use client";
+
+import { useState } from "react";
 import type { UnifiedActivity } from "@/lib/transactions";
 import { formatBalance } from "@/lib/currency";
 import { Pill, statusTone } from "@/components/ui/Pill";
+import { TransactionDetailModal } from "@/components/transactions/TransactionDetailModal";
 
 export function TransactionsTable({ transactions }: { transactions: UnifiedActivity[] }) {
+  const [selected, setSelected] = useState<{ source: UnifiedActivity["source"]; id: string } | null>(
+    null,
+  );
+
   if (transactions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-12 text-center">
@@ -29,7 +37,11 @@ export function TransactionsTable({ transactions }: { transactions: UnifiedActiv
         </thead>
         <tbody>
           {transactions.map((tx) => (
-            <tr key={`${tx.source}-${tx.id}`} className="border-b border-border last:border-0">
+            <tr
+              key={`${tx.source}-${tx.id}`}
+              onClick={() => setSelected({ source: tx.source, id: tx.id })}
+              className="cursor-pointer border-b border-border last:border-0 hover:bg-black/[.02]"
+            >
               <td className="py-3 pr-4 text-foreground/70">
                 {new Date(tx.created_at).toLocaleDateString()}
               </td>
@@ -43,6 +55,7 @@ export function TransactionsTable({ transactions }: { transactions: UnifiedActiv
           ))}
         </tbody>
       </table>
+      <TransactionDetailModal activity={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }

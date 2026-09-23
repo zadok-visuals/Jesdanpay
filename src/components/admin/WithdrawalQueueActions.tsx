@@ -1,7 +1,12 @@
 "use client";
 
 import { useActionState } from "react";
-import { completeWithdrawal, rejectWithdrawal, type AdminActionState } from "@/lib/actions/admin";
+import {
+  completeWithdrawal,
+  rejectWithdrawal,
+  confirmWithdrawalVerification,
+  type AdminActionState,
+} from "@/lib/actions/admin";
 import { Button } from "@/components/ui/Button";
 import type { TransactionStatus } from "@/lib/types/database";
 
@@ -34,17 +39,31 @@ function ActionButton({
 export function WithdrawalQueueActions({
   transactionId,
   status,
+  requiresExtraVerification,
+  extraVerificationConfirmed,
 }: {
   transactionId: string;
   status: TransactionStatus;
+  requiresExtraVerification?: boolean;
+  extraVerificationConfirmed?: boolean;
 }) {
   if (status === "completed" || status === "failed") {
     return null;
   }
 
+  const verificationPending = !!requiresExtraVerification && !extraVerificationConfirmed;
+
   return (
     <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
-      <ActionButton action={completeWithdrawal} transactionId={transactionId} label="Mark paid out" />
+      {verificationPending ? (
+        <ActionButton
+          action={confirmWithdrawalVerification}
+          transactionId={transactionId}
+          label="Confirm ID verification done"
+        />
+      ) : (
+        <ActionButton action={completeWithdrawal} transactionId={transactionId} label="Mark paid out" />
+      )}
       <ActionButton action={rejectWithdrawal} transactionId={transactionId} label="Reject" variant="danger" />
     </div>
   );

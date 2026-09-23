@@ -59,6 +59,10 @@ export type Transaction = {
   actual_target_amount: number | null;
   actual_rate_note: string | null;
   provider_reference: string | null;
+  raw_target_amount: number | null;
+  requires_extra_verification: boolean;
+  extra_verification_confirmed_at: string | null;
+  extra_verification_confirmed_by: string | null;
   created_at: string;
 };
 
@@ -150,7 +154,18 @@ export type WithdrawalRecipient = {
   bank_account_number: string | null;
   bank_name: string | null;
   wallet_address: string | null;
+  bank_code: string | null;
+  busha_recipient_id: string | null;
   created_at: string;
+};
+
+// pin_hash is never selected back to the client (the app only ever checks row *existence* to
+// decide what to render in Settings) — it's typed here for completeness of the Row shape.
+export type WithdrawalPin = {
+  user_id: string;
+  pin_hash: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Database = {
@@ -235,6 +250,12 @@ export type Database = {
         Update: Partial<WithdrawalRecipient>;
         Relationships: [];
       };
+      withdrawal_pins: {
+        Row: WithdrawalPin;
+        Insert: Partial<WithdrawalPin> & Pick<WithdrawalPin, "user_id" | "pin_hash">;
+        Update: Partial<WithdrawalPin>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -261,6 +282,7 @@ export type Database = {
           p_source_amount: number;
           p_target_amount: number;
           p_provider_reference: string;
+          p_raw_target_amount: number | null;
         };
         Returns: string;
       };
@@ -316,12 +338,17 @@ export type Database = {
           p_bank_account_number: string | null;
           p_bank_name: string | null;
           p_wallet_address: string | null;
+          p_bank_code: string | null;
         };
         Returns: undefined;
       };
       create_withdrawal_request: {
-        Args: { p_currency: Currency; p_amount: number };
+        Args: { p_currency: Currency; p_amount: number; p_pin: string };
         Returns: string;
+      };
+      set_withdrawal_pin: {
+        Args: { p_pin: string };
+        Returns: undefined;
       };
       admin_complete_withdrawal: {
         Args: { p_transaction_id: string };
@@ -329,6 +356,26 @@ export type Database = {
       };
       admin_reject_withdrawal: {
         Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      complete_withdrawal_payout: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      fail_withdrawal_payout: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      mark_withdrawal_processing: {
+        Args: { p_transaction_id: string; p_provider_reference: string };
+        Returns: undefined;
+      };
+      flag_withdrawal_for_verification: {
+        Args: { p_transaction_id: string };
+        Returns: undefined;
+      };
+      admin_confirm_withdrawal_verification: {
+        Args: { p_transaction_id: string; p_admin_id: string };
         Returns: undefined;
       };
     };

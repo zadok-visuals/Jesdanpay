@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import {
   getDepositQuote,
@@ -29,9 +28,7 @@ function DepositSuccessScreen({ onClose }: { onClose: () => void }) {
         </p>
       </div>
       <div className="flex gap-3">
-        <Link href="/accounts">
-          <Button>View balance</Button>
-        </Link>
+        <Button onClick={onClose}>View balance</Button>
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>

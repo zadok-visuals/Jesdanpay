@@ -6,6 +6,7 @@ import { requestWithdrawal, type RequestWithdrawalState } from "@/lib/actions/wi
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
+import { Input } from "@/components/ui/Input";
 import type { Currency, WithdrawalRecipient } from "@/lib/types/database";
 
 const WITHDRAWAL_FEE_RATE = 0.01;
@@ -22,6 +23,7 @@ export function WithdrawForm({
   onClose: () => void;
 }) {
   const [amount, setAmount] = useState("");
+  const [pin, setPin] = useState("");
   const [state, setState] = useState<RequestWithdrawalState>({});
   const [isPending, startTransition] = useTransition();
 
@@ -30,17 +32,21 @@ export function WithdrawForm({
   const netAmount = amountNum - fee;
   const exceedsBalance = amountNum > 0 && amountNum > balance;
   const amountValid = amountNum > 0 && !exceedsBalance;
+  const pinValid = /^\d{4,6}$/.test(pin);
   const submitDisabledReason =
     amountNum <= 0
       ? "Enter an amount to continue"
       : exceedsBalance
         ? `Amount exceeds your available ${currency} balance`
-        : null;
+        : !pinValid
+          ? "Enter your withdrawal PIN"
+          : null;
 
   function handleSubmit() {
     const fd = new FormData();
     fd.set("currency", currency);
     fd.set("amount", amount);
+    fd.set("pin", pin);
     startTransition(async () => {
       const result = await requestWithdrawal({}, fd);
       setState(result);
@@ -144,13 +150,24 @@ export function WithdrawForm({
         </div>
       )}
 
+      <Input
+        label="Withdrawal PIN"
+        id="withdrawPin"
+        type="password"
+        inputMode="numeric"
+        maxLength={6}
+        placeholder="4 to 6 digits"
+        value={pin}
+        onChange={(e) => setPin(e.target.value)}
+      />
+
       {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
 
       <div className="flex flex-col items-start gap-1.5">
         <Button
           onClick={handleSubmit}
           loading={isPending}
-          disabled={!amountValid}
+          disabled={!amountValid || !pinValid}
           title={submitDisabledReason ?? undefined}
           className="self-start"
         >

@@ -5,6 +5,7 @@ import { TotalBalanceCard } from "@/components/wallet/TotalBalanceCard";
 import { CurrencyBalanceRow } from "@/components/wallet/CurrencyBalanceRow";
 import { KycStatusBanner } from "@/components/kyc/KycStatusBanner";
 import { TransactionsTable } from "@/components/transactions/TransactionsTable";
+import { fetchUnifiedActivity } from "@/lib/transactions";
 import { Card } from "@/components/ui/Card";
 
 export default async function HomePage() {
@@ -14,15 +15,10 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: wallets }, { data: transactions }] = await Promise.all([
+  const [{ data: profile }, { data: wallets }, activity] = await Promise.all([
     supabase.from("profiles").select("kyc_status").eq("id", user.id).single(),
     supabase.from("wallets").select("*").eq("user_id", user.id).order("currency"),
-    supabase
-      .from("transactions")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(5),
+    fetchUnifiedActivity(supabase, user.id, 5),
   ]);
 
   return (
@@ -40,7 +36,7 @@ export default async function HomePage() {
             See all
           </Link>
         </div>
-        <TransactionsTable transactions={transactions ?? []} />
+        <TransactionsTable transactions={activity} />
       </Card>
     </div>
   );

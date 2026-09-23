@@ -1,14 +1,15 @@
-import type { Transaction } from "@/lib/types/database";
+import type { UnifiedActivity } from "@/lib/transactions";
 import { formatBalance } from "@/lib/currency";
 import { Pill, statusTone } from "@/components/ui/Pill";
 
-export function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
+export function TransactionsTable({ transactions }: { transactions: UnifiedActivity[] }) {
   if (transactions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-12 text-center">
         <p className="text-sm font-medium text-foreground/60">No transactions yet</p>
         <p className="mt-1 text-xs text-foreground/40">
-          Your CNY and USDT exchanges will show up here once you make one.
+          Your deposits, CNY and USDT exchanges, and withdrawals will show up here once you make
+          one.
         </p>
       </div>
     );
@@ -28,13 +29,13 @@ export function TransactionsTable({ transactions }: { transactions: Transaction[
         </thead>
         <tbody>
           {transactions.map((tx) => (
-            <tr key={tx.id} className="border-b border-border last:border-0">
+            <tr key={`${tx.source}-${tx.id}`} className="border-b border-border last:border-0">
               <td className="py-3 pr-4 text-foreground/70">
                 {new Date(tx.created_at).toLocaleDateString()}
               </td>
               <td className="py-3 pr-4 font-medium">{formatBalance(tx.currency, tx.amount)}</td>
               <td className="py-3 pr-4 text-foreground/70">{tx.type}</td>
-              <td className="py-3 pr-4 text-foreground/70">{tx.provider_reference ?? "—"}</td>
+              <td className="py-3 pr-4 text-foreground/70">{tx.reference ?? "—"}</td>
               <td className="py-3 pr-4">
                 <Pill tone={statusTone(tx.status)}>{tx.status}</Pill>
               </td>

@@ -9,6 +9,17 @@
   Logo URL assumes the app is live at https://jesdanpay.net — swap the src
   below if the deployed app ends up on a different domain. Email clients
   can't load images from localhost.
+
+  The button links to {{ .SiteURL }}/auth/confirm using {{ .TokenHash }}
+  (type=email, Supabase's own documented value for the "Confirm signup"
+  template), NOT {{ .ConfirmationURL }} — that produces a PKCE `code`, and
+  exchangeCodeForSession(code) only verifies successfully in the same
+  browser that originally signed up, since the PKCE code_verifier lives in
+  that browser's storage. A signup confirmation link is routinely opened in
+  a different browser/device (e.g. signed up on mobile, confirmed from a
+  desktop mail client), so token_hash + verifyOtp is used instead — same
+  fix, same reasoning, as the Reset Password template. Verified server-side
+  in src/app/auth/confirm/route.ts.
 -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5faf7;">
   <tr>
@@ -37,7 +48,7 @@
         <tr>
           <td style="padding:0 40px 32px 40px; text-align:center;">
             <a
-              href="{{ .ConfirmationURL }}"
+              href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/onboarding/kyc"
               style="display:inline-block; background-color:#1b7a4b; color:#ffffff; font-size:15px; font-weight:600; text-decoration:none; padding:14px 32px; border-radius:12px;"
             >
               Confirm email address

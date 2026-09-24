@@ -148,7 +148,6 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   if (!direction || !config) {
     return (
       <Card className="p-6 sm:p-8">
-        <h2 className="mb-2 text-base font-semibold">Convert USDT</h2>
         <p className="text-sm text-foreground/60">
           USDT exchange isn&rsquo;t available without a local currency wallet.
         </p>
@@ -220,8 +219,6 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
 
   return (
     <Card className="p-6 sm:p-8">
-      <h2 className="mb-6 text-base font-semibold">Convert USDT</h2>
-
       <div className="flex flex-col gap-6">
         <div>
           <p className="mb-2 text-sm font-medium text-foreground/80">Direction</p>

@@ -257,11 +257,14 @@ export async function submitCnyConversion(
     return { error: "Enter a valid amount." };
   }
 
-  const result = await computeCnyRate(direction, nonCnyCurrency, amount);
+  // Independent reads — neither depends on the other's result — run concurrently instead of
+  // adding a fully sequential round trip for no reason.
+  const [result, margin] = await Promise.all([
+    computeCnyRate(direction, nonCnyCurrency, amount),
+    getCnyMarkupRate(supabase, nonCnyCurrency),
+  ]);
   if ("error" in result) return { error: result.error };
   const { preview } = result;
-
-  const margin = await getCnyMarkupRate(supabase, nonCnyCurrency);
   const fromCurrency: Currency = direction === "to_cny" ? nonCnyCurrency : "CNY";
   const fromAmount = direction === "to_cny" ? preview.nonCnyAmount : preview.cnyAmount;
   const toCurrency: Currency = direction === "to_cny" ? "CNY" : nonCnyCurrency;

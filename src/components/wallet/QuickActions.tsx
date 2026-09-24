@@ -1,8 +1,4 @@
-"use client";
-
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/LinkButton";
 
 function PlusIcon() {
   return (
@@ -23,7 +19,7 @@ function SendIcon() {
 
 function WithdrawIcon() {
   return (
-    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M12 5v14M5 12l7 7 7-7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -31,109 +27,51 @@ function WithdrawIcon() {
 
 function SwapIcon() {
   return (
-    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M7 4v13M7 17l-3-3M7 17l3-3M17 20V7M17 7l-3 3M17 7l3 3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-const CONVERT_OPTIONS = [
-  { label: "Convert CNY", href: "/payments?tab=cny" },
-  { label: "Convert USDT", href: "/payments?tab=usdt" },
-];
+// Overrides size="lg"'s default px-6/text-base — kept compact at every viewport width rather
+// than growing at a breakpoint (confirmed live: growing at sm: overflowed the balance card well
+// into ordinary 1366px laptop widths, four buttons plus the balance figure don't fit next to a
+// 256px sidebar at that size). Uses grid (not flex) for the same reason AccountsView.tsx already
+// does — a flex-1 item with nowrap text has an implicit min-width equal to its content, so it
+// overflows past the row instead of shrinking; a minmax(0,1fr) grid column actually constrains
+// it, letting the label wrap as a last resort at genuinely tight widths instead of clipping.
+const ACTION_BUTTON_CLASSES = "w-full !gap-1 !px-1.5 !text-[11px]";
 
-// Reintroduces the popover pattern this codebase used once before for the same reason (merging
-// several destinations behind one "Convert" trigger) — see git history at commit 573b19f for
-// the original, removed in b2b9318 when Send to China was promoted to a primary button and this
-// row briefly went flat. Now Convert (CNY) and Trade USDT collapse back into one trigger.
-function ConvertAction() {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
+// The two most common things a user does — filled/primary weight.
+export function QuickActionsPrimary() {
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium text-foreground/70 transition-colors hover:text-primary-700 sm:w-18 sm:text-xs"
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary-100 sm:h-11 sm:w-11">
-          <SwapIcon />
-        </span>
-        <span className="leading-tight">Convert</span>
-      </button>
-
-      {open && (
-        <div className="absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 rounded-xl border border-foreground/10 bg-background p-1.5 shadow-lg">
-          {CONVERT_OPTIONS.map((option) => (
-            <Link
-              key={option.href}
-              href={option.href}
-              onClick={() => setOpen(false)}
-              className="block rounded-lg px-3 py-2 text-left text-sm font-medium text-foreground/80 hover:bg-primary-50 hover:text-primary-700"
-            >
-              {option.label}
-            </Link>
-          ))}
-        </div>
-      )}
+    <div className="grid grid-cols-2 gap-3">
+      <LinkButton href="/accounts" size="lg" className={ACTION_BUTTON_CLASSES}>
+        <PlusIcon />
+        Add Money
+      </LinkButton>
+      <LinkButton href="/pay-to-china" variant="secondary" size="lg" className={ACTION_BUTTON_CLASSES}>
+        <SendIcon />
+        Send to China
+      </LinkButton>
     </div>
   );
 }
 
-export function QuickActions() {
+// Withdraw and Convert — same size/shape as the primary pair, "secondary" variant (bordered,
+// unfilled) keeps them visually subordinate without dropping to a different button system
+// (previously: small circular icon-only buttons here, a different treatment entirely).
+export function QuickActionsSecondary() {
   return (
-    <div className="flex flex-col gap-4">
-      {/* Primary actions — the two most common things a user does */}
-      <div className="flex gap-3">
-        <Link href="/accounts" className="flex-1">
-          {/* Overrides size="lg"'s default px-6/text-base — at 390px width that combo forces
-              "Send to China" onto two uneven lines. !-prefixed to reliably win over the size
-              classes regardless of Tailwind's compiled rule order. */}
-          <Button
-            className="w-full !gap-1.5 !whitespace-nowrap !px-3 !text-xs sm:!gap-2 sm:!px-6 sm:!text-base"
-            size="lg"
-          >
-            <PlusIcon />
-            Add Money
-          </Button>
-        </Link>
-        <Link href="/pay-to-china" className="flex-1">
-          <Button
-            variant="secondary"
-            className="w-full !gap-1.5 !whitespace-nowrap !px-3 !text-xs sm:!gap-2 sm:!px-6 sm:!text-base"
-            size="lg"
-          >
-            <SendIcon />
-            Send to China
-          </Button>
-        </Link>
-      </div>
-
-      {/* Secondary quick actions — Withdraw is one tap; Convert opens a small chooser since it
-          covers two destinations (Convert CNY, Convert USDT). */}
-      <div className="flex flex-nowrap justify-center gap-2 sm:gap-3">
-        <Link href="/accounts">
-          <span className="flex w-14 flex-col items-center gap-1.5 text-center text-[10px] font-medium text-foreground/70 transition-colors hover:text-primary-700 sm:w-18 sm:text-xs">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-600 transition-colors hover:bg-primary-100 sm:h-11 sm:w-11">
-              <WithdrawIcon />
-            </span>
-            <span className="leading-tight">Withdraw</span>
-          </span>
-        </Link>
-        <ConvertAction />
-      </div>
+    <div className="grid grid-cols-2 gap-3">
+      <LinkButton href="/accounts" variant="secondary" size="lg" className={ACTION_BUTTON_CLASSES}>
+        <WithdrawIcon />
+        Withdraw
+      </LinkButton>
+      <LinkButton href="/payments" variant="secondary" size="lg" className={ACTION_BUTTON_CLASSES}>
+        <SwapIcon />
+        Convert
+      </LinkButton>
     </div>
   );
 }

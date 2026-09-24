@@ -156,7 +156,6 @@ export function CnyConvertForm({
   return (
     <Card className="p-6 sm:p-8">
       <div className="mb-6 flex flex-col gap-1">
-        <h2 className="text-base font-semibold">Convert CNY</h2>
         <p className="text-xs text-foreground/50">
           {direction === "to_cny"
             ? `Lock in a CNY balance now at today's rate. Not a real CNY deposit — this reserves the converted amount for you to send later via "Send to China".`

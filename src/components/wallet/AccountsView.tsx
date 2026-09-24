@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import type { Wallet, WithdrawalRecipient } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Tabs } from "@/components/ui/Tabs";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { DepositForm } from "@/components/wallet/DepositForm";
 import { WithdrawForm } from "@/components/wallet/WithdrawForm";
 
@@ -67,14 +67,12 @@ export function AccountsView({
 
         {isCny ? (
           <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
-            <Link href="/pay-to-china" className="w-full sm:w-auto">
-              <Button className="w-full sm:w-auto">Send to China</Button>
-            </Link>
-            <Link href="/payments?tab=cny" className="w-full sm:w-auto">
-              <Button variant="secondary" className="w-full sm:w-auto">
-                Convert more CNY
-              </Button>
-            </Link>
+            <LinkButton href="/pay-to-china" className="w-full sm:w-auto">
+              Send to China
+            </LinkButton>
+            <LinkButton href="/payments?tab=cny" variant="secondary" className="w-full sm:w-auto">
+              Convert more CNY
+            </LinkButton>
           </div>
         ) : isUsdt ? (
           <>
@@ -100,11 +98,9 @@ export function AccountsView({
               <Button variant="secondary" className="w-full sm:w-auto" onClick={toggleWithdraw}>
                 {withdrawOpen ? "Cancel" : "Withdraw"}
               </Button>
-              <Link href="/payments?tab=usdt" className="w-full sm:w-auto">
-                <Button variant="secondary" className="w-full sm:w-auto">
-                  Convert USDT
-                </Button>
-              </Link>
+              <LinkButton href="/payments?tab=usdt" variant="secondary" className="w-full sm:w-auto">
+                Convert USDT
+              </LinkButton>
             </div>
           </>
         ) : (
@@ -115,16 +111,12 @@ export function AccountsView({
             <Button variant="secondary" className="w-full sm:w-auto" onClick={toggleWithdraw}>
               {withdrawOpen ? "Cancel" : "Withdraw"}
             </Button>
-            <Link href="/pay-to-china" className="w-full sm:w-auto">
-              <Button variant="secondary" className="w-full sm:w-auto">
-                Send to China
-              </Button>
-            </Link>
-            <Link href="/payments?tab=usdt" className="w-full sm:w-auto">
-              <Button variant="secondary" className="w-full sm:w-auto">
-                Convert USDT
-              </Button>
-            </Link>
+            <LinkButton href="/pay-to-china" variant="secondary" className="w-full sm:w-auto">
+              Send to China
+            </LinkButton>
+            <LinkButton href="/payments?tab=usdt" variant="secondary" className="w-full sm:w-auto">
+              Convert USDT
+            </LinkButton>
           </div>
         )}
 

@@ -22,8 +22,17 @@ const AUTOMATED_PAYOUT_USDT_THRESHOLD = 1000;
 async function attemptAutomatedPayout(transactionId: string, userId: string, currency: Currency, amount: number) {
   const admin = createAdminClient();
   try {
-    const usdtEquivalent =
-      currency === "USDT" ? amount : amount * (await probeFiatToUsdtRate(currency));
+    // Neither the rate probe nor the recipient fetch depends on the other — kick both off
+    // together instead of a fully sequential round trip. The recipient is fetched even when the
+    // threshold check below ends up skipping automation entirely; that's one small wasted read
+    // in the (less common) over-threshold case, worth it for cutting real latency in the common
+    // under-threshold path.
+    const [usdtRate, recipientResult] = await Promise.all([
+      currency === "USDT" ? Promise.resolve(1) : probeFiatToUsdtRate(currency),
+      admin.from("withdrawal_recipients").select("*").eq("user_id", userId).maybeSingle(),
+    ]);
+    const usdtEquivalent = currency === "USDT" ? amount : amount * usdtRate;
+    const recipient = recipientResult.data;
 
     if (usdtEquivalent > AUTOMATED_PAYOUT_USDT_THRESHOLD) {
       await admin.rpc("flag_withdrawal_for_verification", { p_transaction_id: transactionId });
@@ -31,12 +40,6 @@ async function attemptAutomatedPayout(transactionId: string, userId: string, cur
     }
 
     if (!getPayoutChannel(currency)) return; // unsupported currency — leave for manual review
-
-    const { data: recipient } = await admin
-      .from("withdrawal_recipients")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
     if (!recipient) return;
 
     let recipientId = recipient.busha_recipient_id;

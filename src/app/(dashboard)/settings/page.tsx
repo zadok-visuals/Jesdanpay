@@ -51,7 +51,7 @@ export default async function SettingsPage() {
               label="Member since"
               value={
                 profile?.created_at
-                  ? new Date(profile.created_at).toLocaleDateString()
+                  ? new Date(profile.created_at).toLocaleDateString("en-US")
                   : "—"
               }
             />

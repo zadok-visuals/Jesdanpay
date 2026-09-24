@@ -286,7 +286,7 @@ export default async function AdminPage({
                       )}
                     </p>
                     <p className="text-xs text-foreground/40">
-                      {new Date(tx.created_at).toLocaleString()}
+                      {new Date(tx.created_at).toLocaleString("en-US")}
                     </p>
                     {tx.status === "completed" && tx.actual_target_amount != null && (
                       <p className="mt-1 text-xs text-foreground/60">
@@ -350,7 +350,7 @@ export default async function AdminPage({
                       </p>
                     )}
                     <p className="text-xs text-foreground/40">
-                      {new Date(tx.created_at).toLocaleString()}
+                      {new Date(tx.created_at).toLocaleString("en-US")}
                     </p>
                   </div>
 

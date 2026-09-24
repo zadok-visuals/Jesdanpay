@@ -108,7 +108,7 @@ export function TransactionDetailModal({
           {detail.type === "withdrawal" && detail.targetAmount != null && (
             <Row label="Net payout" value={formatBalance(detail.sourceCurrency, detail.targetAmount)} />
           )}
-          <Row label="Date" value={new Date(detail.createdAt).toLocaleString()} />
+          <Row label="Date" value={new Date(detail.createdAt).toLocaleString("en-US")} />
         </dl>
       )}
     </Modal>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { executeSwap, checkSwapStatus, previewSwapRate, type ExecuteSwapState } from "@/lib/actions/busha";
@@ -11,6 +12,7 @@ import type { Currency } from "@/lib/types/database";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type Direction =
   | "USDT_TO_NGN"
@@ -95,6 +97,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   );
   const [actionState, setActionState] = useState<ExecuteSwapState>({});
   const [isExecuting, startExecuting] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const router = useRouter();
 
   // Poll for this swap resolving — checkSwapStatus checks Busha's own transfer status directly
@@ -183,6 +186,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   else if (rateError) disabledReason = "Rate unavailable — try again";
 
   function handleExecute() {
+    setConfirmOpen(false);
     const fd = new FormData();
     fd.set("sourceCurrency", config!.source);
     fd.set("targetCurrency", config!.target);
@@ -194,10 +198,13 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
       if (result.transactionId && !result.error) {
         setDone(true);
         setSwapStatus("pending");
+        toast.success("Exchange submitted");
         // Wallet balances shown on this page (and its currency pickers) come from the server
         // component's initial fetch — refresh so the next exchange sees the real post-trade
         // balance instead of a stale pre-trade number.
         router.refresh();
+      } else if (result.error) {
+        toast.error(result.error);
       }
     });
   }
@@ -305,7 +312,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
 
         <div className="flex flex-col items-start gap-1.5">
           <Button
-            onClick={handleExecute}
+            onClick={() => setConfirmOpen(true)}
             loading={isExecuting}
             disabled={!amountValid || isRateLoading || !!rateError}
             title={disabledReason ?? undefined}
@@ -320,6 +327,20 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Confirm exchange"
+        message={
+          receiveAmount != null
+            ? `Confirm exchange of ${formatBalance(config.source, amountNum)} for ${formatBalance(config.target, receiveAmount)}?`
+            : `Confirm exchange of ${formatBalance(config.source, amountNum)}?`
+        }
+        confirmLabel="Confirm exchange"
+        loading={isExecuting}
+        onConfirm={handleExecute}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Card>
   );
 }

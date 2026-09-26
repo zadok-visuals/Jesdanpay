@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Wallet, WithdrawalRecipient } from "@/lib/types/database";
+import type { Currency, Wallet, WithdrawalRecipient } from "@/lib/types/database";
+import type { UnifiedActivity } from "@/lib/transactions";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Tabs } from "@/components/ui/Tabs";
 import { Card } from "@/components/ui/Card";
@@ -9,13 +10,16 @@ import { Button } from "@/components/ui/Button";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { DepositForm } from "@/components/wallet/DepositForm";
 import { WithdrawForm } from "@/components/wallet/WithdrawForm";
+import { TransactionsTable } from "@/components/transactions/TransactionsTable";
 
 export function AccountsView({
   wallets,
-  withdrawalRecipient,
+  withdrawalRecipients,
+  activityByCurrency,
 }: {
   wallets: Wallet[];
-  withdrawalRecipient: WithdrawalRecipient | null;
+  withdrawalRecipients: WithdrawalRecipient[];
+  activityByCurrency: Record<Currency, UnifiedActivity[]>;
 }) {
   const currencies = wallets.map((w) => w.currency);
   const [selected, setSelected] = useState(currencies[0] ?? "NGN");
@@ -24,6 +28,7 @@ export function AccountsView({
   // "Cancel" on its own, making it impossible to tell which "Cancel" closed which panel.
   const [activePanel, setActivePanel] = useState<"deposit" | "withdraw" | null>(null);
   const wallet = wallets.find((w) => w.currency === selected);
+  const recipient = withdrawalRecipients.find((r) => r.currency === selected) ?? null;
 
   if (!wallet) return null;
 
@@ -66,13 +71,17 @@ export function AccountsView({
         </div>
 
         {isCny ? (
-          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
-            <LinkButton href="/pay-to-china" className="w-full sm:w-auto">
-              Send to China
-            </LinkButton>
-            <LinkButton href="/payments?tab=cny" variant="secondary" className="w-full sm:w-auto">
-              Convert more CNY
-            </LinkButton>
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-col sm:gap-3">
+            <div className="contents sm:flex sm:gap-3">
+              <LinkButton href="/pay-to-china" className="w-full sm:w-auto">
+                Send to China
+              </LinkButton>
+            </div>
+            <div className="contents sm:flex sm:gap-3">
+              <LinkButton href="/payments?tab=cny" variant="secondary" className="w-full sm:w-auto">
+                Convert more CNY
+              </LinkButton>
+            </div>
           </div>
         ) : isUsdt ? (
           <>
@@ -91,10 +100,33 @@ export function AccountsView({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-col sm:gap-3">
+              <div className="contents sm:flex sm:gap-3">
+                <Button className="w-full sm:w-auto" onClick={toggleDeposit}>
+                  {depositOpen ? "Cancel" : "Add Money"}
+                </Button>
+              </div>
+              <div className="contents sm:flex sm:gap-3">
+                <Button variant="secondary" className="w-full sm:w-auto" onClick={toggleWithdraw}>
+                  {withdrawOpen ? "Cancel" : "Withdraw"}
+                </Button>
+                <LinkButton href="/payments?tab=usdt" variant="secondary" className="w-full sm:w-auto">
+                  Convert USDT
+                </LinkButton>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-col sm:gap-3">
+            <div className="contents sm:flex sm:gap-3">
               <Button className="w-full sm:w-auto" onClick={toggleDeposit}>
                 {depositOpen ? "Cancel" : "Add Money"}
               </Button>
+              <LinkButton href="/pay-to-china" variant="secondary" className="w-full sm:w-auto">
+                Send to China
+              </LinkButton>
+            </div>
+            <div className="contents sm:flex sm:gap-3">
               <Button variant="secondary" className="w-full sm:w-auto" onClick={toggleWithdraw}>
                 {withdrawOpen ? "Cancel" : "Withdraw"}
               </Button>
@@ -102,21 +134,6 @@ export function AccountsView({
                 Convert USDT
               </LinkButton>
             </div>
-          </>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
-            <Button className="w-full sm:w-auto" onClick={toggleDeposit}>
-              {depositOpen ? "Cancel" : "Add Money"}
-            </Button>
-            <Button variant="secondary" className="w-full sm:w-auto" onClick={toggleWithdraw}>
-              {withdrawOpen ? "Cancel" : "Withdraw"}
-            </Button>
-            <LinkButton href="/pay-to-china" variant="secondary" className="w-full sm:w-auto">
-              Send to China
-            </LinkButton>
-            <LinkButton href="/payments?tab=usdt" variant="secondary" className="w-full sm:w-auto">
-              Convert USDT
-            </LinkButton>
           </div>
         )}
 
@@ -131,7 +148,7 @@ export function AccountsView({
           <WithdrawForm
             currency={wallet.currency}
             balance={wallet.balance}
-            recipient={withdrawalRecipient}
+            recipient={recipient}
             onClose={() => setActivePanel(null)}
           />
         )}
@@ -146,6 +163,11 @@ export function AccountsView({
             ? "USDT is held in your JesDanPay balance. Deposit directly, or use the Convert USDT flow in Conversions to convert to or from NGN, GHS, or KES."
             : `Use "Add Money" above to deposit ${wallet.currency} — your balance updates once the transfer is confirmed.`}
         </p>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="mb-4 text-base font-semibold">{wallet.currency} activity</h2>
+        <TransactionsTable transactions={activityByCurrency[wallet.currency] ?? []} />
       </Card>
     </div>
   );

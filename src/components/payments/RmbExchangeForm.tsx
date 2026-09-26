@@ -331,7 +331,9 @@ function SourceStep({
               </dt>
               <dd className="text-right text-sm font-medium text-foreground">
                 {effectiveRate != null
-                  ? `CNY 1 = ${(1 / effectiveRate).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${state.sourceCurrency}`
+                  ? state.sourceCurrency === "USDT"
+                    ? `1 USDT = CNY ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })}`
+                    : `CNY 1 = ${(1 / effectiveRate).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${state.sourceCurrency}`
                   : "—"}
               </dd>
             </div>

@@ -27,11 +27,24 @@ export async function fetchUnifiedActivity(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   limit?: number,
+  // Filters each source query to the currency it maps into UnifiedActivity.currency below —
+  // transactions.currency, deposits.currency, cny_conversions.to_currency respectively. Used by
+  // the Accounts page to show a per-currency-tab history without a client round trip per tab.
+  currency?: Currency,
 ): Promise<UnifiedActivity[]> {
+  let transactionsQuery = supabase.from("transactions").select("*").eq("user_id", userId);
+  let depositsQuery = supabase.from("deposits").select("*").eq("user_id", userId);
+  let cnyConversionsQuery = supabase.from("cny_conversions").select("*").eq("user_id", userId);
+  if (currency) {
+    transactionsQuery = transactionsQuery.eq("currency", currency);
+    depositsQuery = depositsQuery.eq("currency", currency);
+    cnyConversionsQuery = cnyConversionsQuery.eq("to_currency", currency);
+  }
+
   const [{ data: transactions }, { data: deposits }, { data: cnyConversions }] = await Promise.all([
-    supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
-    supabase.from("deposits").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
-    supabase.from("cny_conversions").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+    transactionsQuery.order("created_at", { ascending: false }),
+    depositsQuery.order("created_at", { ascending: false }),
+    cnyConversionsQuery.order("created_at", { ascending: false }),
   ]);
 
   const fromTransactions: UnifiedActivity[] = (transactions ?? []).map((t) => ({

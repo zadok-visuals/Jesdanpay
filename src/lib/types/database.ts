@@ -160,6 +160,9 @@ export type WithdrawalRecipient = {
   wallet_address: string | null;
   bank_code: string | null;
   busha_recipient_id: string | null;
+  pending_change_requested_at: string | null;
+  recipient_changed_at: string | null;
+  recipient_changed_by: string | null;
   created_at: string;
 };
 
@@ -384,6 +387,21 @@ export type Database = {
       };
       record_automated_payout_failure: {
         Args: { p_transaction_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      request_recipient_change: {
+        Args: { p_currency: Currency };
+        Returns: undefined;
+      };
+      confirm_recipient_change: {
+        Args: {
+          p_currency: Currency;
+          p_account_holder_name: string;
+          p_bank_account_number: string | null;
+          p_bank_name: string | null;
+          p_wallet_address: string | null;
+          p_bank_code: string | null;
+        };
         Returns: undefined;
       };
     };

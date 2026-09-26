@@ -43,7 +43,9 @@ export function TransactionsTable({ transactions }: { transactions: UnifiedActiv
               className="cursor-pointer border-b border-border last:border-0 hover:bg-black/[.02]"
             >
               <td className="py-3 pr-4 text-foreground/70">
-                {new Date(tx.created_at).toLocaleDateString()}
+                {/* Explicit locale — the server's process locale and the browser's can disagree,
+                    which was producing a hydration mismatch (e.g. "26/09/2026" vs "9/26/2026"). */}
+                {new Date(tx.created_at).toLocaleDateString("en-US")}
               </td>
               <td className="py-3 pr-4 font-medium">{formatBalance(tx.currency, tx.amount)}</td>
               <td className="py-3 pr-4 text-foreground/70">{tx.type}</td>

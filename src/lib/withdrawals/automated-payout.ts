@@ -44,7 +44,7 @@ export async function attemptAutomatedPayout(transactionId: string, userId: stri
     // under-threshold path.
     const [usdtRate, recipientResult] = await Promise.all([
       currency === "USDT" ? Promise.resolve(1) : probeFiatToUsdtRate(currency),
-      admin.from("withdrawal_recipients").select("*").eq("user_id", userId).maybeSingle(),
+      admin.from("withdrawal_recipients").select("*").eq("user_id", userId).eq("currency", currency).maybeSingle(),
     ]);
     const usdtEquivalent = currency === "USDT" ? amount : amount * usdtRate;
     const recipient = recipientResult.data;
@@ -69,7 +69,11 @@ export async function attemptAutomatedPayout(transactionId: string, userId: stri
     let recipientId = recipient.busha_recipient_id;
     if (!recipientId) {
       recipientId = await createBushaRecipient(currency, recipient);
-      await admin.from("withdrawal_recipients").update({ busha_recipient_id: recipientId }).eq("user_id", userId);
+      await admin
+        .from("withdrawal_recipients")
+        .update({ busha_recipient_id: recipientId })
+        .eq("user_id", userId)
+        .eq("currency", currency);
     }
 
     const transfer = await createPayoutTransfer(currency, amount, recipientId);

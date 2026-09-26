@@ -21,14 +21,15 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: withdrawalRecipient }, { data: wallets }, { data: withdrawalPin }] =
+  const [{ data: profile }, { data: withdrawalRecipients }, { data: wallets }, { data: withdrawalPin }] =
     await Promise.all([
       supabase
         .from("profiles")
         .select("full_name, email, phone, business_name, kyc_type, kyc_status, created_at")
         .eq("id", user.id)
         .single(),
-      supabase.from("withdrawal_recipients").select("*").eq("user_id", user.id).maybeSingle(),
+      // One recipient per currency now (migration 0031) — fetch all of them.
+      supabase.from("withdrawal_recipients").select("*").eq("user_id", user.id),
       supabase.from("wallets").select("currency").eq("user_id", user.id),
       supabase.from("withdrawal_pins").select("user_id").eq("user_id", user.id).maybeSingle(),
     ]);
@@ -77,7 +78,7 @@ export default async function SettingsPage() {
         </Card>
 
         <WithdrawalRecipientCard
-          recipient={withdrawalRecipient ?? null}
+          recipients={withdrawalRecipients ?? []}
           availableCurrencies={(wallets ?? [])
             .map((w) => w.currency)
             .filter((c) => c === "NGN" || c === "GHS" || c === "KES" || c === "USDT")}

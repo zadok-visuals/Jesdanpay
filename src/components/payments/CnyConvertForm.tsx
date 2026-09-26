@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { Currency, Wallet, CnyTierRate } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/tiers";
@@ -13,6 +14,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const NON_CNY_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "USDT"];
 
@@ -59,6 +61,7 @@ export function CnyConvertForm({
   const [done, setDone] = useState(false);
   const [actionState, setActionState] = useState<CnyConvertActionState>({});
   const [isSubmitting, startSubmitting] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const router = useRouter();
 
   // The live rate depends only on which non-CNY currency is selected, not on direction or
@@ -122,6 +125,7 @@ export function CnyConvertForm({
   }
 
   function handleSubmit() {
+    setConfirmOpen(false);
     const fd = new FormData();
     fd.set("direction", direction);
     fd.set("nonCnyCurrency", nonCnyCurrency);
@@ -131,10 +135,13 @@ export function CnyConvertForm({
       setActionState(result);
       if (result.conversionId && !result.error) {
         setDone(true);
+        toast.success("Conversion complete");
         // Wallet balances shown on this page (and its currency pickers) come from the server
         // component's initial fetch — refresh so the next conversion sees the real post-trade
         // balance instead of a stale pre-trade number.
         router.refresh();
+      } else if (result.error) {
+        toast.error(result.error);
       }
     });
   }
@@ -268,7 +275,7 @@ export function CnyConvertForm({
                 {effectiveRate != null
                   ? nonCnyCurrency === "USDT"
                     ? `USDT 1 = CNY ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })}`
-                    : `1 ${nonCnyCurrency} = ${effectiveRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
+                    : `CNY 1 = ${(1 / effectiveRate).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${nonCnyCurrency}`
                   : "—"}
               </dd>
             </div>
@@ -278,7 +285,7 @@ export function CnyConvertForm({
                 {finalRate != null
                   ? nonCnyCurrency === "USDT"
                     ? `USDT 1 = CNY ${finalRate.toLocaleString("en-US", { maximumFractionDigits: 6 })}`
-                    : `1 ${nonCnyCurrency} = ${finalRate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY`
+                    : `CNY 1 = ${(1 / finalRate).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${nonCnyCurrency}`
                   : "—"}
               </dd>
             </div>
@@ -295,7 +302,7 @@ export function CnyConvertForm({
 
         <div className="flex flex-col items-start gap-1.5">
           <Button
-            onClick={handleSubmit}
+            onClick={() => setConfirmOpen(true)}
             loading={isSubmitting}
             disabled={!amountValid || !amounts}
             title={disabledReason ?? undefined}
@@ -314,6 +321,20 @@ export function CnyConvertForm({
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Confirm conversion"
+        message={
+          receiveAmount != null
+            ? `Confirm conversion of ${formatBalance(spendCurrency, amountNum)} to ${formatBalance(receiveCurrency, receiveAmount)}?`
+            : `Confirm conversion of ${formatBalance(spendCurrency, amountNum)}?`
+        }
+        confirmLabel="Confirm conversion"
+        loading={isSubmitting}
+        onConfirm={handleSubmit}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Card>
   );
 }

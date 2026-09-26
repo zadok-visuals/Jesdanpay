@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Wordmark } from "@/components/layout/Wordmark";
-import { logOut } from "@/lib/actions/auth";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import {
   AccountsIcon,
@@ -61,25 +60,23 @@ export function Sidebar({ className = "", onNavigate }: SidebarProps) {
       </nav>
 
       <div className="border-t border-border px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
-        <form action={logOut}>
-          <LogoutButton
-            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-danger-500 hover:bg-danger-50"
-            icon={
-              <svg
-                className="h-[18px] w-[18px] shrink-0"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M16 17l5-5-5-5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            }
-          />
-        </form>
+        <LogoutButton
+          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-danger-500 hover:bg-danger-50"
+          icon={
+            <svg
+              className="h-[18px] w-[18px] shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M16 17l5-5-5-5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          }
+        />
       </div>
     </aside>
   );

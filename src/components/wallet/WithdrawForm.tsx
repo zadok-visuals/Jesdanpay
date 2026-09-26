@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { requestWithdrawal, type RequestWithdrawalState } from "@/lib/actions/withdrawals";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { Input } from "@/components/ui/Input";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { Currency, WithdrawalRecipient } from "@/lib/types/database";
 
 const WITHDRAWAL_FEE_RATE = 0.01;
@@ -26,6 +28,7 @@ export function WithdrawForm({
   const [pin, setPin] = useState("");
   const [state, setState] = useState<RequestWithdrawalState>({});
   const [isPending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const amountNum = parseFloat(amount) || 0;
   const fee = Math.round(amountNum * WITHDRAWAL_FEE_RATE * 100) / 100;
@@ -43,6 +46,7 @@ export function WithdrawForm({
           : null;
 
   function handleSubmit() {
+    setConfirmOpen(false);
     const fd = new FormData();
     fd.set("currency", currency);
     fd.set("amount", amount);
@@ -50,6 +54,8 @@ export function WithdrawForm({
     startTransition(async () => {
       const result = await requestWithdrawal({}, fd);
       setState(result);
+      if (result.error) toast.error(result.error);
+      else toast.success("Withdrawal requested");
     });
   }
 
@@ -68,23 +74,6 @@ export function WithdrawForm({
         <Link href="/settings">
           <Button variant="secondary">Go to Settings</Button>
         </Link>
-      </div>
-    );
-  }
-
-  if (recipient.currency !== currency) {
-    return (
-      <div className="mt-4 flex flex-col gap-2 rounded-xl border border-border bg-white p-5">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold">Withdraw {currency}</p>
-          <button type="button" onClick={onClose} className="text-xs text-foreground/50 hover:text-foreground">
-            Close
-          </button>
-        </div>
-        <p className="text-sm text-foreground/60">
-          Your saved payout recipient is for {recipient.currency}. You can only withdraw the
-          currency your recipient is set up for.
-        </p>
       </div>
     );
   }
@@ -115,6 +104,13 @@ export function WithdrawForm({
           Close
         </button>
       </div>
+
+      <p className="text-xs text-foreground/50">
+        Paying out to your saved {currency} recipient ·{" "}
+        <Link href="/settings" className="underline hover:text-foreground">
+          Change recipient
+        </Link>
+      </p>
 
       <div>
         <label htmlFor="withdrawAmount" className="mb-1.5 block text-sm font-medium text-foreground/80">
@@ -165,7 +161,7 @@ export function WithdrawForm({
 
       <div className="flex flex-col items-start gap-1.5">
         <Button
-          onClick={handleSubmit}
+          onClick={() => setConfirmOpen(true)}
           loading={isPending}
           disabled={!amountValid || !pinValid}
           title={submitDisabledReason ?? undefined}
@@ -179,6 +175,16 @@ export function WithdrawForm({
           </p>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Confirm withdrawal"
+        message={`Confirm withdrawal of ${formatBalance(currency, amountNum)}? You'll receive ${formatBalance(currency, netAmount)} after the 1% fee.`}
+        confirmLabel="Confirm withdrawal"
+        loading={isPending}
+        onConfirm={handleSubmit}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

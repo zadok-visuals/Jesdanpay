@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Currency, PayoutMethod, RmbRecipient } from "@/lib/types/database";
 import { toCustomerError } from "@/lib/provider-error";
@@ -136,6 +137,8 @@ export async function submitRmbExchange(
     // Best-effort — a failed save shouldn't fail the transfer that already succeeded above.
   }
 
+  revalidatePath("/home");
+  revalidatePath("/accounts");
   return { transactionId: transactionId ?? undefined };
 }
 
@@ -283,5 +286,7 @@ export async function submitCnyConversion(
   });
 
   if (error) return { error: error.message };
+  revalidatePath("/home");
+  revalidatePath("/accounts");
   return { conversionId: conversionId ?? undefined };
 }

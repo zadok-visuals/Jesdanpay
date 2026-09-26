@@ -63,6 +63,8 @@ export type Transaction = {
   requires_extra_verification: boolean;
   extra_verification_confirmed_at: string | null;
   extra_verification_confirmed_by: string | null;
+  automated_payout_attempt_failed_reason: string | null;
+  automated_payout_retry_count: number;
   created_at: string;
 };
 
@@ -378,6 +380,10 @@ export type Database = {
       };
       admin_confirm_withdrawal_verification: {
         Args: { p_transaction_id: string; p_admin_id: string };
+        Returns: undefined;
+      };
+      record_automated_payout_failure: {
+        Args: { p_transaction_id: string; p_reason: string };
         Returns: undefined;
       };
     };

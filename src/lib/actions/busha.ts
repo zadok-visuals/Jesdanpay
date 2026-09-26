@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Currency } from "@/lib/types/database";
@@ -100,6 +101,8 @@ export async function executeSwap(
     await admin.rpc("complete_busha_swap_transaction", { p_transaction_id: transactionId });
   }
 
+  revalidatePath("/home");
+  revalidatePath("/accounts");
   return { transactionId: transactionId ?? undefined };
 }
 
@@ -268,6 +271,8 @@ export async function checkDepositStatus(depositId: string): Promise<DepositStat
             error: creditError,
           });
         } else {
+          revalidatePath("/home");
+          revalidatePath("/accounts");
           return { status: "completed" };
         }
       } else if (transfer.status === "cancelled" || transfer.status === "funds_not_delivered") {
@@ -343,6 +348,8 @@ export async function checkSwapStatus(transactionId: string): Promise<SwapStatus
             error: completeError,
           });
         } else {
+          revalidatePath("/home");
+          revalidatePath("/accounts");
           return { status: "completed" };
         }
       } else if (transfer.status === "cancelled" || transfer.status === "funds_not_delivered") {
@@ -357,6 +364,8 @@ export async function checkSwapStatus(transactionId: string): Promise<SwapStatus
             error: failError,
           });
         } else {
+          revalidatePath("/home");
+          revalidatePath("/accounts");
           return { status: "failed" };
         }
       }

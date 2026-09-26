@@ -10,6 +10,7 @@ import { CnyTierRateForm } from "@/components/admin/CnyTierRateForm";
 import { CnyMarkupForm } from "@/components/admin/CnyMarkupForm";
 import { WithdrawalQueueActions } from "@/components/admin/WithdrawalQueueActions";
 import { summarizeRmbRecipient } from "@/lib/rmbRecipient";
+import { AUTOMATED_PAYOUT_MAX_RETRY_ATTEMPTS } from "@/lib/withdrawals/automated-payout";
 
 const MARKUP_RANGE_OPTIONS = [7, 30, 90, 0] as const; // 0 = all time
 
@@ -328,6 +329,13 @@ export default async function AdminPage({
                       {tx.requires_extra_verification && (
                         <Pill tone={tx.extra_verification_confirmed_at ? "success" : "warning"}>
                           {tx.extra_verification_confirmed_at ? "ID verified" : "ID verification required"}
+                        </Pill>
+                      )}
+                      {tx.automated_payout_attempt_failed_reason && (
+                        <Pill tone="warning">
+                          Automation attempted, failed: {tx.automated_payout_attempt_failed_reason}
+                          {tx.automated_payout_retry_count > 0 &&
+                            ` (retry ${tx.automated_payout_retry_count}/${AUTOMATED_PAYOUT_MAX_RETRY_ATTEMPTS})`}
                         </Pill>
                       )}
                     </div>

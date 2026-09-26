@@ -42,10 +42,14 @@ function SwapIcon() {
 // it, letting the label wrap as a last resort at genuinely tight widths instead of clipping.
 const ACTION_BUTTON_CLASSES = "w-full !gap-1 !px-1.5 !text-[11px]";
 
-// The two most common things a user does — filled/primary weight.
-export function QuickActionsPrimary() {
+// All four actions, in order, as direct children of TotalBalanceCard's single 2x2 grid — no grid
+// wrapper of their own here, so buttons never end up nested inside two separate 2-column grids
+// sitting side by side. Add Money / Send to China stay filled/primary weight (the two most common
+// things a user does); Withdraw / Convert stay "secondary" (bordered, unfilled) so they read as
+// subordinate without dropping to a different button system entirely.
+export function QuickActions() {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <>
       <LinkButton href="/accounts" size="lg" className={ACTION_BUTTON_CLASSES}>
         <PlusIcon />
         Add Money
@@ -54,16 +58,6 @@ export function QuickActionsPrimary() {
         <SendIcon />
         Send to China
       </LinkButton>
-    </div>
-  );
-}
-
-// Withdraw and Convert — same size/shape as the primary pair, "secondary" variant (bordered,
-// unfilled) keeps them visually subordinate without dropping to a different button system
-// (previously: small circular icon-only buttons here, a different treatment entirely).
-export function QuickActionsSecondary() {
-  return (
-    <div className="grid grid-cols-2 gap-3">
       <LinkButton href="/accounts" variant="secondary" size="lg" className={ACTION_BUTTON_CLASSES}>
         <WithdrawIcon />
         Withdraw
@@ -72,6 +66,6 @@ export function QuickActionsSecondary() {
         <SwapIcon />
         Convert
       </LinkButton>
-    </div>
+    </>
   );
 }

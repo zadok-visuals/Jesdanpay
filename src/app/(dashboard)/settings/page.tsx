@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Pill, statusTone } from "@/components/ui/Pill";
 import { WithdrawalRecipientCard } from "@/components/wallet/WithdrawalRecipientCard";
 import { TransactionPinCard } from "@/components/wallet/TransactionPinCard";
+import { getNigerianBanks, type NigerianBank } from "@/lib/paystack/banks";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -21,7 +22,7 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: withdrawalRecipients }, { data: wallets }, { data: withdrawalPin }] =
+  const [{ data: profile }, { data: withdrawalRecipients }, { data: wallets }, { data: withdrawalPin }, nigerianBanks] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -32,6 +33,9 @@ export default async function SettingsPage() {
       supabase.from("withdrawal_recipients").select("*").eq("user_id", user.id),
       supabase.from("wallets").select("currency").eq("user_id", user.id),
       supabase.from("withdrawal_pins").select("user_id").eq("user_id", user.id).maybeSingle(),
+      // A Paystack outage must never block the whole Settings page — fall back to an empty list,
+      // which just disables the bank picker rather than crashing.
+      getNigerianBanks().catch((): NigerianBank[] => []),
     ]);
 
   return (
@@ -82,6 +86,7 @@ export default async function SettingsPage() {
           availableCurrencies={(wallets ?? [])
             .map((w) => w.currency)
             .filter((c) => c === "NGN" || c === "GHS" || c === "KES" || c === "USDT")}
+          nigerianBanks={nigerianBanks}
         />
 
         <TransactionPinCard hasPin={!!withdrawalPin} />

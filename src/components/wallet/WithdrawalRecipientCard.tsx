@@ -13,8 +13,79 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { Currency, WithdrawalRecipient } from "@/lib/types/database";
+import type { NigerianBank } from "@/lib/paystack/banks";
 
 const initialState: WithdrawalActionState = {};
+
+// Searchable bank-name picker replacing free-text bank name + bank code inputs for NGN — the user
+// only ever sees/picks a bank name, selecting one attaches the matching Paystack/NIBSS code to a
+// hidden field automatically. Local to this file since it's only used here.
+function NigerianBankPicker({
+  banks,
+  idPrefix,
+  defaultBankName,
+  defaultBankCode,
+}: {
+  banks: NigerianBank[];
+  idPrefix: string;
+  defaultBankName?: string;
+  defaultBankCode?: string;
+}) {
+  const [query, setQuery] = useState(defaultBankName ?? "");
+  const [selectedCode, setSelectedCode] = useState(defaultBankCode ?? "");
+  const [open, setOpen] = useState(false);
+
+  const trimmed = query.trim().toLowerCase();
+  const filtered = (trimmed ? banks.filter((b) => b.name.toLowerCase().includes(trimmed)) : banks).slice(0, 20);
+
+  return (
+    <div className="relative flex flex-col gap-1.5">
+      <label htmlFor={`${idPrefix}-bankSearch`} className="text-sm font-medium text-foreground/80">
+        Bank
+      </label>
+      <input
+        id={`${idPrefix}-bankSearch`}
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setSelectedCode("");
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={banks.length ? "Search for your bank" : "Bank list unavailable — try again shortly"}
+        disabled={banks.length === 0}
+        autoComplete="off"
+        required
+        className="w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm outline-none focus:border-primary-400 disabled:bg-black/[.03]"
+      />
+      <input type="hidden" name="bankName" value={selectedCode ? query : ""} />
+      <input type="hidden" name="bankCode" value={selectedCode} />
+      {query && !selectedCode && <p className="text-xs text-danger-500">Pick your bank from the list.</p>}
+      {open && filtered.length > 0 && (
+        <ul className="absolute top-full z-10 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-border bg-white shadow-lg">
+          {filtered.map((b) => (
+            <li key={b.code}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setQuery(b.name);
+                  setSelectedCode(b.code);
+                  setOpen(false);
+                }}
+                className="block w-full px-3.5 py-2 text-left text-sm hover:bg-primary-50"
+              >
+                {b.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 // The per-currency payout-detail fields — shared by first-time setup and a change to an existing
 // recipient, since both collect exactly the same fields for a given currency. `idPrefix` keeps
@@ -24,10 +95,12 @@ function RecipientFields({
   currency,
   idPrefix,
   defaults,
+  nigerianBanks,
 }: {
   currency: Currency;
   idPrefix: string;
   defaults?: WithdrawalRecipient;
+  nigerianBanks: NigerianBank[];
 }) {
   if (currency === "USDT") {
     return (
@@ -74,24 +147,22 @@ function RecipientFields({
         defaultValue={defaults?.bank_account_number ?? ""}
         placeholder="Account number"
       />
-      <Input
-        label="Bank name"
-        id={`${idPrefix}-bankName`}
-        name="bankName"
-        type="text"
-        required
-        defaultValue={defaults?.bank_name ?? ""}
-        placeholder="Bank name"
-      />
-      {currency === "NGN" && (
+      {currency === "NGN" ? (
+        <NigerianBankPicker
+          banks={nigerianBanks}
+          idPrefix={idPrefix}
+          defaultBankName={defaults?.bank_name ?? undefined}
+          defaultBankCode={defaults?.bank_code ?? undefined}
+        />
+      ) : (
         <Input
-          label="Bank code"
-          id={`${idPrefix}-bankCode`}
-          name="bankCode"
+          label="Bank name"
+          id={`${idPrefix}-bankName`}
+          name="bankName"
           type="text"
           required
-          defaultValue={defaults?.bank_code ?? ""}
-          placeholder="Found in your bank's app or from your bank directly"
+          defaultValue={defaults?.bank_name ?? ""}
+          placeholder="Bank name"
         />
       )}
     </>
@@ -100,7 +171,7 @@ function RecipientFields({
 
 // First-time setup for a currency with no recipient yet — ungated, same as before (only a
 // *change* to an existing recipient goes through the password-re-verified flow below).
-function SetupForm({ currency }: { currency: Currency }) {
+function SetupForm({ currency, nigerianBanks }: { currency: Currency; nigerianBanks: NigerianBank[] }) {
   const [state, formAction, pending] = useActionState(setWithdrawalRecipient, initialState);
   const idPrefix = `setup-${currency}`;
 
@@ -115,7 +186,7 @@ function SetupForm({ currency }: { currency: Currency }) {
         required
         placeholder="Must match your KYC name exactly"
       />
-      <RecipientFields currency={currency} idPrefix={idPrefix} />
+      <RecipientFields currency={currency} idPrefix={idPrefix} nigerianBanks={nigerianBanks} />
       {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
       <Button type="submit" loading={pending} className="self-start">
         {pending ? "Saving…" : "Save payout recipient"}
@@ -169,11 +240,13 @@ function RecipientDetail({ recipient }: { recipient: WithdrawalRecipient }) {
 function ChangeRecipientForm({
   currency,
   recipient,
+  nigerianBanks,
   onDone,
   onCancel,
 }: {
   currency: Currency;
   recipient: WithdrawalRecipient;
+  nigerianBanks: NigerianBank[];
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -220,7 +293,7 @@ function ChangeRecipientForm({
         defaultValue={recipient.account_holder_name}
         placeholder="Must match your KYC name exactly"
       />
-      <RecipientFields currency={currency} idPrefix={idPrefix} defaults={recipient} />
+      <RecipientFields currency={currency} idPrefix={idPrefix} defaults={recipient} nigerianBanks={nigerianBanks} />
       {state.error && <p className="text-sm text-danger-500">{state.error}</p>}
       <div className="flex gap-3">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
@@ -250,9 +323,11 @@ function ChangeRecipientForm({
 function RecipientSection({
   currency,
   recipient,
+  nigerianBanks,
 }: {
   currency: Currency;
   recipient: WithdrawalRecipient | null;
+  nigerianBanks: NigerianBank[];
 }) {
   const [changing, setChanging] = useState(false);
   const [requesting, startRequesting] = useTransition();
@@ -269,11 +344,12 @@ function RecipientSection({
     <div className="flex flex-col gap-3">
       <p className="text-sm font-semibold">{currency}</p>
       {!recipient ? (
-        <SetupForm currency={currency} />
+        <SetupForm currency={currency} nigerianBanks={nigerianBanks} />
       ) : changing ? (
         <ChangeRecipientForm
           currency={currency}
           recipient={recipient}
+          nigerianBanks={nigerianBanks}
           onDone={() => setChanging(false)}
           onCancel={() => setChanging(false)}
         />
@@ -297,9 +373,11 @@ function RecipientSection({
 export function WithdrawalRecipientCard({
   recipients,
   availableCurrencies,
+  nigerianBanks,
 }: {
   recipients: WithdrawalRecipient[];
   availableCurrencies: Currency[];
+  nigerianBanks: NigerianBank[];
 }) {
   return (
     <Card className="p-6">
@@ -311,7 +389,12 @@ export function WithdrawalRecipientCard({
 
       <div className="flex flex-col gap-6">
         {availableCurrencies.map((c) => (
-          <RecipientSection key={c} currency={c} recipient={recipients.find((r) => r.currency === c) ?? null} />
+          <RecipientSection
+            key={c}
+            currency={c}
+            recipient={recipients.find((r) => r.currency === c) ?? null}
+            nigerianBanks={nigerianBanks}
+          />
         ))}
       </div>
     </Card>

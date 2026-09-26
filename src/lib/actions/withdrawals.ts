@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Currency } from "@/lib/types/database";
 import { attemptAutomatedPayout } from "@/lib/withdrawals/automated-payout";
+import { getNigerianBanks } from "@/lib/paystack/banks";
 
 export interface WithdrawalActionState {
   error?: string;
@@ -13,10 +14,10 @@ export interface WithdrawalActionState {
 // Shared per-currency field validation, reused by both first-time setup (setWithdrawalRecipient)
 // and a change to an existing currency's recipient (confirmRecipientChange) — same requiredness
 // rules either way, only the RPC and the gate in front of it differ.
-function parseRecipientFields(
+async function parseRecipientFields(
   currency: Currency,
   formData: FormData,
-):
+): Promise<
   | { error: string }
   | {
       accountHolderName: string;
@@ -24,7 +25,8 @@ function parseRecipientFields(
       bankName: string | null;
       walletAddress: string | null;
       bankCode: string | null;
-    } {
+    }
+> {
   const accountHolderName = String(formData.get("accountHolderName") ?? "").trim();
   const bankAccountNumber = String(formData.get("bankAccountNumber") ?? "").trim();
   const bankName = String(formData.get("bankName") ?? "").trim();
@@ -41,10 +43,27 @@ function parseRecipientFields(
     return { error: "M-Pesa phone number is required." };
   }
   if (currency === "NGN" && (!bankAccountNumber || !bankName || !bankCode)) {
-    return { error: "Bank account number, bank name, and bank code are required." };
+    return { error: "Bank account number and bank are required." };
   }
   if (currency === "GHS" && (!bankAccountNumber || !bankName)) {
     return { error: "Bank account number and bank name are required." };
+  }
+
+  // Defense in depth: the UI only ever lets a user pick a bank from the real Paystack list (no
+  // free-text bank code), but never trust a client-submitted (name, code) pair for anything
+  // provider-facing without re-checking it server-side — same discipline already applied to every
+  // other provider-facing value in this codebase.
+  if (currency === "NGN") {
+    let banks;
+    try {
+      banks = await getNigerianBanks();
+    } catch {
+      return { error: "Could not verify the selected bank right now. Please try again." };
+    }
+    const match = banks.find((b) => b.code === bankCode && b.name === bankName);
+    if (!match) {
+      return { error: "Select your bank from the list." };
+    }
   }
 
   return {
@@ -67,7 +86,7 @@ export async function setWithdrawalRecipient(
   if (!user) redirect("/login");
 
   const currency = String(formData.get("currency") ?? "") as Currency;
-  const parsed = parseRecipientFields(currency, formData);
+  const parsed = await parseRecipientFields(currency, formData);
   if ("error" in parsed) return parsed;
 
   const { error } = await supabase.rpc("set_withdrawal_recipient", {
@@ -122,7 +141,7 @@ export async function confirmRecipientChange(
   const password = String(formData.get("password") ?? "");
   if (!password) return { error: "Enter your password to confirm." };
 
-  const parsed = parseRecipientFields(currency, formData);
+  const parsed = await parseRecipientFields(currency, formData);
   if ("error" in parsed) return parsed;
 
   const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password });

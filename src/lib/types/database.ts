@@ -135,6 +135,16 @@ export type CnyMarkupRate = {
   updated_at: string;
 };
 
+export type SupplierRate = {
+  id: string;
+  base_currency: Currency;
+  quote_currency: Currency;
+  buy_rate: number;
+  effective_from: string;
+  set_by: string;
+  created_at: string;
+};
+
 export type CnyConversionDirection = "to_cny" | "from_cny";
 
 export type CnyConversion = {
@@ -237,6 +247,12 @@ export type Database = {
         Update: Partial<CnyMarkupRate>;
         Relationships: [];
       };
+      supplier_rates: {
+        Row: SupplierRate;
+        Insert: Partial<SupplierRate> & Pick<SupplierRate, "base_currency" | "quote_currency" | "buy_rate" | "set_by">;
+        Update: Partial<SupplierRate>;
+        Relationships: [];
+      };
       cny_conversions: {
         Row: CnyConversion;
         Insert: Partial<CnyConversion> &
@@ -336,6 +352,16 @@ export type Database = {
       };
       admin_set_cny_markup_rate: {
         Args: { p_fiat_markup_rate: number; p_usdt_markup_rate: number };
+        Returns: undefined;
+      };
+      admin_set_supplier_rate: {
+        Args: {
+          p_base_currency: Currency;
+          p_quote_currency: Currency;
+          p_buy_rate: number;
+          p_effective_from: string;
+          p_set_by: string;
+        };
         Returns: undefined;
       };
       set_withdrawal_recipient: {

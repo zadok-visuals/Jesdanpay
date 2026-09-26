@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Currency } from "@/lib/types/database";
 
 export interface AdminActionState {
   error?: string;
@@ -201,5 +202,42 @@ export async function setCnyTierRate(
 
   if (error) return { error: error.message };
   revalidatePath("/admin");
+  return {};
+}
+
+export async function setSupplierRate(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const adminUser = await requireAdminUser();
+  // Submitted as a single "BASE/QUOTE" value from one <select> (src/app/admin/pnl/page.tsx) —
+  // simpler than two separate dropdowns for a fixed, short list of configured pairs.
+  const [baseCurrency, quoteCurrency] = String(formData.get("pair") ?? "").split("/") as [Currency, Currency];
+  const buyRate = Number(formData.get("buyRate"));
+  const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "").trim();
+
+  if (!baseCurrency || !quoteCurrency) {
+    return { error: "Select a currency pair." };
+  }
+
+  if (!Number.isFinite(buyRate) || buyRate <= 0) {
+    return { error: "Enter a valid buy rate." };
+  }
+  const effectiveFrom = effectiveFromRaw ? new Date(effectiveFromRaw) : new Date();
+  if (Number.isNaN(effectiveFrom.getTime())) {
+    return { error: "Enter a valid effective-from date/time." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("admin_set_supplier_rate", {
+    p_base_currency: baseCurrency,
+    p_quote_currency: quoteCurrency,
+    p_buy_rate: buyRate,
+    p_effective_from: effectiveFrom.toISOString(),
+    p_set_by: adminUser.id,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin/pnl");
   return {};
 }

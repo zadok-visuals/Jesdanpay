@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Currency, TransactionStatus } from "@/lib/types/database";
 import { summarizeRmbRecipient } from "@/lib/rmbRecipient";
-import type { UnifiedActivity } from "@/lib/transactions";
+import { isMostRecentForCurrency, type UnifiedActivity } from "@/lib/transactions";
 
 // Full detail for one row from the unified activity list (see src/lib/transactions.ts) — kept
 // separate from UnifiedActivity itself so the list query stays lightweight; this is only fetched
@@ -25,11 +25,31 @@ export interface ActivityDetail {
   // Only set for deposits where the amount actually confirmed on-chain (or via the payment
   // provider) differs from what was originally requested — see migration 0028.
   confirmedAmount: number | null;
+  // The relevant wallet's balance at request time (destination currency for a conversion/
+  // exchange, this activity's own currency for a deposit/withdrawal) — null only if the wallet
+  // row itself couldn't be found. isMostRecent decides the row's label: "New balance" when
+  // nothing else has touched that currency since, "Current balance" otherwise (a later
+  // transaction already moved it further, so this number is no longer a fresh snapshot).
+  balanceAfter: number | null;
+  isMostRecent: boolean;
 }
 
 export interface ActivityDetailState {
   detail?: ActivityDetail;
   error?: string;
+}
+
+async function resolveBalanceInfo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  currency: Currency,
+  createdAt: string,
+): Promise<{ balanceAfter: number | null; isMostRecent: boolean }> {
+  const [{ data: wallet }, isMostRecent] = await Promise.all([
+    supabase.from("wallets").select("balance").eq("user_id", userId).eq("currency", currency).maybeSingle(),
+    isMostRecentForCurrency(supabase, userId, currency, createdAt),
+  ]);
+  return { balanceAfter: wallet?.balance ?? null, isMostRecent };
 }
 
 export async function getActivityDetail(
@@ -51,6 +71,7 @@ export async function getActivityDetail(
       .maybeSingle();
     if (error) return { error: error.message };
     if (!data) return { error: "Deposit not found." };
+    const { balanceAfter, isMostRecent } = await resolveBalanceInfo(supabase, user.id, data.currency, data.created_at);
     return {
       detail: {
         source: "deposit",
@@ -65,6 +86,8 @@ export async function getActivityDetail(
         reference: data.provider_reference,
         description: null,
         confirmedAmount: data.confirmed_amount,
+        balanceAfter,
+        isMostRecent,
       },
     };
   }
@@ -78,6 +101,7 @@ export async function getActivityDetail(
       .maybeSingle();
     if (error) return { error: error.message };
     if (!data) return { error: "Conversion not found." };
+    const { balanceAfter, isMostRecent } = await resolveBalanceInfo(supabase, user.id, data.to_currency, data.created_at);
     return {
       detail: {
         source: "cny_conversion",
@@ -92,6 +116,8 @@ export async function getActivityDetail(
         reference: null,
         description: data.direction === "to_cny" ? "Converted to CNY" : "Converted from CNY",
         confirmedAmount: null,
+        balanceAfter,
+        isMostRecent,
       },
     };
   }
@@ -131,6 +157,14 @@ export async function getActivityDetail(
     description = "USDT exchange";
   }
 
+  const resolvedTargetAmount = tx.actual_target_amount ?? tx.target_amount;
+  // Same conversion-vs-withdrawal test the modal itself applies to decide whether to show a
+  // target-amount row at all — reused here so the balance lookup targets the same currency the
+  // modal is actually describing as "the" relevant one for this row.
+  const isConversion = tx.type !== "withdrawal" && tx.target_currency != null && resolvedTargetAmount != null;
+  const relevantCurrency = isConversion ? tx.target_currency! : tx.currency;
+  const { balanceAfter, isMostRecent } = await resolveBalanceInfo(supabase, user.id, relevantCurrency, tx.created_at);
+
   return {
     detail: {
       source: "transaction",
@@ -139,12 +173,14 @@ export async function getActivityDetail(
       createdAt: tx.created_at,
       sourceAmount: tx.amount,
       sourceCurrency: tx.currency,
-      targetAmount: tx.actual_target_amount ?? tx.target_amount,
+      targetAmount: resolvedTargetAmount,
       targetCurrency: tx.target_currency,
       fee,
       reference: tx.provider_reference,
       description,
       confirmedAmount: null,
+      balanceAfter,
+      isMostRecent,
     },
   };
 }

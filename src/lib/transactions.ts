@@ -36,7 +36,10 @@ export async function fetchUnifiedActivity(
   let depositsQuery = supabase.from("deposits").select("*").eq("user_id", userId);
   let cnyConversionsQuery = supabase.from("cny_conversions").select("*").eq("user_id", userId);
   if (currency) {
-    transactionsQuery = transactionsQuery.eq("currency", currency);
+    // A swap/exchange row stores currency (source) and target_currency (destination) — match
+    // either side, not just the source, so e.g. a NGN->USDT swap shows up under both tabs, not
+    // just NGN. deposits and cny_conversions are untouched: each only ever has one currency side.
+    transactionsQuery = transactionsQuery.or(`currency.eq.${currency},target_currency.eq.${currency}`);
     depositsQuery = depositsQuery.eq("currency", currency);
     cnyConversionsQuery = cnyConversionsQuery.eq("to_currency", currency);
   }
@@ -47,16 +50,22 @@ export async function fetchUnifiedActivity(
     cnyConversionsQuery.order("created_at", { ascending: false }),
   ]);
 
-  const fromTransactions: UnifiedActivity[] = (transactions ?? []).map((t) => ({
-    id: t.id,
-    source: "transaction",
-    type: t.type,
-    amount: t.amount,
-    currency: t.currency,
-    status: t.status,
-    reference: t.provider_reference,
-    created_at: t.created_at,
-  }));
+  const fromTransactions: UnifiedActivity[] = (transactions ?? []).map((t) => {
+    // When filtering by currency and this row only matched on target_currency (not currency),
+    // show the side that actually pertains to the requested currency — otherwise a USDT-tab row
+    // would confusingly display its NGN source amount instead of the USDT it actually credited.
+    const matchedOnTargetOnly = currency != null && t.currency !== currency && t.target_currency === currency;
+    return {
+      id: t.id,
+      source: "transaction",
+      type: t.type,
+      amount: matchedOnTargetOnly ? (t.target_amount ?? t.amount) : t.amount,
+      currency: matchedOnTargetOnly ? (t.target_currency as Currency) : t.currency,
+      status: t.status,
+      reference: t.provider_reference,
+      created_at: t.created_at,
+    };
+  });
 
   // Deposits show their real status — pending, completed, or failed (a Busha transfer that
   // expired or was cancelled leaves fail_deposit's trail here rather than vanishing) — not just
@@ -91,4 +100,39 @@ export async function fetchUnifiedActivity(
   );
 
   return typeof limit === "number" ? merged.slice(0, limit) : merged;
+}
+
+// "Is this activity the most recent one touching this currency" — used by the transaction detail
+// receipt to decide between "New balance" (nothing happened to this currency since) and "Current
+// balance" (a later transaction/deposit/conversion already moved it further). Uses the exact same
+// per-table currency-matching semantics as fetchUnifiedActivity above (including the transactions
+// table's either-side match), so this stays consistent with what the per-currency activity list
+// itself would show.
+export async function isMostRecentForCurrency(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  currency: Currency,
+  createdAt: string,
+): Promise<boolean> {
+  const [{ count: laterTransactions }, { count: laterDeposits }, { count: laterConversions }] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .or(`currency.eq.${currency},target_currency.eq.${currency}`)
+      .gt("created_at", createdAt),
+    supabase
+      .from("deposits")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("currency", currency)
+      .gt("created_at", createdAt),
+    supabase
+      .from("cny_conversions")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("to_currency", currency)
+      .gt("created_at", createdAt),
+  ]);
+  return (laterTransactions ?? 0) === 0 && (laterDeposits ?? 0) === 0 && (laterConversions ?? 0) === 0;
 }

@@ -109,6 +109,17 @@ export function TransactionDetailModal({
             <Row label="Net payout" value={formatBalance(detail.sourceCurrency, detail.targetAmount)} />
           )}
           <Row label="Date" value={new Date(detail.createdAt).toLocaleString()} />
+          {detail.balanceAfter != null && (
+            <Row
+              label={detail.isMostRecent ? "New balance" : "Current balance"}
+              value={formatBalance(
+                detail.type !== "withdrawal" && detail.targetCurrency != null && detail.targetAmount != null
+                  ? detail.targetCurrency
+                  : detail.sourceCurrency,
+                detail.balanceAfter,
+              )}
+            />
+          )}
         </dl>
       )}
     </Modal>

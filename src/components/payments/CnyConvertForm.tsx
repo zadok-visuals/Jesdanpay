@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { Currency, Wallet, CnyTierRate } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/tiers";
+import { MINIMUM_USDT_EQUIVALENT } from "@/lib/busha/limits";
 import {
   previewLiveBushaRate,
   submitCnyConversion,
@@ -111,9 +112,20 @@ export function CnyConvertForm({
     : null;
   const feeAmount = amountEntered ? round2(amountNum * markupRate) : null;
 
+  // amounts.nonCnyAmount is always the non-CNY-side amount regardless of direction — USDT per 1
+  // unit of itself is 1, so no rate multiplication needed there; fiat needs bushaRate (USDT per 1
+  // unit of that fiat currency) to convert to its USDT equivalent.
+  const usdtEquivalent = amounts
+    ? nonCnyCurrency === "USDT"
+      ? amounts.nonCnyAmount
+      : amounts.nonCnyAmount * (bushaRate ?? 0)
+    : null;
+  const belowMinimum = usdtEquivalent != null && usdtEquivalent < MINIMUM_USDT_EQUIVALENT;
+
   let disabledReason: string | null = null;
   if (!amountEntered) disabledReason = "Enter an amount to continue";
   else if (exceedsBalance) disabledReason = `Amount exceeds your available ${spendCurrency} balance`;
+  else if (belowMinimum) disabledReason = "Minimum amount must be equivalent to 10 USDT";
   else if (isRateLoading) disabledReason = "Fetching live rate…";
   else if (rateError) disabledReason = "Rate unavailable — try again";
   else if (!amounts) disabledReason = "Conversion rates aren't configured yet";
@@ -304,7 +316,7 @@ export function CnyConvertForm({
           <Button
             onClick={() => setConfirmOpen(true)}
             loading={isSubmitting}
-            disabled={!amountValid || !amounts}
+            disabled={!amountValid || !amounts || belowMinimum}
             title={disabledReason ?? undefined}
             className="self-start"
           >
@@ -315,7 +327,7 @@ export function CnyConvertForm({
                 : `Convert to ${nonCnyCurrency}`}
           </Button>
           {disabledReason && (
-            <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
+            <p className={`text-xs ${exceedsBalance || belowMinimum ? "text-danger-500" : "text-foreground/50"}`}>
               {disabledReason}
             </p>
           )}

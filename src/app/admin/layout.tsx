@@ -1,6 +1,7 @@
 import { requireAdminUser } from "@/lib/auth/admin";
 import { Wordmark } from "@/components/layout/Wordmark";
 import { LogoutButton } from "@/components/auth/LogoutButton";
+import { AdminNavTabs } from "@/components/admin/AdminNavTabs";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdminUser();
@@ -16,6 +17,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
         <LogoutButton className="inline-flex items-center gap-1.5 text-sm font-medium text-danger-500 hover:underline" />
       </header>
+      <AdminNavTabs />
       <main className="p-6">{children}</main>
     </div>
   );

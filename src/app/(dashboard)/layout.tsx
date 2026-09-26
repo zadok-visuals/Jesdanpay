@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardChrome } from "@/components/layout/DashboardChrome";
+import { isAdminEmail } from "@/lib/auth/admin";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -17,5 +18,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const name = profile?.full_name || profile?.email || "there";
 
-  return <DashboardChrome name={name}>{children}</DashboardChrome>;
+  return (
+    <DashboardChrome name={name} isAdmin={isAdminEmail(user.email)}>
+      {children}
+    </DashboardChrome>
+  );
 }

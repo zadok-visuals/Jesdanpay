@@ -8,6 +8,7 @@ import type { Currency } from "@/lib/types/database";
 import * as busha from "@/lib/busha/client";
 import { getUsdtPairRates } from "@/lib/busha/rate";
 import { applyMarkup } from "@/lib/busha/markup";
+import { MINIMUM_USDT_EQUIVALENT } from "@/lib/busha/limits";
 import { toCustomerError } from "@/lib/provider-error";
 
 export interface SwapRateState {
@@ -57,8 +58,28 @@ export async function executeSwap(
   const targetCurrency = String(formData.get("targetCurrency") ?? "") as Currency;
   const amount = String(formData.get("amount") ?? "");
 
-  if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+  const amountNum = Number(amount);
+  if (!Number.isFinite(amountNum) || amountNum <= 0) {
     return { error: "Enter a valid amount." };
+  }
+
+  // Must run BEFORE calling Busha, not after: by the time a quote/transfer response exists, the
+  // real transfer has already executed at the provider — rejecting post-hoc using its response
+  // amounts (e.g. rawTargetAmount) would be too late to actually stop a sub-minimum swap.
+  try {
+    const usdtEquivalent =
+      sourceCurrency === "USDT"
+        ? amountNum
+        : await (async () => {
+            const rates = await getUsdtPairRates(sourceCurrency);
+            if (!rates) throw new Error(`USDT/${sourceCurrency} isn't available on Busha right now.`);
+            return amountNum / rates.buyRate;
+          })();
+    if (usdtEquivalent < MINIMUM_USDT_EQUIVALENT) {
+      return { error: "Minimum amount must be equivalent to 10 USDT" };
+    }
+  } catch (err) {
+    return { error: toCustomerError(err, "busha.executeSwap") };
   }
 
   let transfer;

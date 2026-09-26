@@ -7,6 +7,7 @@ import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { executeSwap, checkSwapStatus, previewSwapRate, type ExecuteSwapState } from "@/lib/actions/busha";
 import { applyMarkup, MARKUP_RATE } from "@/lib/busha/markup";
+import { MINIMUM_USDT_EQUIVALENT } from "@/lib/busha/limits";
 import { round2 } from "@/lib/cny/tiers";
 import type { Currency } from "@/lib/types/database";
 import { Card } from "@/components/ui/Card";
@@ -179,9 +180,15 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const receiveAmount = rawTargetAmount != null ? applyMarkup(rawTargetAmount) : null;
   const feeAmount = amountEntered ? round2(amountNum * MARKUP_RATE) : null;
 
+  // Selling USDT: the entered amount already IS the USDT equivalent. Buying USDT with fiat:
+  // divide by the buy rate (fiat per 1 USDT) — same division already used for rawTargetAmount.
+  const usdtEquivalent = !amountEntered ? null : isSelling ? amountNum : activeRate ? amountNum / activeRate : null;
+  const belowMinimum = usdtEquivalent != null && usdtEquivalent < MINIMUM_USDT_EQUIVALENT;
+
   let disabledReason: string | null = null;
   if (amountNum <= 0) disabledReason = "Enter an amount to continue";
   else if (exceedsBalance) disabledReason = `Amount exceeds your available ${config.source} balance`;
+  else if (belowMinimum) disabledReason = "Minimum amount must be equivalent to 10 USDT";
   else if (isRateLoading) disabledReason = "Fetching live rate…";
   else if (rateError) disabledReason = "Rate unavailable — try again";
 
@@ -314,14 +321,14 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
           <Button
             onClick={() => setConfirmOpen(true)}
             loading={isExecuting}
-            disabled={!amountValid || isRateLoading || !!rateError}
+            disabled={!amountValid || isRateLoading || !!rateError || belowMinimum}
             title={disabledReason ?? undefined}
             className="self-start"
           >
             {isExecuting ? "Exchanging…" : "Confirm & Exchange"}
           </Button>
           {disabledReason && (
-            <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
+            <p className={`text-xs ${exceedsBalance || belowMinimum ? "text-danger-500" : "text-foreground/50"}`}>
               {disabledReason}
             </p>
           )}

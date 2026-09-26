@@ -6,6 +6,7 @@ import { Wordmark } from "@/components/layout/Wordmark";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import {
   AccountsIcon,
+  AdminIcon,
   HomeIcon,
   PayToChinaIcon,
   PaymentsIcon,
@@ -24,10 +25,11 @@ const NAV_ITEMS = [
 
 interface SidebarProps {
   className?: string;
+  isAdmin?: boolean;
   onNavigate?: () => void;
 }
 
-export function Sidebar({ className = "", onNavigate }: SidebarProps) {
+export function Sidebar({ className = "", isAdmin = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -57,6 +59,20 @@ export function Sidebar({ className = "", onNavigate }: SidebarProps) {
             </Link>
           );
         })}
+        {isAdmin && (
+          <Link
+            href="/admin"
+            onClick={onNavigate}
+            className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+              pathname === "/admin" || pathname.startsWith("/admin/")
+                ? "bg-primary-50 text-primary-700"
+                : "text-foreground/60 hover:bg-primary-50/70 hover:text-primary-700"
+            }`}
+          >
+            <AdminIcon className="shrink-0" />
+            Admin
+          </Link>
+        )}
       </nav>
 
       <div className="border-t border-border px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">

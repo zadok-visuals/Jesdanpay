@@ -7,6 +7,7 @@ import type { Currency, PayoutMethod, RmbRecipient } from "@/lib/types/database"
 import { toCustomerError } from "@/lib/provider-error";
 import { probeFiatToUsdtRate } from "@/lib/busha/rate";
 import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/tiers";
+import { MINIMUM_USDT_EQUIVALENT } from "@/lib/busha/limits";
 
 export interface PaymentsActionState {
   error?: string;
@@ -268,6 +269,14 @@ export async function submitCnyConversion(
   ]);
   if ("error" in result) return { error: result.error };
   const { preview } = result;
+
+  // Never trust the client's own minimum check — recompute the exact same formula server-side.
+  const usdtEquivalent =
+    preview.nonCnyCurrency === "USDT" ? preview.nonCnyAmount : preview.nonCnyAmount * (preview.bushaRate ?? 0);
+  if (usdtEquivalent < MINIMUM_USDT_EQUIVALENT) {
+    return { error: "Minimum amount must be equivalent to 10 USDT" };
+  }
+
   const fromCurrency: Currency = direction === "to_cny" ? nonCnyCurrency : "CNY";
   const fromAmount = direction === "to_cny" ? preview.nonCnyAmount : preview.cnyAmount;
   const toCurrency: Currency = direction === "to_cny" ? "CNY" : nonCnyCurrency;

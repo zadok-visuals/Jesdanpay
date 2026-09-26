@@ -7,9 +7,11 @@ import { Topbar } from "@/components/layout/Topbar";
 
 export function DashboardChrome({
   name,
+  isAdmin = false,
   children,
 }: {
   name: string;
+  isAdmin?: boolean;
   children: React.ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -22,7 +24,7 @@ export function DashboardChrome({
   return (
     <div className="flex h-dvh overflow-hidden">
       <div className="hidden h-full md:block">
-        <Sidebar />
+        <Sidebar isAdmin={isAdmin} />
       </div>
 
       {drawerOpen && (
@@ -33,7 +35,7 @@ export function DashboardChrome({
             aria-hidden="true"
           />
           <div className="absolute inset-y-0 left-0 h-dvh w-64">
-            <Sidebar onNavigate={() => setDrawerOpen(false)} />
+            <Sidebar isAdmin={isAdmin} onNavigate={() => setDrawerOpen(false)} />
           </div>
         </div>
       )}

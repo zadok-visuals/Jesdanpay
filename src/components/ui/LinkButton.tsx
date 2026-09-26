@@ -20,8 +20,8 @@ export function LinkButton({
   ...buttonProps
 }: { href: string; className?: string } & ButtonProps) {
   return (
-    <Link href={href} className={className}>
-      <StatusButton {...buttonProps} />
+    <Link href={href} className="contents">
+      <StatusButton className={className} {...buttonProps} />
     </Link>
   );
 }

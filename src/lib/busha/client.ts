@@ -56,7 +56,14 @@ async function request<T>(
     // top-level `message` field on error responses, so reading json.message directly always
     // fell through to the generic fallback below instead of the actual reason.
     const message = json?.error?.message ?? json?.message ?? `Busha request failed (${res.status})`;
-    throw new BushaError(message, res.status);
+    // A generic "Request validation failed" message is useless on its own — Busha's validation
+    // errors likely name the specific invalid field under one of these keys (standard for this
+    // kind of response). Logging the full raw error here (not guessing which key it is) so the
+    // real shape is visible in server logs the first time this actually fires.
+    console.error("[busha.request] error response", { path, status: res.status, error: json?.error ?? json });
+    const detail = json?.error?.details ?? json?.error?.errors ?? json?.error?.fields;
+    const detailText = detail != null ? ` — ${typeof detail === "string" ? detail : JSON.stringify(detail)}` : "";
+    throw new BushaError(`${message}${detailText}`, res.status);
   }
   return json.data as T;
 }
@@ -127,14 +134,14 @@ export function createQuote(params: {
   sourceAmount?: string;
   targetAmount?: string;
   isDeposit?: boolean;
-  // A payout: pays a quote's proceeds out to a pre-created Recipient (see createRecipient below)
-  // instead of crediting Busha's own balance. Confirmed against docs.busha.io's payout guide —
-  // `pay_out: { type: "bank_transfer" | "mobile_money" | "address", recipient_id }`. Confirmed
-  // directly with Busha support: for the crypto/address payout type specifically, recipient_id
-  // alone isn't enough — the wallet address and network need to be on the quote request too
-  // (bank_transfer/mobile_money work fine off recipient_id alone). address/network are optional
-  // here and only ever set for that crypto case; recipient_id is still always included.
-  payOut?: { type: string; recipientId: string; address?: string; network?: string };
+  // A payout: pays a quote's proceeds out. Confirmed against docs.busha.io's payout guide —
+  // `pay_out: { type: "bank_transfer" | "mobile_money" | "address", recipient_id }` for
+  // bank_transfer/mobile_money. Per Busha's process-crypto-payouts guide (confirmed directly with
+  // Busha support): the crypto/address payout type does NOT use a Recipient at all — it goes
+  // straight to `pay_out: { type: "address", address, network }`, no recipient_id anywhere. So
+  // recipientId is optional here (only sent when present) and address/network are the crypto
+  // path's own fields, independent of it.
+  payOut?: { type: string; recipientId?: string; address?: string; network?: string };
 }): Promise<BushaQuote> {
   const currency = params.sourceCurrency.toUpperCase();
   const payIn = params.isDeposit
@@ -146,7 +153,7 @@ export function createQuote(params: {
     ? {
         pay_out: {
           type: params.payOut.type,
-          recipient_id: params.payOut.recipientId,
+          ...(params.payOut.recipientId ? { recipient_id: params.payOut.recipientId } : {}),
           ...(params.payOut.address ? { address: params.payOut.address } : {}),
           ...(params.payOut.network ? { network: params.payOut.network } : {}),
         },

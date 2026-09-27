@@ -34,6 +34,8 @@ export function getPayoutChannel(currency: Currency): PayoutChannel | null {
 
 // Creates a Busha Recipient from the user's saved withdrawal_recipients row. Callers should
 // cache the returned id on that row (busha_recipient_id) and only call this once per user.
+// NOT used for the crypto channel — per Busha's process-crypto-payouts guide, crypto payouts don't
+// use a Recipient at all, see createPayoutTransfer below.
 export async function createBushaRecipient(
   currency: Currency,
   recipient: WithdrawalRecipient,
@@ -67,15 +69,7 @@ export async function createBushaRecipient(
       account_name: recipient.account_holder_name,
     };
   } else {
-    if (!recipient.wallet_address) {
-      throw new Error("Missing wallet address for automated payout");
-    }
-    body = {
-      type: channel.recipientType,
-      network: "BSC",
-      address: recipient.wallet_address,
-      account_name: recipient.account_holder_name,
-    };
+    throw new Error(`createBushaRecipient is not used for the ${channel.recipientType} channel`);
   }
 
   const created = await busha.createRecipient(body);
@@ -83,32 +77,32 @@ export async function createBushaRecipient(
 }
 
 // Requests and immediately executes a payout transfer for the exact amount being withdrawn.
+// recipientId is only used for the bank_transfer/mobile_money channels — the crypto channel skips
+// Recipient creation entirely (see createBushaRecipient above) and builds its payout quote
+// straight from the wallet address, per Busha's documented crypto-payout flow.
 export async function createPayoutTransfer(
   currency: Currency,
   amount: number,
-  recipientId: string,
   recipient: WithdrawalRecipient,
+  recipientId?: string,
 ): Promise<busha.BushaTransfer> {
   const channel = getPayoutChannel(currency);
   if (!channel) throw new Error(`Automated payout isn't supported for ${currency} yet`);
 
-  // Confirmed with Busha support: the crypto payout type needs the wallet address and network on
-  // the quote itself — recipient_id alone (sufficient for bank_transfer/mobile_money) isn't enough
-  // for this type specifically.
   const isCrypto = channel.recipientType === "crypto";
-  if (isCrypto && !recipient.wallet_address) {
-    throw new Error("Missing wallet address for automated payout");
+  if (isCrypto) {
+    if (!recipient.wallet_address) throw new Error("Missing wallet address for automated payout");
+  } else if (!recipientId) {
+    throw new Error("Missing recipient id for automated payout");
   }
 
   const quote = await busha.createQuote({
     sourceCurrency: currency,
     targetCurrency: currency,
     targetAmount: amount.toFixed(2),
-    payOut: {
-      type: channel.payOutType,
-      recipientId,
-      ...(isCrypto ? { address: recipient.wallet_address!, network: "BSC" } : {}),
-    },
+    payOut: isCrypto
+      ? { type: channel.payOutType, address: recipient.wallet_address!, network: "BSC" }
+      : { type: channel.payOutType, recipientId },
   });
   return busha.createTransfer(quote.id);
 }

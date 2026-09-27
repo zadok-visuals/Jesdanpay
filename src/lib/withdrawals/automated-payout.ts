@@ -54,7 +54,8 @@ export async function attemptAutomatedPayout(transactionId: string, userId: stri
       return;
     }
 
-    if (!getPayoutChannel(currency)) {
+    const channel = getPayoutChannel(currency);
+    if (!channel) {
       // Definitively not automatable — clear any stale reason from an earlier, different failed
       // attempt so the admin badge doesn't linger and the retry cron doesn't keep retrying a
       // currency that can never succeed (this branch never increments the retry counter).
@@ -66,17 +67,22 @@ export async function attemptAutomatedPayout(transactionId: string, userId: stri
       return;
     }
 
-    let recipientId = recipient.busha_recipient_id;
-    if (!recipientId) {
-      recipientId = await createBushaRecipient(currency, recipient);
-      await admin
-        .from("withdrawal_recipients")
-        .update({ busha_recipient_id: recipientId })
-        .eq("user_id", userId)
-        .eq("currency", currency);
+    // Crypto payouts don't use a Recipient at all per Busha's documented flow (see payout.ts) —
+    // skip creating/caching a busha_recipient_id entirely for that channel.
+    let recipientId: string | undefined;
+    if (channel.recipientType !== "crypto") {
+      recipientId = recipient.busha_recipient_id ?? undefined;
+      if (!recipientId) {
+        recipientId = await createBushaRecipient(currency, recipient);
+        await admin
+          .from("withdrawal_recipients")
+          .update({ busha_recipient_id: recipientId })
+          .eq("user_id", userId)
+          .eq("currency", currency);
+      }
     }
 
-    const transfer = await createPayoutTransfer(currency, amount, recipientId, recipient);
+    const transfer = await createPayoutTransfer(currency, amount, recipient, recipientId);
     await admin.rpc("mark_withdrawal_processing", {
       p_transaction_id: transactionId,
       p_provider_reference: transfer.id,
@@ -98,7 +104,9 @@ export async function attemptAutomatedPayout(transactionId: string, userId: stri
     });
     await admin.rpc("record_automated_payout_failure", {
       p_transaction_id: transactionId,
-      p_reason: reason.slice(0, 500),
+      // Raised from 500 — a longer, more specific Busha validation detail (see client.ts's
+      // request()) shouldn't get cut off before showing which field actually failed.
+      p_reason: reason.slice(0, 1000),
     });
   }
 }

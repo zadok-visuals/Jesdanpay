@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
   Wallet,
@@ -203,6 +203,22 @@ function SourceStep({
   // the reverse direction and writes the result back into state.amount via onChange.
   const [activeField, setActiveField] = useState<"fiat" | "cny">("fiat");
   const [cnyInput, setCnyInput] = useState("");
+
+  // Switching source currency leaves a stale amount/CNY pair on screen, computed under the
+  // previous currency's rate — clear both fields so the user starts fresh rather than seeing a
+  // wrong-for-the-new-currency number. Skipped on first mount (isFirstRender) since there's
+  // nothing stale to clear then, only on an actual change afterward.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setActiveField("fiat");
+    onChange({ amount: "" });
+    setCnyInput("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.sourceCurrency]);
 
   useEffect(() => {
     if (activeField === "cny") return;

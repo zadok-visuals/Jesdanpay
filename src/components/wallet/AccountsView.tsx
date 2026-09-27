@@ -73,12 +73,12 @@ export function AccountsView({
         {isCny ? (
           <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-col sm:gap-3">
             <div className="contents sm:flex sm:gap-3">
-              <LinkButton href="/pay-to-china" className="w-full sm:w-auto">
+              <LinkButton href="/pay-to-china" className="w-full sm:min-w-[180px] sm:w-auto">
                 Send to China
               </LinkButton>
             </div>
             <div className="contents sm:flex sm:gap-3">
-              <LinkButton href="/payments?tab=cny" variant="secondary" className="w-full sm:w-auto">
+              <LinkButton href="/payments?tab=cny" variant="secondary" className="w-full sm:min-w-[180px] sm:w-auto">
                 Convert more CNY
               </LinkButton>
             </div>
@@ -102,15 +102,15 @@ export function AccountsView({
 
             <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-col sm:gap-3">
               <div className="contents sm:flex sm:gap-3">
-                <Button className="w-full sm:w-auto" onClick={toggleDeposit}>
+                <Button className="w-full sm:min-w-[180px] sm:w-auto" onClick={toggleDeposit}>
                   {depositOpen ? "Cancel" : "Add Money"}
                 </Button>
               </div>
               <div className="contents sm:flex sm:gap-3">
-                <Button variant="secondary" className="w-full sm:w-auto" onClick={toggleWithdraw}>
+                <Button variant="secondary" className="w-full sm:min-w-[180px] sm:w-auto" onClick={toggleWithdraw}>
                   {withdrawOpen ? "Cancel" : "Withdraw"}
                 </Button>
-                <LinkButton href="/payments?tab=usdt" variant="secondary" className="w-full sm:w-auto">
+                <LinkButton href="/payments?tab=usdt" variant="secondary" className="w-full sm:min-w-[180px] sm:w-auto">
                   Convert USDT
                 </LinkButton>
               </div>
@@ -119,18 +119,18 @@ export function AccountsView({
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-col sm:gap-3">
             <div className="contents sm:flex sm:gap-3">
-              <Button className="w-full sm:w-auto" onClick={toggleDeposit}>
+              <Button className="w-full sm:min-w-[180px] sm:w-auto" onClick={toggleDeposit}>
                 {depositOpen ? "Cancel" : "Add Money"}
               </Button>
-              <LinkButton href="/pay-to-china" variant="secondary" className="w-full sm:w-auto">
+              <LinkButton href="/pay-to-china" variant="secondary" className="w-full sm:min-w-[180px] sm:w-auto">
                 Send to China
               </LinkButton>
             </div>
             <div className="contents sm:flex sm:gap-3">
-              <Button variant="secondary" className="w-full sm:w-auto" onClick={toggleWithdraw}>
+              <Button variant="secondary" className="w-full sm:min-w-[180px] sm:w-auto" onClick={toggleWithdraw}>
                 {withdrawOpen ? "Cancel" : "Withdraw"}
               </Button>
-              <LinkButton href="/payments?tab=usdt" variant="secondary" className="w-full sm:w-auto">
+              <LinkButton href="/payments?tab=usdt" variant="secondary" className="w-full sm:min-w-[180px] sm:w-auto">
                 Convert USDT
               </LinkButton>
             </div>

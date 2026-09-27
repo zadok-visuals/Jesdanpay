@@ -49,6 +49,18 @@ export default async function AdminKycPage({ searchParams }: { searchParams: Pro
     documentsByUser.set(doc.user_id, [...(documentsByUser.get(doc.user_id) ?? []), doc]);
   }
 
+  // Signed URLs so an admin can actually view an uploaded ID/selfie/etc. without the bucket being
+  // public — same pattern as the RMB recipient QR codes in src/app/admin/rmb/page.tsx, one batched
+  // call for every pending document across all profiles on this page rather than one per document.
+  const fileRefs = (kycDocuments ?? []).map((d) => d.file_ref).filter((ref): ref is string => !!ref);
+  const signedUrlByRef = new Map<string, string>();
+  if (fileRefs.length) {
+    const { data: signedUrls } = await admin.storage.from("kyc-documents").createSignedUrls(fileRefs, 3600);
+    for (const entry of signedUrls ?? []) {
+      if (entry.signedUrl) signedUrlByRef.set(entry.path ?? "", entry.signedUrl);
+    }
+  }
+
   return (
     <div>
       <h1 className="mb-6 text-xl font-semibold">KYC Review</h1>
@@ -67,9 +79,29 @@ export default async function AdminKycPage({ searchParams }: { searchParams: Pro
                     <Pill tone="warning">{profile.kyc_type ?? "unknown"}</Pill>
                   </div>
                   <p className="text-xs text-foreground/50">
-                    {docs.length} document{docs.length === 1 ? "" : "s"} submitted:{" "}
-                    {docs.map((d) => d.document_type).join(", ") || "—"}
+                    {docs.length} document{docs.length === 1 ? "" : "s"} submitted:
                   </p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    {docs.length === 0 && <span className="text-foreground/50">—</span>}
+                    {docs.map((d) => {
+                      const url = d.file_ref ? signedUrlByRef.get(d.file_ref) : undefined;
+                      return url ? (
+                        <a
+                          key={d.id}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-primary-600 hover:underline"
+                        >
+                          {d.document_type} — View document
+                        </a>
+                      ) : (
+                        <span key={d.id} className="text-foreground/60">
+                          {d.document_type}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
                 <KycQueueActions userId={profile.id} />
               </Card>

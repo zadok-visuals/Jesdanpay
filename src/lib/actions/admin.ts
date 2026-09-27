@@ -24,7 +24,7 @@ export async function markRmbProcessing(
     .eq("type", "rmb_manual");
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/rmb");
   return {};
 }
 
@@ -52,7 +52,7 @@ export async function completeRmbTransaction(
   });
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/rmb");
   return {};
 }
 
@@ -69,7 +69,7 @@ export async function rejectRmbTransaction(
   });
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/rmb");
   return {};
 }
 
@@ -84,7 +84,7 @@ export async function approveKyc(
   const { error } = await admin.rpc("admin_approve_kyc", { p_user_id: userId });
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/kyc");
   return {};
 }
 
@@ -94,12 +94,17 @@ export async function rejectKyc(
 ): Promise<AdminActionState> {
   await requireAdminUser();
   const userId = String(formData.get("userId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (!reason) {
+    return { error: "A rejection reason is required." };
+  }
 
   const admin = createAdminClient();
-  const { error } = await admin.rpc("admin_reject_kyc", { p_user_id: userId });
+  const { error } = await admin.rpc("admin_reject_kyc", { p_user_id: userId, p_reason: reason });
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/kyc");
   return {};
 }
 
@@ -114,7 +119,7 @@ export async function completeWithdrawal(
   const { error } = await admin.rpc("admin_complete_withdrawal", { p_transaction_id: transactionId });
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/withdrawals");
   return {};
 }
 
@@ -129,7 +134,7 @@ export async function rejectWithdrawal(
   const { error } = await admin.rpc("admin_reject_withdrawal", { p_transaction_id: transactionId });
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/withdrawals");
   return {};
 }
 
@@ -152,7 +157,7 @@ export async function confirmWithdrawalVerification(
   });
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/withdrawals");
   return {};
 }
 
@@ -178,7 +183,7 @@ export async function setCnyMarkupRate(
   });
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/rates");
   return {};
 }
 
@@ -201,7 +206,7 @@ export async function setCnyTierRate(
   });
 
   if (error) return { error: error.message };
-  revalidatePath("/admin");
+  revalidatePath("/admin/rates");
   return {};
 }
 

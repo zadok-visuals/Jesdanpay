@@ -40,7 +40,9 @@ function SwapIcon() {
 // does — a flex-1 item with nowrap text has an implicit min-width equal to its content, so it
 // overflows past the row instead of shrinking; a minmax(0,1fr) grid column actually constrains
 // it, letting the label wrap as a last resort at genuinely tight widths instead of clipping.
-const ACTION_BUTTON_CLASSES = "w-full !gap-1 !px-1.5 !text-[11px]";
+// sm:min-w-[180px] gives each button real presence on desktop instead of shrink-wrapping to its
+// grid column — checked live against the balance card's actual width, still fits at 1366px.
+const ACTION_BUTTON_CLASSES = "w-full sm:min-w-[180px] !gap-1 !px-1.5 !text-xs";
 
 // All four actions, in order, as direct children of TotalBalanceCard's single 2x2 grid — no grid
 // wrapper of their own here, so buttons never end up nested inside two separate 2-column grids

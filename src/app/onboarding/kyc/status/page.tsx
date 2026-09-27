@@ -20,7 +20,7 @@ export default async function KycStatusPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("kyc_status, kyc_type")
+    .select("kyc_status, kyc_type, kyc_rejection_reason")
     .eq("id", user.id)
     .single();
 
@@ -34,7 +34,11 @@ export default async function KycStatusPage() {
         <Pill tone={statusTone(profile.kyc_status)}>{profile.kyc_status}</Pill>
       </div>
       <h1 className="mb-2 text-xl font-semibold">Verification {profile.kyc_status}</h1>
-      <p className="mb-6 text-sm text-foreground/60">{STATUS_COPY[profile.kyc_status]}</p>
+      <p className="mb-6 text-sm text-foreground/60">
+        {profile.kyc_status === "rejected" && profile.kyc_rejection_reason
+          ? profile.kyc_rejection_reason
+          : STATUS_COPY[profile.kyc_status]}
+      </p>
 
       <div className="flex justify-center gap-3">
         {profile.kyc_status === "rejected" && (

@@ -24,6 +24,7 @@ export type Profile = {
   business_name: string | null;
   kyc_type: KycType | null;
   kyc_status: KycStatus;
+  kyc_rejection_reason: string | null;
   country: CountryCode | null;
   created_at: string;
 };
@@ -330,7 +331,7 @@ export type Database = {
         Returns: undefined;
       };
       admin_reject_kyc: {
-        Args: { p_user_id: string };
+        Args: { p_user_id: string; p_reason: string };
         Returns: undefined;
       };
       record_cny_conversion: {

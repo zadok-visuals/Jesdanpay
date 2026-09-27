@@ -62,14 +62,21 @@ export async function submitIndividualKyc(
       });
     }
 
+    // Resubmission (e.g. after a rejection) must replace the existing row for a document_type,
+    // not insert a duplicate alongside it — upsert against the (user_id, document_type) unique
+    // constraint (migration 0033), explicitly resetting status to "pending" on every row touched
+    // since a resubmission always means "review this fresh," regardless of its previous status.
     const { error: docsError } = await supabase
       .from("kyc_documents")
-      .insert(documents.map((doc) => ({ ...doc, user_id: user.id })));
+      .upsert(
+        documents.map((doc) => ({ ...doc, user_id: user.id, status: "pending" as const })),
+        { onConflict: "user_id,document_type" },
+      );
     if (docsError) throw docsError;
 
     const { error: profileError } = await supabase
       .from("profiles")
-      .update({ phone, kyc_type: "individual", kyc_status: "pending" })
+      .update({ phone, kyc_type: "individual", kyc_status: "pending", kyc_rejection_reason: null })
       .eq("id", user.id);
     if (profileError) throw profileError;
   } catch (err) {
@@ -125,14 +132,18 @@ export async function submitBusinessKyc(
       documents.push({ document_type: "proof_of_business_address", file_ref: path });
     }
 
+    // Same upsert-on-resubmission fix as submitIndividualKyc above.
     const { error: docsError } = await supabase
       .from("kyc_documents")
-      .insert(documents.map((doc) => ({ ...doc, user_id: user.id, tier: "business" as const })));
+      .upsert(
+        documents.map((doc) => ({ ...doc, user_id: user.id, tier: "business" as const, status: "pending" as const })),
+        { onConflict: "user_id,document_type" },
+      );
     if (docsError) throw docsError;
 
     const { error: profileError } = await supabase
       .from("profiles")
-      .update({ business_name: businessName, kyc_type: "business", kyc_status: "pending" })
+      .update({ business_name: businessName, kyc_type: "business", kyc_status: "pending", kyc_rejection_reason: null })
       .eq("id", user.id);
     if (profileError) throw profileError;
   } catch (err) {

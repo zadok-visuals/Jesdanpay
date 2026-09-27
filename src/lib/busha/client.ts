@@ -29,7 +29,13 @@ export class BushaError extends Error {
   }
 }
 
-async function request<T>(path: string, options: { method: "GET" | "POST"; body?: unknown }): Promise<T> {
+async function request<T>(
+  path: string,
+  // revalidate: opt-in Next.js cache lifetime (seconds) for the rare read-only endpoint that
+  // wants one (e.g. getBanks below) — omitted everywhere else so every mutating/time-sensitive
+  // call (quotes, transfers, recipients) stays fully uncached, as it must.
+  options: { method: "GET" | "POST"; body?: unknown; revalidate?: number },
+): Promise<T> {
   const apiKey = process.env.BUSHA_API_KEY;
   if (!apiKey) throw new BushaError("BUSHA_API_KEY is not configured", 500);
 
@@ -40,6 +46,7 @@ async function request<T>(path: string, options: { method: "GET" | "POST"; body?
       Authorization: `Bearer ${apiKey}`,
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
+    ...(options.revalidate != null ? { next: { revalidate: options.revalidate } } : {}),
   });
 
   const json = await res.json().catch(() => null);
@@ -122,8 +129,12 @@ export function createQuote(params: {
   isDeposit?: boolean;
   // A payout: pays a quote's proceeds out to a pre-created Recipient (see createRecipient below)
   // instead of crediting Busha's own balance. Confirmed against docs.busha.io's payout guide —
-  // `pay_out: { type: "bank_transfer" | "mobile_money" | "address", recipient_id }`.
-  payOut?: { type: string; recipientId: string };
+  // `pay_out: { type: "bank_transfer" | "mobile_money" | "address", recipient_id }`. Confirmed
+  // directly with Busha support: for the crypto/address payout type specifically, recipient_id
+  // alone isn't enough — the wallet address and network need to be on the quote request too
+  // (bank_transfer/mobile_money work fine off recipient_id alone). address/network are optional
+  // here and only ever set for that crypto case; recipient_id is still always included.
+  payOut?: { type: string; recipientId: string; address?: string; network?: string };
 }): Promise<BushaQuote> {
   const currency = params.sourceCurrency.toUpperCase();
   const payIn = params.isDeposit
@@ -132,7 +143,14 @@ export function createQuote(params: {
       : { pay_in: { type: "temporary_bank_account" } }
     : {};
   const payOut = params.payOut
-    ? { pay_out: { type: params.payOut.type, recipient_id: params.payOut.recipientId } }
+    ? {
+        pay_out: {
+          type: params.payOut.type,
+          recipient_id: params.payOut.recipientId,
+          ...(params.payOut.address ? { address: params.payOut.address } : {}),
+          ...(params.payOut.network ? { network: params.payOut.network } : {}),
+        },
+      }
     : {};
 
   return request("/v1/quotes", {
@@ -201,4 +219,23 @@ export async function getPair(base: string, counter: string): Promise<BushaPair 
 // GET /v1/transfers/{id} — polling fallback if the webhook hasn't fired yet.
 export function getTransfer(transferId: string): Promise<BushaTransfer> {
   return request(`/v1/transfers/${transferId}`, { method: "GET" });
+}
+
+export type BushaBank = {
+  name: string;
+  code: string;
+};
+
+// GET /v1/banks — confirmed directly with Busha support: Busha's ngn_bank recipient type expects
+// its own internal bank codes, NOT the standard NIBSS codes a general bank-list provider (e.g.
+// Paystack, used here previously) returns — those get rejected outright. This is the only correct
+// source for the code createBushaRecipient's ngn_bank body needs (src/lib/busha/payout.ts).
+// Cached for a day since the bank list changes rarely — same lifetime the previous Paystack-backed
+// version used.
+export async function getBanks(): Promise<BushaBank[]> {
+  const banks = await request<{ name: string; code: string }[]>("/v1/banks", {
+    method: "GET",
+    revalidate: 60 * 60 * 24,
+  });
+  return banks.map((b) => ({ name: b.name, code: b.code }));
 }

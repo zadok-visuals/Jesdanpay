@@ -76,7 +76,7 @@ export async function attemptAutomatedPayout(transactionId: string, userId: stri
         .eq("currency", currency);
     }
 
-    const transfer = await createPayoutTransfer(currency, amount, recipientId);
+    const transfer = await createPayoutTransfer(currency, amount, recipientId, recipient);
     await admin.rpc("mark_withdrawal_processing", {
       p_transaction_id: transactionId,
       p_provider_reference: transfer.id,

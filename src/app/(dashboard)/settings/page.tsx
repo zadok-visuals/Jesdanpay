@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Pill, statusTone } from "@/components/ui/Pill";
 import { WithdrawalRecipientCard } from "@/components/wallet/WithdrawalRecipientCard";
 import { TransactionPinCard } from "@/components/wallet/TransactionPinCard";
-import { getNigerianBanks, type NigerianBank } from "@/lib/paystack/banks";
+import { getBanks, type BushaBank } from "@/lib/busha/client";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -33,9 +33,9 @@ export default async function SettingsPage() {
       supabase.from("withdrawal_recipients").select("*").eq("user_id", user.id),
       supabase.from("wallets").select("currency").eq("user_id", user.id),
       supabase.from("withdrawal_pins").select("user_id").eq("user_id", user.id).maybeSingle(),
-      // A Paystack outage must never block the whole Settings page — fall back to an empty list,
+      // A Busha outage must never block the whole Settings page — fall back to an empty list,
       // which just disables the bank picker rather than crashing.
-      getNigerianBanks().catch((): NigerianBank[] => []),
+      getBanks().catch((): BushaBank[] => []),
     ]);
 
   return (

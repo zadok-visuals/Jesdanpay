@@ -13,7 +13,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { Currency, WithdrawalRecipient } from "@/lib/types/database";
-import type { NigerianBank } from "@/lib/paystack/banks";
+import type { BushaBank } from "@/lib/busha/client";
 
 const initialState: WithdrawalActionState = {};
 
@@ -26,7 +26,7 @@ function NigerianBankPicker({
   defaultBankName,
   defaultBankCode,
 }: {
-  banks: NigerianBank[];
+  banks: BushaBank[];
   idPrefix: string;
   defaultBankName?: string;
   defaultBankCode?: string;
@@ -100,7 +100,7 @@ function RecipientFields({
   currency: Currency;
   idPrefix: string;
   defaults?: WithdrawalRecipient;
-  nigerianBanks: NigerianBank[];
+  nigerianBanks: BushaBank[];
 }) {
   if (currency === "USDT") {
     return (
@@ -171,7 +171,7 @@ function RecipientFields({
 
 // First-time setup for a currency with no recipient yet — ungated, same as before (only a
 // *change* to an existing recipient goes through the password-re-verified flow below).
-function SetupForm({ currency, nigerianBanks }: { currency: Currency; nigerianBanks: NigerianBank[] }) {
+function SetupForm({ currency, nigerianBanks }: { currency: Currency; nigerianBanks: BushaBank[] }) {
   const [state, formAction, pending] = useActionState(setWithdrawalRecipient, initialState);
   const idPrefix = `setup-${currency}`;
 
@@ -246,7 +246,7 @@ function ChangeRecipientForm({
 }: {
   currency: Currency;
   recipient: WithdrawalRecipient;
-  nigerianBanks: NigerianBank[];
+  nigerianBanks: BushaBank[];
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -327,7 +327,7 @@ function RecipientSection({
 }: {
   currency: Currency;
   recipient: WithdrawalRecipient | null;
-  nigerianBanks: NigerianBank[];
+  nigerianBanks: BushaBank[];
 }) {
   const [changing, setChanging] = useState(false);
   const [requesting, startRequesting] = useTransition();
@@ -377,7 +377,7 @@ export function WithdrawalRecipientCard({
 }: {
   recipients: WithdrawalRecipient[];
   availableCurrencies: Currency[];
-  nigerianBanks: NigerianBank[];
+  nigerianBanks: BushaBank[];
 }) {
   return (
     <Card className="p-6">

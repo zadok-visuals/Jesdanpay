@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Currency } from "@/lib/types/database";
 import { attemptAutomatedPayout } from "@/lib/withdrawals/automated-payout";
-import { getNigerianBanks } from "@/lib/paystack/banks";
+import { getBanks } from "@/lib/busha/client";
 
 export interface WithdrawalActionState {
   error?: string;
@@ -49,14 +49,14 @@ async function parseRecipientFields(
     return { error: "Bank account number and bank name are required." };
   }
 
-  // Defense in depth: the UI only ever lets a user pick a bank from the real Paystack list (no
+  // Defense in depth: the UI only ever lets a user pick a bank from Busha's own real bank list (no
   // free-text bank code), but never trust a client-submitted (name, code) pair for anything
   // provider-facing without re-checking it server-side — same discipline already applied to every
   // other provider-facing value in this codebase.
   if (currency === "NGN") {
     let banks;
     try {
-      banks = await getNigerianBanks();
+      banks = await getBanks();
     } catch {
       return { error: "Could not verify the selected bank right now. Please try again." };
     }

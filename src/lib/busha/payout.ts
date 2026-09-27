@@ -87,15 +87,28 @@ export async function createPayoutTransfer(
   currency: Currency,
   amount: number,
   recipientId: string,
+  recipient: WithdrawalRecipient,
 ): Promise<busha.BushaTransfer> {
   const channel = getPayoutChannel(currency);
   if (!channel) throw new Error(`Automated payout isn't supported for ${currency} yet`);
+
+  // Confirmed with Busha support: the crypto payout type needs the wallet address and network on
+  // the quote itself — recipient_id alone (sufficient for bank_transfer/mobile_money) isn't enough
+  // for this type specifically.
+  const isCrypto = channel.recipientType === "crypto";
+  if (isCrypto && !recipient.wallet_address) {
+    throw new Error("Missing wallet address for automated payout");
+  }
 
   const quote = await busha.createQuote({
     sourceCurrency: currency,
     targetCurrency: currency,
     targetAmount: amount.toFixed(2),
-    payOut: { type: channel.payOutType, recipientId },
+    payOut: {
+      type: channel.payOutType,
+      recipientId,
+      ...(isCrypto ? { address: recipient.wallet_address!, network: "BSC" } : {}),
+    },
   });
   return busha.createTransfer(quote.id);
 }

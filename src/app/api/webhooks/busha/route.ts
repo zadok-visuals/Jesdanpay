@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getTransfer } from "@/lib/busha/client";
+import { checkWebhookSecret } from "@/lib/webhook-auth";
 
+// SECURITY (webhook forgery hardening): this route used to complete or fail a `transactions`
+// row based solely on the `status` field inside the POST body. Since nothing verified the
+// request came from Busha, anyone who could guess (or observe) a real `provider_reference` could
+// POST a forged `funds_converted`/`funds_delivered` event here and get a wallet credited with
+// nothing actually paid. The swap-completing/failing branches below now re-verify the real
+// status via `getTransfer` (Busha's own API) before acting — same pattern already used by
+// src/app/api/cron/reconcile-deposits/route.ts — and an optional BUSHA_WEBHOOK_SECRET header
+// check is layered on top, non-blocking until a confirmed real delivery reveals which header
+// Busha actually sends it in (see that check below, and the header-guessing history right here).
+//
 // PRIOR BUG (found during the "deposits not reflecting" audit): this route used to check a
 // header named `x-busha-webhook-secret` — a name that was NEVER confirmed against Busha's real
 // docs, just guessed. Since BUSHA_WEBHOOK_SECRET was set, every real webhook delivery got
@@ -65,6 +77,72 @@ export async function POST(request: Request) {
   const status = payload.data?.status;
   const category = payload.data?.category;
 
+  // Optional shared-secret check. Non-blocking on purpose: the last time a header name here was
+  // guessed instead of confirmed (x-busha-webhook-secret), every real delivery got rejected
+  // before it was ever logged, and nobody noticed for weeks. So until a confirmed real delivery
+  // shows _debugHeaders carrying the actual header Busha uses, a mismatch only logs a warning —
+  // it never blocks processing.
+  const bushaWebhookSecret = process.env.BUSHA_WEBHOOK_SECRET;
+  if (bushaWebhookSecret) {
+    const { matched, matchedHeader } = checkWebhookSecret(
+      debugHeaders,
+      ["x-busha-signature", "x-webhook-secret", "x-busha-webhook-secret", "busha-signature"],
+      bushaWebhookSecret,
+    );
+    if (matched) {
+      console.log("[busha webhook] shared-secret header verified", { eventId: eventRow?.id, matchedHeader });
+    } else {
+      console.warn(
+        "[busha webhook] BUSHA_WEBHOOK_SECRET is set but no header matched any candidate name — processing anyway; check _debugHeaders on this event once confirmed real to find the actual header Busha uses",
+        { eventId: eventRow?.id, debugHeaders },
+      );
+    }
+  }
+
+  // Don't trust the webhook payload's own `status` for anything that completes or fails a
+  // transaction — a forged POST naming a real provider_reference could otherwise get a swap
+  // completed (money credited) for nothing actually converted. Re-verify against Busha's own API
+  // and act only on what IT reports, exactly like reconcile-deposits does for stale deposits.
+  async function verifyAndFinalizeBushaSwap(transactionId: string, reference: string) {
+    let transfer;
+    try {
+      transfer = await getTransfer(reference);
+    } catch (err) {
+      console.error(
+        "[busha webhook] getTransfer failed while verifying swap status — leaving transaction untouched",
+        { eventId: eventRow?.id, transactionId, providerReference: reference, err },
+      );
+      return;
+    }
+
+    if (transfer.status === "funds_converted" || transfer.status === "funds_delivered") {
+      const { error } = await admin.rpc("complete_busha_swap_transaction", { p_transaction_id: transactionId });
+      if (error) {
+        console.error("[busha webhook] complete_busha_swap_transaction RPC failed", {
+          eventId: eventRow?.id,
+          transactionId,
+          providerReference: reference,
+          error,
+        });
+      }
+    } else if (transfer.status === "funds_not_delivered" || transfer.status === "cancelled") {
+      const { error } = await admin.rpc("fail_busha_swap_transaction", { p_transaction_id: transactionId });
+      if (error) {
+        console.error("[busha webhook] fail_busha_swap_transaction RPC failed", {
+          eventId: eventRow?.id,
+          transactionId,
+          providerReference: reference,
+          error,
+        });
+      }
+    } else {
+      console.log(
+        "[busha webhook] payload claimed a terminal status but Busha's own API still reports a non-terminal one — not acting yet",
+        { eventId: eventRow?.id, transactionId, providerReference: reference, claimedStatus: status, actualStatus: transfer.status },
+      );
+    }
+  }
+
   async function markProcessed() {
     if (eventRow?.id) {
       await admin
@@ -116,17 +194,7 @@ export async function POST(request: Request) {
       .eq("provider_reference", providerReference)
       .maybeSingle();
     if (transaction) {
-      const { error } = await admin.rpc("complete_busha_swap_transaction", {
-        p_transaction_id: transaction.id,
-      });
-      if (error) {
-        console.error("[busha webhook] complete_busha_swap_transaction RPC failed", {
-          eventId: eventRow?.id,
-          transactionId: transaction.id,
-          providerReference,
-          error,
-        });
-      }
+      await verifyAndFinalizeBushaSwap(transaction.id, providerReference);
     } else {
       console.error("[busha webhook] funds_converted/delivered but no matching transaction found", {
         eventId: eventRow?.id,
@@ -160,17 +228,7 @@ export async function POST(request: Request) {
         .eq("provider_reference", providerReference)
         .maybeSingle();
       if (transaction) {
-        const { error } = await admin.rpc("fail_busha_swap_transaction", {
-          p_transaction_id: transaction.id,
-        });
-        if (error) {
-          console.error("[busha webhook] fail_busha_swap_transaction RPC failed", {
-            eventId: eventRow?.id,
-            transactionId: transaction.id,
-            providerReference,
-            error,
-          });
-        }
+        await verifyAndFinalizeBushaSwap(transaction.id, providerReference);
       }
     }
   }

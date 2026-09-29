@@ -33,7 +33,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublicPath = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+  // "/" is checked for an exact match rather than folded into PUBLIC_PATHS' startsWith list —
+  // startsWith("/") would match every path and disable auth-gating entirely. "/" now serves the
+  // public marketing landing page (src/components/marketing/LandingPage.tsx) to logged-out
+  // visitors; src/app/page.tsx itself still redirects a signed-in user on to /home.
+  const isPublicPath = pathname === "/" || PUBLIC_PATHS.some((path) => pathname.startsWith(path));
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();

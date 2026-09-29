@@ -34,6 +34,14 @@
   --color-danger-50: #fbeae8;
   --color-warning-500: #d6a419;
   --color-warning-50: #fdf6e3;
+
+  /* Warm neutral palette for the marketing site only (src/components/marketing/*) — the dashboard
+     keeps its own cooler --background/--surface untouched. cream/sand read as the "espresso bar"
+     backdrop; primary-900 and accent-500 (already defined above) double as the deep brand tone and
+     metallic accent the marketing style calls for, so nothing new is needed for those two. */
+  --color-cream: #faf6ee;
+  --color-cream-dark: #f1e9d8;
+  --color-sand: #e9dfc9;
 }
 
 @theme inline {
@@ -71,8 +79,13 @@
   --color-warning-50: var(--color-warning-50);
   --color-warning-500: var(--color-warning-500);
 
+  --color-cream: var(--color-cream);
+  --color-cream-dark: var(--color-cream-dark);
+  --color-sand: var(--color-sand);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
 
   --radius-xl: 12px;
   --radius-2xl: 16px;
@@ -82,4 +95,35 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Continuous ambient motion for the marketing hero's orbit/ribbon accents (src/components/
+   marketing/Hero.tsx) — plain CSS rather than a JS animation loop since it never needs to react
+   to scroll position or user input, just spin/float forever. */
+@keyframes marketing-orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes marketing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+.animate-marketing-orbit {
+  animation: marketing-orbit-spin 40s linear infinite;
+}
+
+.animate-marketing-orbit-reverse {
+  animation: marketing-orbit-spin 55s linear infinite reverse;
+}
+
+.animate-marketing-float {
+  animation: marketing-float 6s ease-in-out infinite;
 }

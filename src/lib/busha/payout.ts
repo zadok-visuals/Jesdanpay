@@ -100,8 +100,11 @@ export async function createPayoutTransfer(
     sourceCurrency: currency,
     targetCurrency: currency,
     targetAmount: amount.toFixed(2),
+    // network now comes from the recipient row (migration 0035) instead of a hardcoded literal —
+    // BSC is still the only value ever set (the only network this Busha account accepts), but the
+    // source of truth now lives where the recipient is actually saved, not three files away.
     payOut: isCrypto
-      ? { type: channel.payOutType, address: recipient.wallet_address!, network: "BSC" }
+      ? { type: channel.payOutType, address: recipient.wallet_address!, network: recipient.network ?? "BSC" }
       : { type: channel.payOutType, recipientId },
   });
   return busha.createTransfer(quote.id);

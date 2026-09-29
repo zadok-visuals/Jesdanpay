@@ -1,10 +1,38 @@
 import { requireAdminUser } from "@/lib/auth/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Wordmark } from "@/components/layout/Wordmark";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { AdminNavTabs } from "@/components/admin/AdminNavTabs";
+import type { Currency } from "@/lib/types/database";
+
+// handle_new_user() (migration 0020) only provisions a wallet for the local currency matching
+// the signup country (NG->NGN, GH->GHS, KE->KES) plus CNY+USDT always — everyone else gets no
+// local wallet at all. That restriction is deliberate for regular users (presumably compliance/
+// rails reasons) and must keep applying to them — this backfill exists ONLY because an admin
+// account is just a regular profile with an allowlisted email (see isAdminEmail below), so an
+// admin who signed up under one country would otherwise have no wallet rows for the others and
+// couldn't deposit/withdraw/convert those currencies themselves (Settings/Accounts availability
+// is driven entirely by which `wallets` rows exist). "USD" is deliberately excluded — a dead
+// legacy enum value never actually provisioned or used anywhere in the app.
+// ignoreDuplicates makes this a safe no-op on every page load: it only inserts rows that don't
+// already exist (ON CONFLICT DO NOTHING on the wallets table's own (user_id, currency) primary
+// key), never touching an existing wallet's balance. Runs only for the currently-authenticated
+// admin's own id, never another user's — gated by sitting right after requireAdminUser() here.
+const ADMIN_BACKFILL_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "CNY", "USDT"];
+
+async function backfillAdminWallets(userId: string) {
+  const admin = createAdminClient();
+  await admin
+    .from("wallets")
+    .upsert(
+      ADMIN_BACKFILL_CURRENCIES.map((currency) => ({ user_id: userId, currency })),
+      { onConflict: "user_id,currency", ignoreDuplicates: true },
+    );
+}
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  await requireAdminUser();
+  const adminUser = await requireAdminUser();
+  await backfillAdminWallets(adminUser.id);
 
   return (
     <div className="min-h-dvh bg-background">

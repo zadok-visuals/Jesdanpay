@@ -142,10 +142,15 @@ export async function getActivityDetail(
       .maybeSingle();
     description = recipient ? summarizeRmbRecipient(recipient) : null;
   } else if (tx.type === "withdrawal") {
+    // BUG: since migration 0031, a user can have one withdrawal_recipients row PER CURRENCY —
+    // this lookup was missing a currency filter, so a user with recipients for multiple
+    // currencies could see e.g. their NGN bank details on a USDT withdrawal's receipt (whichever
+    // row happened to come back first/last). Filter by this transaction's own currency.
     const { data: recipient } = await supabase
       .from("withdrawal_recipients")
       .select("*")
       .eq("user_id", user.id)
+      .eq("currency", tx.currency)
       .maybeSingle();
     description = recipient
       ? recipient.wallet_address

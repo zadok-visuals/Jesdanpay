@@ -17,7 +17,7 @@ export default async function TransactionsPage() {
     <div>
       <h1 className="mb-6 text-xl font-semibold">Transactions</h1>
       <Card className="p-6">
-        <TransactionsTable transactions={activity} />
+        <TransactionsTable transactions={activity} showFilter />
       </Card>
     </div>
   );

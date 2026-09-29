@@ -63,7 +63,13 @@ export default async function AdminWithdrawalsPage({ searchParams }: { searchPar
       ? admin.from("profiles").select("id, email, full_name").in("id", withdrawalUserIds)
       : Promise.resolve({ data: [] }),
   ]);
-  const withdrawalRecipientByUser = new Map((withdrawalRecipients ?? []).map((r) => [r.user_id, r]));
+  // BUG: since migration 0031, a user can have one withdrawal_recipients row PER CURRENCY, not
+  // one total. Keying this map by user_id alone meant whichever currency's recipient loaded last
+  // silently won for every currency for that user — e.g. a USDT withdrawal could display that
+  // user's NGN bank details instead of their wallet address. Key by user_id+currency instead.
+  const withdrawalRecipientByUserCurrency = new Map(
+    (withdrawalRecipients ?? []).map((r) => [`${r.user_id}:${r.currency}`, r]),
+  );
   const withdrawalProfileByUser = new Map((withdrawalProfiles ?? []).map((p) => [p.id, p]));
 
   return (
@@ -75,7 +81,7 @@ export default async function AdminWithdrawalsPage({ searchParams }: { searchPar
       ) : (
         <div className="flex flex-col gap-4">
           {withdrawalTransactions.map((tx) => {
-            const recipient = withdrawalRecipientByUser.get(tx.user_id);
+            const recipient = withdrawalRecipientByUserCurrency.get(`${tx.user_id}:${tx.currency}`);
             const profile = withdrawalProfileByUser.get(tx.user_id);
 
             return (

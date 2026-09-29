@@ -7,6 +7,12 @@ import { Pagination } from "@/components/admin/Pagination";
 import { resolveUserIdsByEmail } from "@/lib/admin/search";
 import { ADMIN_PAGE_SIZE, pageRange, parsePageParam, parseStringParam, type AdminSearchParams } from "@/lib/admin/pagination";
 
+// "bvn_or_nin" -> "Bvn or nin" — good enough for an internal admin label, no lookup table needed.
+function humanizeDocumentType(type: string): string {
+  const spaced = type.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 export default async function AdminKycPage({ searchParams }: { searchParams: Promise<AdminSearchParams> }) {
   const admin = createAdminClient();
   const params = await searchParams;
@@ -85,19 +91,28 @@ export default async function AdminKycPage({ searchParams }: { searchParams: Pro
                     {docs.length === 0 && <span className="text-foreground/50">—</span>}
                     {docs.map((d) => {
                       const url = d.file_ref ? signedUrlByRef.get(d.file_ref) : undefined;
-                      return url ? (
-                        <a
-                          key={d.id}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-primary-600 hover:underline"
-                        >
-                          {d.document_type} — View document
-                        </a>
-                      ) : (
+                      if (url) {
+                        return (
+                          <a
+                            key={d.id}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-primary-600 hover:underline"
+                          >
+                            {d.document_type} — View document
+                          </a>
+                        );
+                      }
+                      // BUG: a kyc_documents row with no file_ref (phone_number, bvn_or_nin, tin,
+                      // ownership_structure — see src/lib/actions/kyc.ts) stores its actual
+                      // submitted value in the `value` column, but this only ever rendered the
+                      // document_type label — an admin reviewing KYC could see that a BVN/phone
+                      // number was submitted, never the actual number to verify against.
+                      return (
                         <span key={d.id} className="text-foreground/60">
-                          {d.document_type}
+                          {humanizeDocumentType(d.document_type)}
+                          {d.value != null ? `: ${d.value}` : ""}
                         </span>
                       );
                     })}

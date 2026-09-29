@@ -128,18 +128,28 @@ export async function POST(request: Request) {
       });
     }
   } else if (status === "funds_converted" || status === "funds_delivered") {
+    // BUG (found during the "completed USDT withdrawal didn't subtract from balance" audit): this
+    // branch used to call complete_busha_swap_transaction unconditionally, regardless of the
+    // row's type. That RPC CREDITS target_amount onto the wallet on completion — correct for a
+    // swap, which only debits at completion — but a withdrawal is already debited up front by
+    // create_withdrawal_request, so running the swap-completion RPC on a `type = 'withdrawal'` row
+    // re-credited the (near-full) amount straight back, cancelling out almost the entire original
+    // debit. Fix: select `type` too and branch exactly like
+    // src/app/api/cron/reconcile-busha-transfers/route.ts already does.
     const { data: transaction } = await admin
       .from("transactions")
-      .select("id")
+      .select("id, type")
       .eq("provider", "busha")
       .eq("provider_reference", providerReference)
       .maybeSingle();
     if (transaction) {
-      const { error } = await admin.rpc("complete_busha_swap_transaction", {
+      const isWithdrawal = transaction.type === "withdrawal";
+      const completeRpc = isWithdrawal ? "complete_withdrawal_payout" : "complete_busha_swap_transaction";
+      const { error } = await admin.rpc(completeRpc, {
         p_transaction_id: transaction.id,
       });
       if (error) {
-        console.error("[busha webhook] complete_busha_swap_transaction RPC failed", {
+        console.error(`[busha webhook] ${completeRpc} RPC failed`, {
           eventId: eventRow?.id,
           transactionId: transaction.id,
           providerReference,
@@ -172,18 +182,24 @@ export async function POST(request: Request) {
         }
       }
     } else {
+      // Same type-aware branching as the completion case above — fail_busha_swap_transaction
+      // doesn't touch the wallet at all (a swap never debited until completion), but
+      // fail_withdrawal_payout REFUNDS the original debit, so calling the wrong one here would
+      // leave a failed withdrawal's funds stranded (debited, never refunded).
       const { data: transaction } = await admin
         .from("transactions")
-        .select("id")
+        .select("id, type")
         .eq("provider", "busha")
         .eq("provider_reference", providerReference)
         .maybeSingle();
       if (transaction) {
-        const { error } = await admin.rpc("fail_busha_swap_transaction", {
+        const isWithdrawal = transaction.type === "withdrawal";
+        const failRpc = isWithdrawal ? "fail_withdrawal_payout" : "fail_busha_swap_transaction";
+        const { error } = await admin.rpc(failRpc, {
           p_transaction_id: transaction.id,
         });
         if (error) {
-          console.error("[busha webhook] fail_busha_swap_transaction RPC failed", {
+          console.error(`[busha webhook] ${failRpc} RPC failed`, {
             eventId: eventRow?.id,
             transactionId: transaction.id,
             providerReference,

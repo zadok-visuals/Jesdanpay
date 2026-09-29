@@ -27,6 +27,7 @@ async function parseRecipientFields(
       bankName: string | null;
       walletAddress: string | null;
       bankCode: string | null;
+      network: string | null;
     }
 > {
   const accountHolderName = String(formData.get("accountHolderName") ?? "").trim();
@@ -74,6 +75,9 @@ async function parseRecipientFields(
     bankName: currency === "USDT" || currency === "KES" ? null : bankName,
     walletAddress: currency === "USDT" ? walletAddress : null,
     bankCode: currency === "NGN" ? bankCode : null,
+    // BSC is the only network this Busha account accepts at all (see busha/client.ts's header
+    // comment) — no UI field needed since there's nothing to choose between today.
+    network: currency === "USDT" ? "BSC" : null,
   };
 }
 
@@ -98,6 +102,7 @@ export async function setWithdrawalRecipient(
     p_bank_name: parsed.bankName,
     p_wallet_address: parsed.walletAddress,
     p_bank_code: parsed.bankCode,
+    p_network: parsed.network,
   });
 
   if (error) return { error: error.message };
@@ -156,6 +161,7 @@ export async function confirmRecipientChange(
     p_bank_name: parsed.bankName,
     p_wallet_address: parsed.walletAddress,
     p_bank_code: parsed.bankCode,
+    p_network: parsed.network,
   });
 
   if (error) return { error: error.message };
@@ -179,6 +185,37 @@ export async function setWithdrawalPin(
   }
 
   const { error } = await supabase.rpc("set_withdrawal_pin", { p_pin: pin });
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  return {};
+}
+
+// Self-service PIN change — previously TransactionPinCard just said "contact support" once a PIN
+// was set, mirroring confirmRecipientChange's exact trust model: re-verify the user's password via
+// signInWithPassword immediately before calling the privileged RPC (a Postgres function can't
+// check an Auth password hash), so change_withdrawal_pin itself needs no old-PIN check.
+export async function changeWithdrawalPin(
+  _prevState: WithdrawalActionState,
+  formData: FormData,
+): Promise<WithdrawalActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !user.email) redirect("/login");
+
+  const password = String(formData.get("password") ?? "");
+  if (!password) return { error: "Enter your password to confirm." };
+
+  const pin = String(formData.get("pin") ?? "").trim();
+  if (!/^\d{4,6}$/.test(pin)) {
+    return { error: "PIN must be 4 to 6 digits." };
+  }
+
+  const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password });
+  if (authError) return { error: "Incorrect password." };
+
+  const { error } = await supabase.rpc("change_withdrawal_pin", { p_pin: pin });
   if (error) return { error: error.message };
   revalidatePath("/settings");
   return {};

@@ -170,6 +170,7 @@ export type WithdrawalRecipient = {
   bank_name: string | null;
   wallet_address: string | null;
   bank_code: string | null;
+  network: string | null;
   busha_recipient_id: string | null;
   pending_change_requested_at: string | null;
   recipient_changed_at: string | null;
@@ -373,6 +374,7 @@ export type Database = {
           p_bank_name: string | null;
           p_wallet_address: string | null;
           p_bank_code: string | null;
+          p_network: string | null;
         };
         Returns: undefined;
       };
@@ -428,7 +430,12 @@ export type Database = {
           p_bank_name: string | null;
           p_wallet_address: string | null;
           p_bank_code: string | null;
+          p_network: string | null;
         };
+        Returns: undefined;
+      };
+      change_withdrawal_pin: {
+        Args: { p_pin: string };
         Returns: undefined;
       };
     };

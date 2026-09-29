@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { requestWithdrawal, type RequestWithdrawalState } from "@/lib/actions/withdrawals";
+import { previewLiveBushaRate } from "@/lib/actions/payments";
+import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD } from "@/lib/busha/limits";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
@@ -30,20 +32,38 @@ export function WithdrawForm({
   const [isPending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  // Same live-rate pattern already used for the conversion minimum (CnyConvertForm/
+  // UsdtExchangeForm) — fetched once per currency, not per keystroke.
+  const [bushaRate, setBushaRate] = useState<number | null>(null);
+  useEffect(() => {
+    if (currency === "USDT") return;
+    let cancelled = false;
+    previewLiveBushaRate(currency).then((result) => {
+      if (!cancelled) setBushaRate(result.rate ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currency]);
+
   const amountNum = parseFloat(amount) || 0;
   const fee = Math.round(amountNum * WITHDRAWAL_FEE_RATE * 100) / 100;
   const netAmount = amountNum - fee;
   const exceedsBalance = amountNum > 0 && amountNum > balance;
-  const amountValid = amountNum > 0 && !exceedsBalance;
+  const usdtEquivalent = amountNum > 0 ? (currency === "USDT" ? amountNum : amountNum * (bushaRate ?? 0)) : null;
+  const belowMinimum = usdtEquivalent != null && usdtEquivalent < MINIMUM_WITHDRAWAL_USDT_THRESHOLD;
+  const amountValid = amountNum > 0 && !exceedsBalance && !belowMinimum;
   const pinValid = /^\d{4,6}$/.test(pin);
   const submitDisabledReason =
     amountNum <= 0
       ? "Enter an amount to continue"
       : exceedsBalance
         ? `Amount exceeds your available ${currency} balance`
-        : !pinValid
-          ? "Enter your withdrawal PIN"
-          : null;
+        : belowMinimum
+          ? `Minimum withdrawal is equivalent to ${MINIMUM_WITHDRAWAL_USDT_THRESHOLD} USDT`
+          : !pinValid
+            ? "Enter your withdrawal PIN"
+            : null;
 
   function handleSubmit() {
     setConfirmOpen(false);
@@ -170,7 +190,7 @@ export function WithdrawForm({
           {isPending ? "Submitting…" : "Request withdrawal"}
         </Button>
         {submitDisabledReason && (
-          <p className={`text-xs ${exceedsBalance ? "text-danger-500" : "text-foreground/50"}`}>
+          <p className={`text-xs ${exceedsBalance || belowMinimum ? "text-danger-500" : "text-foreground/50"}`}>
             {submitDisabledReason}
           </p>
         )}

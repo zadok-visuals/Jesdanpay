@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Currency } from "@/lib/types/database";
 import { attemptAutomatedPayout } from "@/lib/withdrawals/automated-payout";
 import { getBanks } from "@/lib/busha/client";
+import { probeFiatToUsdtRate } from "@/lib/busha/rate";
+import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD } from "@/lib/busha/limits";
 
 export interface WithdrawalActionState {
   error?: string;
@@ -204,6 +206,22 @@ export async function requestWithdrawal(
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid amount." };
   }
+
+  // Never trust the client's own minimum check — recompute server-side using the same live-rate
+  // probe already used for the conversion minimum (CnyConvertForm/UsdtExchangeForm's server
+  // actions). create_withdrawal_request has no live USDT rate available to it, so this is checked
+  // here rather than pushed into SQL.
+  const usdtEquivalent =
+    currency === "USDT"
+      ? amount
+      : await probeFiatToUsdtRate(currency).catch(() => null);
+  if (usdtEquivalent == null) {
+    return { error: "Could not verify the withdrawal amount right now. Please try again." };
+  }
+  if (usdtEquivalent < MINIMUM_WITHDRAWAL_USDT_THRESHOLD) {
+    return { error: `Minimum withdrawal is equivalent to ${MINIMUM_WITHDRAWAL_USDT_THRESHOLD} USDT` };
+  }
+
   if (!pin) {
     return { error: "Enter your withdrawal PIN." };
   }

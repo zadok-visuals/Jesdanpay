@@ -2,6 +2,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Currency } from "@/lib/types/database";
 import { probeFiatToUsdtRate } from "@/lib/busha/rate";
 import { getPayoutChannel, createBushaRecipient, createPayoutTransfer } from "@/lib/busha/payout";
+import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD } from "@/lib/busha/limits";
+
+// Re-exported for visibility next to AUTOMATED_PAYOUT_USDT_THRESHOLD below — actually defined in
+// busha/limits.ts (a plain leaf constant) rather than here, since this module imports the
+// service-role admin client at module scope and must never be pulled into a client bundle;
+// WithdrawForm.tsx imports the constant directly from limits.ts instead of from here.
+export { MINIMUM_WITHDRAWAL_USDT_THRESHOLD };
 
 // Amounts at or below this USDT-equivalent are automated via Busha's payout API; anything above
 // stays on the manual admin-approval path, now additionally gated on extra identity verification
@@ -51,6 +58,21 @@ export async function attemptAutomatedPayout(transactionId: string, userId: stri
 
     if (usdtEquivalent > AUTOMATED_PAYOUT_USDT_THRESHOLD) {
       await admin.rpc("flag_withdrawal_for_verification", { p_transaction_id: transactionId });
+      return;
+    }
+
+    // Below Busha's own minimum payout amount — this should already be blocked at request time
+    // (requestWithdrawal in src/lib/actions/withdrawals.ts) for every NEW withdrawal, but a row
+    // created before that check existed could still land here. Detect it up front with our own
+    // clear reason rather than actually calling Busha and recording whatever generic validation
+    // error it returns. Uses the same failure-recording path as a real error (bounded by the
+    // existing retry cap), not the >1,000 verification flag — this isn't a case needing admin
+    // identity verification, just manual handling.
+    if (usdtEquivalent < MINIMUM_WITHDRAWAL_USDT_THRESHOLD) {
+      await admin.rpc("record_automated_payout_failure", {
+        p_transaction_id: transactionId,
+        p_reason: `Below Busha's minimum payout amount (${MINIMUM_WITHDRAWAL_USDT_THRESHOLD} USDT equivalent)`,
+      });
       return;
     }
 

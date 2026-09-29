@@ -14,8 +14,8 @@ export function TotalBalanceCard({ wallets }: { wallets: Wallet[] }) {
 
   return (
     <Card className="flex flex-col gap-8 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
-      <div>
-        <div className="mb-3 flex items-center gap-3">
+      <div className="flex flex-col items-center text-center sm:items-start sm:text-left">
+        <div className="mb-3 flex flex-col items-center gap-2 sm:flex-row sm:gap-3">
           <p className="text-sm font-medium text-foreground/60">Balance</p>
           <Tabs options={currencies} value={selected} onChange={setSelected} />
         </div>

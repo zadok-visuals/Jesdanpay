@@ -12,6 +12,23 @@
 // `NGN|ZAR|GHS` — no KES, no crypto/USDT anywhere in this API. KES and USDT deposits stay on
 // Busha; there's no Klasha product to attempt for USDT at all.
 //
+// Auth — confirmed on a support call AND against developers.klasha.com/overview/authentication
+// (previously wrong: this file used to send KLASHA_API_KEY directly as a static bearer token,
+// which is not how Klasha auth actually works):
+//   1. POST /auth/account/v2/login with { username: <business account email>, password } — a
+//      Klasha *account* login, not the API key/public key pair — returns
+//      { data: { token: "<JWT>" } }.
+//   2. Every other request sends BOTH `Authorization: Bearer <that JWT>` AND
+//      `x-auth-token: <KLASHA_PUBLIC_KEY>` together — confirmed from the docs' own example,
+//      neither header replaces the other.
+//   3. Token lifetime is undocumented anywhere (confirmed directly by Klasha support) — this
+//      decodes the JWT's own `exp` claim rather than assuming a fixed TTL, and refreshes a
+//      little before that deadline rather than waiting to be rejected.
+//   4. Base URL for both auth and the GHS collection endpoint is confirmed by Klasha support
+//      to be https://dev.kcookery.com — their real intentional host, just not branded as
+//      klasha.com. Still overridable via KLASHA_API_BASE_URL: "dev" in the hostname is worth
+//      staying cautious about in case a separate production host turns out to exist later.
+//
 // Things NOT guessed at and still needing a real production test once Klasha support clears
 // account access:
 //   1. The 3DES parameters below are almost certainly WRONG. Klasha's docs say 3DES (which
@@ -26,7 +43,7 @@
 
 import { createCipheriv, createDecipheriv } from "node:crypto";
 
-const BASE_URL = process.env.KLASHA_API_BASE_URL ?? "https://gate.klasapps.com";
+const BASE_URL = process.env.KLASHA_API_BASE_URL ?? "https://dev.kcookery.com";
 
 export class KlashaError extends Error {
   constructor(
@@ -65,22 +82,96 @@ export function decryptBody(encrypted: string): unknown {
   return JSON.parse(decrypted);
 }
 
-async function request<T>(path: string, options: { method: "GET" | "POST"; body?: unknown }): Promise<T> {
-  const bearerToken = process.env.KLASHA_API_KEY;
-  const publicKey = process.env.KLASHA_PUBLIC_KEY;
-  if (!bearerToken || !publicKey) {
-    throw new KlashaError("KLASHA_API_KEY / KLASHA_PUBLIC_KEY are not configured", 500);
+// Decodes a JWT's payload segment to read its own `exp` claim (seconds since epoch), since
+// Klasha support confirmed there's no documented fixed token lifetime to hardcode instead.
+function decodeJwtExpiryMs(token: string): number | null {
+  const payloadSegment = token.split(".")[1];
+  if (!payloadSegment) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(payloadSegment, "base64url").toString("utf8"));
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface KlashaSession {
+  token: string;
+  expiresAt: number; // ms epoch, decoded from the JWT's own `exp` claim
+}
+
+// Module-level cache — fine at this app's scale (a single server process), and avoids logging
+// in again on every Klasha call. Refreshed a little early (see TOKEN_REFRESH_MARGIN_MS) rather
+// than exactly at expiry, and forced to null on a 401 so the next request logs in fresh.
+let cachedSession: KlashaSession | null = null;
+const TOKEN_REFRESH_MARGIN_MS = 90_000;
+
+// POST /auth/account/v2/login — a Klasha business account login (KLASHA_LOGIN_EMAIL /
+// KLASHA_LOGIN_PASSWORD), not the API key/public key pair. Exported so a caller can force a
+// fresh login (or inspect the decoded expiry) without going through the request() cache.
+export async function login(): Promise<KlashaSession> {
+  const username = process.env.KLASHA_LOGIN_EMAIL;
+  const password = process.env.KLASHA_LOGIN_PASSWORD;
+  if (!username || !password) {
+    throw new KlashaError("KLASHA_LOGIN_EMAIL / KLASHA_LOGIN_PASSWORD are not configured", 500);
   }
 
+  const res = await fetch(`${BASE_URL}/auth/account/v2/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+
+  const json = await res.json().catch(() => null);
+  const token: string | undefined = json?.data?.token;
+  if (!res.ok || json?.error || !token) {
+    const message = json?.message ?? json?.error ?? `Klasha login failed (${res.status})`;
+    throw new KlashaError(message, res.status);
+  }
+
+  const expiresAt = decodeJwtExpiryMs(token);
+  if (expiresAt == null) {
+    throw new KlashaError("Klasha login token has no readable expiry", 500);
+  }
+
+  cachedSession = { token, expiresAt };
+  return cachedSession;
+}
+
+async function getValidToken(): Promise<string> {
+  if (cachedSession && cachedSession.expiresAt - TOKEN_REFRESH_MARGIN_MS > Date.now()) {
+    return cachedSession.token;
+  }
+  return (await login()).token;
+}
+
+async function request<T>(
+  path: string,
+  options: { method: "GET" | "POST"; body?: unknown },
+  isRetry = false,
+): Promise<T> {
+  const publicKey = process.env.KLASHA_PUBLIC_KEY;
+  if (!publicKey) {
+    throw new KlashaError("KLASHA_PUBLIC_KEY is not configured", 500);
+  }
+
+  const token = await getValidToken();
   const res = await fetch(`${BASE_URL}${path}`, {
     method: options.method,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${bearerToken}`,
+      Authorization: `Bearer ${token}`,
       "x-auth-token": publicKey,
     },
     body: options.body ? JSON.stringify({ message: encryptBody(options.body) }) : undefined,
   });
+
+  // Safety net for a token invalidated server-side before its decoded exp — force one fresh
+  // login and retry exactly once, rather than assuming the decoded expiry is always trustworthy.
+  if (res.status === 401 && !isRetry) {
+    cachedSession = null;
+    return request(path, options, true);
+  }
 
   const json = await res.json().catch(() => null);
   if (!res.ok || json?.error) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getLiveCnyRates, type LiveCnyRate } from "@/lib/actions/marketingRates";
-import { CURRENCY_META } from "@/lib/currency";
+import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Reveal } from "@/components/marketing/Reveal";
 
 const REFRESH_MS = 60_000;
@@ -41,7 +41,7 @@ export function LiveRate() {
             Live pricing
           </p>
           <h2 className="mt-3 font-[family-name:var(--font-serif)] text-3xl text-primary-900 sm:text-4xl">
-            Today&rsquo;s rate to CNY
+            Today&rsquo;s rates
           </h2>
         </Reveal>
 
@@ -58,26 +58,27 @@ export function LiveRate() {
             )}
             {rates && (
               <div className="grid gap-4 sm:grid-cols-2">
-                {rates.map((rate) => (
-                  <div
-                    key={rate.currency}
-                    className="flex items-center justify-between rounded-2xl border border-primary-800/10 bg-white/60 px-5 py-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl leading-none">{CURRENCY_META[rate.currency].flag}</span>
-                      <span className="text-sm font-medium text-primary-900">
-                        {rate.quoteUnits.toLocaleString("en-US")} {rate.currency}
+                {rates.map((rate) => {
+                  // from_cny (NGN/GHS/KES): "1 CNY = [amount] [currency]" — CNY on the left.
+                  // to_cny (USDT): "1 USDT = ¥[amount]" — USDT on the left, its original layout.
+                  const isFromCny = rate.direction === "from_cny";
+                  const leftCurrency = isFromCny ? "CNY" : rate.currency;
+                  const rightCurrency = isFromCny ? rate.currency : "CNY";
+                  return (
+                    <div
+                      key={rate.currency}
+                      className="flex items-center justify-between rounded-2xl border border-primary-800/10 bg-white/60 px-5 py-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl leading-none">{CURRENCY_META[leftCurrency].flag}</span>
+                        <span className="text-sm font-medium text-primary-900">1 {leftCurrency}</span>
+                      </div>
+                      <span className="font-[family-name:var(--font-serif)] text-lg text-primary-900">
+                        {formatBalance(rightCurrency, rate.amount)}
                       </span>
                     </div>
-                    <span className="font-[family-name:var(--font-serif)] text-lg text-primary-900">
-                      ¥
-                      {rate.cnyAmount.toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <p className="mt-6 text-center text-xs text-primary-900/40">

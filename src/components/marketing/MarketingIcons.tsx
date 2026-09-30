@@ -123,3 +123,34 @@ export function ClockIcon({ className = "" }: IconProps) {
     </svg>
   );
 }
+
+// Footer social icons (src/components/marketing/MarketingFooter.tsx) — simple outline glyphs
+// evocative of each platform rather than literal logo reproductions, matching this file's
+// minimal-outline style; the accessible label on each link carries the actual platform name.
+export function FacebookIcon({ className = "" }: IconProps) {
+  return (
+    <svg className={`h-[18px] w-[18px] ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13.5 19v-6.5H16l.5-2.5h-3V8.2c0-.8.3-1.3 1.4-1.3H16.5V4.6c-.3 0-1.2-.1-2.2-.1-2.2 0-3.6 1.3-3.6 3.7V10h-2.2v2.5h2.2V19" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function TikTokIcon({ className = "" }: IconProps) {
+  return (
+    <svg className={`h-[18px] w-[18px] ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M14 4v10.8a3.4 3.4 0 1 1-3.2-3.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 4c.35 2.3 1.9 3.9 4.2 4.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function InstagramIcon({ className = "" }: IconProps) {
+  return (
+    <svg className={`h-[18px] w-[18px] ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="4" y="4" width="16" height="16" rx="4.5" />
+      <circle cx="12" cy="12" r="3.5" />
+      <circle cx="16.5" cy="7.5" r="0.75" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

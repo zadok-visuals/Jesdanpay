@@ -1,32 +1,24 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/layout/Wordmark";
+import { FacebookIcon, TikTokIcon, InstagramIcon } from "@/components/marketing/MarketingIcons";
 
+// Leading "/" on the hash anchors — see MarketingNav.tsx's LINKS comment; this footer now also
+// renders on /blog and /blog/[slug], where a bare "#foo" wouldn't navigate back to "/".
 const FOOTER_LINKS = [
-  { href: "#how-it-works", label: "Product" },
-  { href: "#countries", label: "Countries" },
-  { href: "#security", label: "Security" },
-  { href: "#features", label: "Pricing" },
+  { href: "/#how-it-works", label: "Product" },
+  { href: "/#countries", label: "Countries" },
+  { href: "/#security", label: "Security" },
+  { href: "/#features", label: "Pricing" },
+  { href: "/blog", label: "Blog" },
+  { href: "/#faq", label: "FAQ" },
 ];
 
-// Social hrefs are placeholders (no confirmed handles yet) — swap for the client's real profiles
-// before launch.
-const SOCIALS: { href: string; label: string; path: string; rect?: boolean }[] = [
-  {
-    href: "#",
-    label: "X (Twitter)",
-    path: "M4 4l7.5 8.5L4.3 20h2l6.3-6.7L17.5 20H20l-8-9 7-7h-2l-6 6.4L6.5 4H4Z",
-  },
-  {
-    href: "#",
-    label: "Instagram",
-    path: "",
-    rect: true,
-  },
-  {
-    href: "#",
-    label: "LinkedIn",
-    path: "M4.5 8.5h3V19h-3V8.5ZM6 4a1.75 1.75 0 1 1 0 3.5A1.75 1.75 0 0 1 6 4ZM10.5 8.5h2.9v1.43h.04c.4-.76 1.4-1.57 2.9-1.57 3.1 0 3.66 2.04 3.66 4.7V19h-3v-5.24c0-1.25-.02-2.86-1.74-2.86-1.75 0-2.02 1.36-2.02 2.77V19h-3V8.5Z",
-  },
+// Facebook/TikTok/Instagram — the client's actual platforms. hrefs are all "#" placeholders (no
+// confirmed handles yet) — swap for the client's real profile URLs before launch.
+const SOCIALS = [
+  { href: "#", label: "Facebook", Icon: FacebookIcon },
+  { href: "#", label: "TikTok", Icon: TikTokIcon },
+  { href: "#", label: "Instagram", Icon: InstagramIcon },
 ];
 
 export function MarketingFooter() {
@@ -58,24 +50,14 @@ export function MarketingFooter() {
           </div>
 
           <div className="flex gap-3">
-            {SOCIALS.map((social) => (
+            {SOCIALS.map(({ href, label, Icon }) => (
               <a
-                key={social.label}
-                href={social.href}
-                aria-label={social.label}
+                key={label}
+                href={href}
+                aria-label={label}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-primary-900/10 text-primary-900/60 transition-colors hover:border-primary-900/25 hover:text-primary-900"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-[18px] w-[18px]">
-                  {social.rect ? (
-                    <>
-                      <rect x="4" y="4" width="16" height="16" rx="4.5" />
-                      <circle cx="12" cy="12" r="3.5" />
-                      <circle cx="16.5" cy="7.5" r="0.75" fill="currentColor" stroke="none" />
-                    </>
-                  ) : (
-                    <path d={social.path} strokeLinecap="round" strokeLinejoin="round" />
-                  )}
-                </svg>
+                <Icon />
               </a>
             ))}
           </div>

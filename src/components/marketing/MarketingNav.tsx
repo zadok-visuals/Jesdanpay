@@ -5,11 +5,17 @@ import Link from "next/link";
 import { Wordmark } from "@/components/layout/Wordmark";
 import { PillButton } from "@/components/marketing/PillButton";
 
+// Leading "/" on the hash anchors (rather than a bare "#foo") so these still resolve correctly
+// now that MarketingNav is also rendered on /blog and /blog/[slug] — a bare "#foo" would just
+// try (and fail) to scroll to an element on whatever page it's clicked from instead of
+// navigating back to that section on the homepage.
 const LINKS = [
-  { href: "#how-it-works", label: "Product" },
-  { href: "#countries", label: "Countries" },
-  { href: "#features", label: "Pricing" },
-  { href: "#security", label: "Support" },
+  { href: "/#how-it-works", label: "Product" },
+  { href: "/#countries", label: "Countries" },
+  { href: "/#features", label: "Pricing" },
+  { href: "/#security", label: "Support" },
+  { href: "/blog", label: "Blog" },
+  { href: "/#faq", label: "FAQ" },
 ];
 
 export function MarketingNav() {
@@ -32,7 +38,7 @@ export function MarketingNav() {
       >
         <Wordmark className="h-7" />
 
-        <div className="hidden items-center gap-9 md:flex">
+        <div className="hidden items-center gap-6 lg:flex">
           {LINKS.map((link) => (
             <a
               key={link.href}
@@ -44,7 +50,7 @@ export function MarketingNav() {
           ))}
         </div>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           <Link
             href="/login"
             className="text-sm font-medium text-primary-900/70 transition-colors hover:text-primary-900"
@@ -60,7 +66,7 @@ export function MarketingNav() {
           type="button"
           aria-label="Toggle menu"
           onClick={() => setMenuOpen((open) => !open)}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-primary-900 md:hidden"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-primary-900 lg:hidden"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-5 w-5">
             {menuOpen ? (
@@ -73,7 +79,7 @@ export function MarketingNav() {
       </nav>
 
       {menuOpen && (
-        <div className="absolute inset-x-4 top-[calc(100%+8px)] flex flex-col gap-1 rounded-3xl border border-white/40 bg-white/90 p-4 shadow-[0_20px_50px_-20px_rgba(10,46,31,0.35)] backdrop-blur-xl md:hidden">
+        <div className="absolute inset-x-4 top-[calc(100%+8px)] flex flex-col gap-1 rounded-3xl border border-white/40 bg-white/90 p-4 shadow-[0_20px_50px_-20px_rgba(10,46,31,0.35)] backdrop-blur-xl lg:hidden">
           {LINKS.map((link) => (
             <a
               key={link.href}

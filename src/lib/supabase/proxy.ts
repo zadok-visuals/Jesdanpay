@@ -2,7 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/types/database";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/forgot-password", "/reset-password"];
+// "/blog" (prefix match, so this covers /blog/[slug] too) is public — it's part of the marketing
+// site (src/app/blog/*), not gated content. Confirmed missing here by an actual redirect-to-
+// /login when visiting /blog logged out while building the blog scaffold.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/forgot-password", "/reset-password", "/blog"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

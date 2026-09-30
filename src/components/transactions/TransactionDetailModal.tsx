@@ -19,9 +19,9 @@ const TYPE_LABELS: Record<string, string> = {
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-5 py-3">
+    <div className="flex min-w-0 items-start justify-between gap-4 px-5 py-3">
       <dt className="shrink-0 text-sm text-foreground/60">{label}</dt>
-      <dd className="text-right text-sm font-medium text-foreground">{value}</dd>
+      <dd className="min-w-0 break-all text-right text-sm font-medium text-foreground">{value}</dd>
     </div>
   );
 }

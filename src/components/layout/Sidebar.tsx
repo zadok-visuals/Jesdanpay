@@ -10,17 +10,18 @@ import {
   HomeIcon,
   PayToChinaIcon,
   PaymentsIcon,
-  ReportsIcon,
   TransactionsIcon,
 } from "@/components/layout/NavIcons";
 
+// Reports is temporarily off the nav (see src/app/(dashboard)/reports/page.tsx's redirect) —
+// removed from the list rather than the icon import chain so re-adding it later is a one-line
+// change; the route itself and its ComingSoon copy are left intact underneath.
 const NAV_ITEMS = [
   { href: "/home", label: "Home", Icon: HomeIcon },
   { href: "/accounts", label: "Accounts", Icon: AccountsIcon },
   { href: "/pay-to-china", label: "Pay to China", Icon: PayToChinaIcon },
   { href: "/payments", label: "Conversions", Icon: PaymentsIcon },
   { href: "/transactions", label: "Transactions", Icon: TransactionsIcon },
-  { href: "/reports", label: "Reports", Icon: ReportsIcon },
 ] as const;
 
 interface SidebarProps {

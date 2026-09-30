@@ -48,13 +48,13 @@ export function TransactionsTable({
   );
 
   const filterBar = showFilter && (
-    <div className="mb-4 inline-flex items-center gap-1 rounded-xl bg-black/[.04] p-1">
+    <div className="mb-4 flex max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-black/[.04] p-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {FILTER_OPTIONS.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => setFilter(option.value)}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+          className={`shrink-0 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
             option.value === filter ? "bg-white text-primary-700" : "text-foreground/60 hover:text-foreground"
           }`}
         >

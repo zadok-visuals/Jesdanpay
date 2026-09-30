@@ -38,7 +38,7 @@ export function Testimonials() {
         <div className="mt-14 grid gap-5 sm:grid-cols-3">
           {TESTIMONIALS.map((t, i) => (
             <Reveal key={t.name + i} delay={i * 0.1}>
-              <div className="flex h-full flex-col justify-between rounded-[24px] border border-white/50 bg-white/50 p-8 backdrop-blur-xl">
+              <div className="flex h-full flex-col justify-between rounded-3xl border border-white/50 bg-white/50 p-8 backdrop-blur-xl">
                 <p className="font-[family-name:var(--font-serif)] text-[17px] italic leading-relaxed text-primary-900/80">
                   &ldquo;{t.quote}&rdquo;
                 </p>

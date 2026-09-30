@@ -32,7 +32,7 @@ const SOCIALS: { href: string; label: string; path: string; rect?: boolean }[] =
 export function MarketingFooter() {
   return (
     <footer className="px-4 pb-10 pt-16 sm:px-6">
-      <div className="mx-auto max-w-6xl rounded-[32px] border border-primary-900/10 bg-white/50 px-6 py-12 backdrop-blur-xl sm:px-12">
+      <div className="mx-auto max-w-6xl rounded-3xl border border-primary-900/10 bg-white/50 px-6 py-12 backdrop-blur-xl sm:px-12">
         <div className="flex flex-col gap-10 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <Wordmark className="h-7" />

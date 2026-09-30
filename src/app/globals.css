@@ -89,6 +89,10 @@
 
   --radius-xl: 12px;
   --radius-2xl: 16px;
+  /* One step beyond --radius-2xl for the marketing site's larger card/band curves (Hero's product
+     shot frame, StatsBand, FinalCta, the footer panel) — added so those sections pick a class off
+     this same scale instead of each inventing its own rounded-[Npx] one-off. */
+  --radius-3xl: 24px;
 }
 
 body {
@@ -126,4 +130,22 @@ body {
 
 .animate-marketing-float {
   animation: marketing-float 6s ease-in-out infinite;
+}
+
+/* Self-looping currency corridor strip (src/components/marketing/CorridorStrip.tsx) — the row
+   renders the corridor list twice back to back and slides exactly one copy-width (-50%) to the
+   left forever, which reads as a seamless infinite loop. Paused on hover so a curious visitor can
+   actually read a chip instead of chasing it. */
+@keyframes marketing-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marketing-marquee {
+  animation: marketing-marquee 30s linear infinite;
+}
+
+.animate-marketing-marquee:hover {
+  animation-play-state: paused;
 }

@@ -1,5 +1,6 @@
 import { Reveal } from "@/components/marketing/Reveal";
-import { DepositIcon, ConvertIcon, SendIcon } from "@/components/marketing/MarketingIcons";
+import { IconMotion } from "@/components/marketing/IconMotion";
+import { DepositIcon, ConvertIcon, SendIcon, ClockIcon } from "@/components/marketing/MarketingIcons";
 
 const STEPS = [
   {
@@ -27,7 +28,8 @@ export function HowItWorks() {
     <section id="how-it-works" className="px-4 py-20 sm:px-6">
       <div className="mx-auto max-w-6xl">
         <Reveal className="mx-auto max-w-xl text-center">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary-800/50">
+          <p className="inline-flex items-center gap-2 text-sm font-medium uppercase tracking-[0.2em] text-primary-800/50">
+            <ClockIcon className="h-4 w-4" />
             How it works
           </p>
           <h2 className="mt-3 font-[family-name:var(--font-serif)] text-3xl text-primary-900 sm:text-4xl">
@@ -43,12 +45,12 @@ export function HowItWorks() {
 
           {STEPS.map(({ icon: Icon, step, title, body }, i) => (
             <Reveal key={step} delay={i * 0.12} className="relative text-center">
-              <div className="relative mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full border border-primary-800/15 bg-cream text-primary-800">
+              <IconMotion className="relative mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full border border-primary-800/15 bg-cream text-primary-800">
                 <Icon />
                 <span className="absolute -top-2 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary-900 text-[11px] font-semibold text-cream">
                   {step}
                 </span>
-              </div>
+              </IconMotion>
               <h3 className="mt-6 text-lg font-semibold text-primary-900">{title}</h3>
               <p className="mx-auto mt-2 max-w-[260px] text-[15px] leading-relaxed text-primary-900/55">
                 {body}

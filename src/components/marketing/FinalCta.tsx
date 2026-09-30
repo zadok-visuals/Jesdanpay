@@ -5,7 +5,7 @@ import { ArrowRightIcon } from "@/components/marketing/MarketingIcons";
 export function FinalCta() {
   return (
     <section id="cta" className="px-4 py-20 sm:px-6">
-      <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[32px] bg-primary-900 px-6 py-20 text-center sm:px-10">
+      <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl bg-primary-900 px-6 py-20 text-center sm:px-10">
         <div
           className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-accent-500/10 blur-3xl"
           aria-hidden="true"
@@ -23,7 +23,7 @@ export function FinalCta() {
             Join the corridor connecting Africa&rsquo;s fastest-growing markets to China.
           </p>
           <div className="mt-10 flex justify-center">
-            <PillButton href="/signup" variant="onDark">
+            <PillButton href="/signup" variant="onDark" size="lg">
               Get started
               <ArrowRightIcon />
             </PillButton>

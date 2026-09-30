@@ -51,7 +51,7 @@ export function MarketingNav() {
           >
             Log in
           </Link>
-          <PillButton href="/signup" className="!px-5 !py-2.5 text-sm">
+          <PillButton href="/signup" size="sm">
             Sign up
           </PillButton>
         </div>

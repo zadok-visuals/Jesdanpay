@@ -24,8 +24,8 @@ export function Hero() {
 
           <Reveal delay={0.08}>
             <h1 className="mt-7 font-[family-name:var(--font-serif)] text-[2.75rem] leading-[1.05] tracking-tight text-primary-900 sm:text-6xl lg:text-[4.25rem]">
-              Send money between{" "}
-              <span className="italic text-primary-600">Nigeria and China</span>, easily.
+              Facilitating supplier payments{" "}
+              <span className="italic text-primary-600">to China</span>.
             </h1>
           </Reveal>
 
@@ -38,13 +38,13 @@ export function Hero() {
           </Reveal>
 
           <Reveal delay={0.24}>
-            <div className="mt-9 flex flex-col gap-4 sm:flex-row sm:items-center">
-              <PillButton href="/signup">
+            <div className="mt-9 flex flex-row flex-wrap items-center gap-4">
+              <PillButton href="/signup" size="lg">
                 Get started
                 <ArrowRightIcon />
               </PillButton>
               {/* mailto placeholder — swap for the client's real support address before launch */}
-              <PillButton href="mailto:hello@jesdanpay.net" variant="secondary">
+              <PillButton href="mailto:hello@jesdanpay.net" variant="secondary" size="lg">
                 Talk to us
               </PillButton>
             </div>
@@ -54,8 +54,8 @@ export function Hero() {
         <Reveal delay={0.2} className="relative mx-auto w-full max-w-sm lg:max-w-none">
           <div className="relative aspect-[4/5] w-full">
             <div className="animate-marketing-float relative h-full w-full">
-              <div className="absolute inset-6 rounded-[32px] bg-gradient-to-br from-primary-100/70 via-cream to-accent-100/50 blur-2xl" />
-              <div className="relative h-full w-full overflow-hidden rounded-[32px] border border-white/50 shadow-[0_40px_80px_-30px_rgba(10,46,31,0.35)]">
+              <div className="absolute inset-6 rounded-3xl bg-gradient-to-br from-primary-100/70 via-cream to-accent-100/50 blur-2xl" />
+              <div className="relative h-full w-full overflow-hidden rounded-3xl border border-white/50 shadow-[0_40px_80px_-30px_rgba(10,46,31,0.35)]">
                 <Image
                   src="/auth-hero-female-v2.png"
                   alt="The JesDanPay app dashboard, showing NGN, USD and CNY balances"

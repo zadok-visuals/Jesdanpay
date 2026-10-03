@@ -6,23 +6,12 @@ import { Pill, statusTone } from "@/components/ui/Pill";
 import { KycDocumentList } from "@/components/admin/KycDocumentList";
 import { formatBalance } from "@/lib/currency";
 import { COUNTRIES } from "@/lib/countries";
+import { sumByCurrency } from "@/lib/admin/aggregate";
 import type { Currency } from "@/lib/types/database";
 
 function countryName(code: string | null): string {
   if (!code) return "—";
   return COUNTRIES.find((c) => c.code === code)?.name ?? code;
-}
-
-// Sums `amount` per currency into a Map — the same "fetch raw rows, aggregate in JS" pattern
-// already used by src/app/admin/pnl/page.tsx rather than a SQL-side group-by (Postgrest has no
-// native groupBy aggregation through the JS client).
-function sumByCurrency<T>(rows: T[], currencyOf: (row: T) => string, amountOf: (row: T) => number): Map<string, number> {
-  const totals = new Map<string, number>();
-  for (const row of rows) {
-    const currency = currencyOf(row);
-    totals.set(currency, (totals.get(currency) ?? 0) + amountOf(row));
-  }
-  return totals;
 }
 
 function CurrencyTotals({ title, totals, empty }: { title: string; totals: Map<string, number>; empty: string }) {

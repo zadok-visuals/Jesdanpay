@@ -8,7 +8,14 @@ import type { Currency } from "@/lib/types/database";
 import * as busha from "@/lib/busha/client";
 import { getUsdtPairRates } from "@/lib/busha/rate";
 import { applyMarkup } from "@/lib/busha/markup";
-import { MINIMUM_USDT_EQUIVALENT } from "@/lib/busha/limits";
+import { MINIMUM_USDT_EQUIVALENT, FIAT_MINIMUM_DEPOSIT } from "@/lib/busha/limits";
+
+// FIAT_MINIMUM_DEPOSIT is only keyed by the fiat currencies that have a confirmed minimum — looks
+// up by exact currency match rather than a cast, so an unconfigured currency (USDT, or a fiat one
+// with no confirmed minimum yet) always resolves to undefined and simply isn't enforced.
+function fiatMinimumFor(currency: Currency): number | undefined {
+  return currency === "NGN" || currency === "GHS" || currency === "KES" ? FIAT_MINIMUM_DEPOSIT[currency] : undefined;
+}
 import { toCustomerError } from "@/lib/provider-error";
 
 export interface SwapRateState {
@@ -131,6 +138,11 @@ export interface DepositQuoteState {
   error?: string;
   quoteId?: string;
   fee?: string;
+  // Busha's own quoted target_amount — the exact net figure the deposit will credit once
+  // executed (what initiateDeposit later reads off the resulting transfer), not amount - fee
+  // recomputed client-side, so the payment-instructions screen can never show a net figure that
+  // drifts from what actually gets credited.
+  netAmount?: string;
   amount?: string;
   currency?: Currency;
 }
@@ -153,6 +165,11 @@ export async function getDepositQuote(
     return { error: "Enter a valid amount." };
   }
 
+  const minimum = fiatMinimumFor(currency);
+  if (minimum != null && Number(amount) < minimum) {
+    return { error: `Minimum ${currency} deposit is ${minimum}.` };
+  }
+
   try {
     const quote = await busha.createQuote({
       sourceCurrency: currency,
@@ -161,7 +178,7 @@ export async function getDepositQuote(
       isDeposit: true,
     });
     const fee = quote.fees.reduce((sum, f) => sum + Number(f.amount.amount), 0);
-    return { quoteId: quote.id, fee: fee.toFixed(2), amount, currency };
+    return { quoteId: quote.id, fee: fee.toFixed(2), netAmount: quote.target_amount, amount, currency };
   } catch (err) {
     return { error: toCustomerError(err, "busha.getDepositQuote") };
   }
@@ -190,7 +207,16 @@ export async function initiateDeposit(
 
   const quoteId = String(formData.get("quoteId") ?? "");
   const currency = String(formData.get("currency") ?? "").toUpperCase() as Currency;
+  const amount = String(formData.get("amount") ?? "");
   if (!quoteId) return { error: "Missing quote." };
+
+  // Re-checked here too, not just in getDepositQuote — this is the actual point of no return
+  // (money moves once createTransfer below succeeds), so it shouldn't rely solely on trusting
+  // that whatever called this with a quoteId already enforced the minimum upstream.
+  const minimum = fiatMinimumFor(currency);
+  if (minimum != null && Number(amount) < minimum) {
+    return { error: `Minimum ${currency} deposit is ${minimum}.` };
+  }
 
   let transfer;
   try {

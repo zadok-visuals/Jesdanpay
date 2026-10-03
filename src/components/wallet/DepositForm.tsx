@@ -14,6 +14,7 @@ import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { useCountdown, formatCountdown } from "@/lib/hooks/useCountdown";
+import { FIAT_MINIMUM_DEPOSIT } from "@/lib/busha/limits";
 import type { Currency } from "@/lib/types/database";
 
 const STATUS_POLL_INTERVAL_MS = 10_000;
@@ -38,17 +39,20 @@ function DepositSuccessScreen({ onClose }: { onClose: () => void }) {
   );
 }
 
-function CopyAddressButton({ address }: { address: string }) {
+// Generalized from "CopyAddressButton" — originally only ever copied the USDT crypto address,
+// now reused next to the bank account number and the "amount to transfer" figure too, so it takes
+// a generic value/label instead of being hardcoded to "address".
+function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(address);
+      await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard access can fail (permissions, insecure context) — nothing to recover into,
-      // the address is still visible to select and copy manually.
+      // the value is still visible to select and copy manually.
     }
   }
 
@@ -57,8 +61,8 @@ function CopyAddressButton({ address }: { address: string }) {
       type="button"
       onClick={handleCopy}
       className="shrink-0 rounded-md p-1 text-foreground/40 hover:bg-black/[.04] hover:text-foreground/70"
-      aria-label="Copy address"
-      title={copied ? "Copied!" : "Copy address"}
+      aria-label={label}
+      title={copied ? "Copied!" : label}
     >
       {copied ? (
         <span className="text-xs font-medium text-success-500">Copied!</span>
@@ -114,7 +118,7 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
         </div>
         <p className="text-xs text-foreground/50">
           Finish this payment on the secure page that opens next. Your wallet is credited
-          automatically once it's confirmed.
+          automatically once it&rsquo;s confirmed.
         </p>
         <a href={state.redirectUrl} target="_blank" rel="noopener noreferrer" className="self-start">
           <Button>Complete payment</Button>
@@ -177,6 +181,11 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
   const expiresAt = depositState.bankDetails?.expiresAt || depositState.cryptoAddress?.expiresAt;
   const secondsLeft = useCountdown(expiresAt);
   const expired = expiresAt ? secondsLeft <= 0 : false;
+
+  // Only NGN/GHS/KES have an entry at all (see limits.ts's own comment on why NGN/GHS are
+  // currently unset) — USDT never has a minimum here, so this is undefined for it.
+  const minimumDeposit = currency !== "USDT" ? FIAT_MINIMUM_DEPOSIT[currency] : undefined;
+  const belowMinimum = minimumDeposit != null && Number(amount) > 0 && Number(amount) < minimumDeposit;
 
   // Poll for this deposit resolving. checkDepositStatus checks Busha's own transfer status
   // directly on every call now — it doesn't just trust a webhook/cron to have updated our DB —
@@ -257,9 +266,12 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
           <p className="text-xs font-medium uppercase tracking-wide text-primary-700/70">
             Transfer exactly
           </p>
-          <p className="text-3xl font-bold text-primary-800">
-            {formatBalance(currency as Currency, Number(quoteState.amount))}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-3xl font-bold text-primary-800">
+              {formatBalance(currency as Currency, Number(quoteState.amount))}
+            </p>
+            <CopyButton value={String(quoteState.amount ?? "")} label="Copy amount" />
+          </div>
           {expiresAt && (
             <p className={`text-xs font-medium ${expired ? "text-danger-500" : "text-primary-700/70"}`}>
               {expired ? "Expired" : `Expires in ${formatCountdown(secondsLeft)}`}
@@ -267,17 +279,39 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
           )}
         </div>
 
+        {/* Mirrors Busha's own app: the gross transfer amount, the fee, and the net amount that
+            actually lands in the wallet, all shown together — previously only the gross "Transfer
+            exactly" figure above made it to this screen, the fee/net breakdown only ever appeared
+            briefly at the quote-preview step and was lost by the time a user got here. */}
         <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-          {[
-            { label: "Bank", value: bankName },
-            { label: "Account number", value: accountNumber },
-            { label: "Account name", value: accountName },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-sm text-foreground/60">{label}</dt>
-              <dd className="text-sm font-medium">{value}</dd>
-            </div>
-          ))}
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-foreground/60">Deposit fee</dt>
+            <dd className="text-sm font-medium">{formatBalance(currency as Currency, Number(quoteState.fee ?? 0))}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-foreground/60">You will receive</dt>
+            <dd className="text-sm font-semibold text-primary-700">
+              {formatBalance(currency as Currency, Number(quoteState.netAmount ?? 0))}
+            </dd>
+          </div>
+        </dl>
+
+        <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-foreground/60">Bank</dt>
+            <dd className="text-sm font-medium">{bankName}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-foreground/60">Account number</dt>
+            <dd className="flex items-center gap-1 text-sm font-medium">
+              {accountNumber}
+              <CopyButton value={accountNumber} label="Copy account number" />
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-foreground/60">Account name</dt>
+            <dd className="text-sm font-medium">{accountName}</dd>
+          </div>
         </dl>
         <p className="text-xs text-foreground/50">
           Your wallet is credited automatically once the transfer is confirmed — usually within a
@@ -303,7 +337,10 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
             <p className="text-xs font-medium uppercase tracking-wide text-primary-700/70">
               Send exactly
             </p>
-            <p className="text-3xl font-bold text-primary-800">{quoteState.amount} USDT</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-3xl font-bold text-primary-800">{quoteState.amount} USDT</p>
+              <CopyButton value={String(quoteState.amount ?? "")} label="Copy amount" />
+            </div>
             {expiresAt && (
               <p className={`text-xs font-medium ${expired ? "text-danger-500" : "text-primary-700/70"}`}>
                 {expired ? "Expired" : `Expires in ${formatCountdown(secondsLeft)}`}
@@ -320,11 +357,23 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
               <p className="text-sm text-foreground/60">Address</p>
               <div className="flex items-start gap-2">
                 <p className="break-all text-sm font-medium">{address}</p>
-                <CopyAddressButton address={address} />
+                <CopyButton value={address} label="Copy address" />
               </div>
             </div>
           </div>
         </div>
+
+        {/* Same fee/net breakdown as the fiat bank-transfer screen — mirrors Busha's own app. */}
+        <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-foreground/60">Deposit fee</dt>
+            <dd className="text-sm font-medium">{quoteState.fee ?? "0.00"} USDT</dd>
+          </div>
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-foreground/60">You will receive</dt>
+            <dd className="text-sm font-semibold text-primary-700">{quoteState.netAmount ?? "0.00"} USDT</dd>
+          </div>
+        </dl>
 
         <p className="text-xs font-medium text-danger-500">
           Only send USDT on the BSC (BNB Smart Chain) network. Sending via any other network may
@@ -389,8 +438,14 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
           <Button
             onClick={handleGetQuote}
             loading={isQuoting}
-            disabled={!amount || Number(amount) <= 0}
-            title={!amount || Number(amount) <= 0 ? "Enter an amount to continue" : undefined}
+            disabled={!amount || Number(amount) <= 0 || belowMinimum}
+            title={
+              !amount || Number(amount) <= 0
+                ? "Enter an amount to continue"
+                : belowMinimum
+                  ? `Minimum ${currency} deposit is ${minimumDeposit}`
+                  : undefined
+            }
             className="self-start"
           >
             Preview
@@ -402,6 +457,11 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
         )}
         {!quoteState.quoteId && (!amount || Number(amount) <= 0) && (
           <p className="text-xs text-foreground/50">Enter an amount to continue</p>
+        )}
+        {!quoteState.quoteId && belowMinimum && (
+          <p className="text-xs text-danger-500">
+            Minimum {currency} deposit is {formatBalance(currency as Currency, minimumDeposit!)}
+          </p>
         )}
       </div>
     </div>

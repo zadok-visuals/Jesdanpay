@@ -60,6 +60,9 @@ export function TransactionDetailModal({
         <dl className="-mx-1 divide-y divide-border">
           <Row label="Type" value={TYPE_LABELS[detail.type] ?? detail.type} />
           <Row label="Status" value={<Pill tone={statusTone(detail.status)}>{detail.status}</Pill>} />
+          {detail.status === "failed" && detail.rejectionReason && (
+            <Row label="Rejection reason" value={detail.rejectionReason} />
+          )}
           {detail.description && <Row label="Description" value={detail.description} />}
           {detail.reference && <Row label="Reference" value={detail.reference} />}
           {(() => {

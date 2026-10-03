@@ -59,6 +59,7 @@ export type Transaction = {
   target_amount: number | null;
   actual_target_amount: number | null;
   actual_rate_note: string | null;
+  rejection_reason: string | null;
   provider_reference: string | null;
   raw_target_amount: number | null;
   requires_extra_verification: boolean;
@@ -289,7 +290,7 @@ export type Database = {
         Returns: string;
       };
       admin_reject_rmb_transaction: {
-        Args: { p_transaction_id: string };
+        Args: { p_transaction_id: string; p_reason: string };
         Returns: undefined;
       };
       admin_complete_rmb_transaction: {

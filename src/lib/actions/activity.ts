@@ -22,6 +22,10 @@ export interface ActivityDetail {
   fee: number | null;
   reference: string | null;
   description: string | null;
+  // Set when an admin rejected this (currently only rmb_manual — see admin_reject_rmb_transaction,
+  // migration 0036, mirroring profiles.kyc_rejection_reason) so the user can see why, same as KYC
+  // rejection reasons are already surfaced on the KYC status page.
+  rejectionReason: string | null;
   // Only set for deposits where the amount actually confirmed on-chain (or via the payment
   // provider) differs from what was originally requested — see migration 0028.
   confirmedAmount: number | null;
@@ -85,6 +89,7 @@ export async function getActivityDetail(
         fee: null,
         reference: data.provider_reference,
         description: null,
+        rejectionReason: null,
         confirmedAmount: data.confirmed_amount,
         balanceAfter,
         isMostRecent,
@@ -115,6 +120,7 @@ export async function getActivityDetail(
         fee: null,
         reference: null,
         description: data.direction === "to_cny" ? "Converted to CNY" : "Converted from CNY",
+        rejectionReason: null,
         confirmedAmount: null,
         balanceAfter,
         isMostRecent,
@@ -183,6 +189,7 @@ export async function getActivityDetail(
       fee,
       reference: tx.provider_reference,
       description,
+      rejectionReason: tx.rejection_reason,
       confirmedAmount: null,
       balanceAfter,
       isMostRecent,

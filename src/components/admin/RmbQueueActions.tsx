@@ -37,6 +37,33 @@ function ActionButton({
   );
 }
 
+// Rejection requires a reason so the user actually learns what to fix (see the KYC rejection
+// pattern this mirrors, src/components/admin/KycQueueActions.tsx) — the button stays disabled
+// until something is typed, same as every other required-field gate in this app.
+function RejectAction({ transactionId }: { transactionId: string }) {
+  const [state, formAction, pending] = useActionState(rejectRmbTransaction, initialState);
+  const [reason, setReason] = useState("");
+
+  return (
+    <form action={formAction} className="flex flex-col items-end gap-1.5">
+      <input type="hidden" name="transactionId" value={transactionId} />
+      <input
+        type="text"
+        name="reason"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Reason for rejection (required)"
+        required
+        className="w-56 rounded-lg border border-border px-3 py-1.5 text-xs outline-none focus:border-primary-400"
+      />
+      <Button type="submit" size="sm" variant="danger" loading={pending} disabled={!reason.trim()}>
+        Reject
+      </Button>
+      {state.error && <p className="text-xs text-danger-500">{state.error}</p>}
+    </form>
+  );
+}
+
 function CompleteForm({ transactionId }: { transactionId: string }) {
   const [state, formAction, pending] = useActionState(completeRmbTransaction, initialState);
   const [open, setOpen] = useState(false);
@@ -104,12 +131,7 @@ export function RmbQueueActions({
         <ActionButton action={markRmbProcessing} transactionId={transactionId} label="Mark processing" />
       )}
       {status === "processing" && <CompleteForm transactionId={transactionId} />}
-      <ActionButton
-        action={rejectRmbTransaction}
-        transactionId={transactionId}
-        label="Reject"
-        variant="danger"
-      />
+      <RejectAction transactionId={transactionId} />
     </div>
   );
 }

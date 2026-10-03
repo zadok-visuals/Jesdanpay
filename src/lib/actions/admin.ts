@@ -62,10 +62,16 @@ export async function rejectRmbTransaction(
 ): Promise<AdminActionState> {
   await requireAdminUser();
   const transactionId = String(formData.get("transactionId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (!reason) {
+    return { error: "A rejection reason is required." };
+  }
 
   const admin = createAdminClient();
   const { error } = await admin.rpc("admin_reject_rmb_transaction", {
     p_transaction_id: transactionId,
+    p_reason: reason,
   });
 
   if (error) return { error: error.message };

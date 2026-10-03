@@ -13,6 +13,13 @@ function humanizeDocumentType(type: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+// "Oct 2, 2026" — short enough for the review list, matches the created_at style already used
+// elsewhere in the admin panel (admin/withdrawals, admin/rmb) just with the month abbreviated
+// instead of a full date+time string, since this is a list of submission dates, not timestamps.
+function formatSubmittedDate(createdAt: string): string {
+  return new Date(createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 export default async function AdminKycPage({ searchParams }: { searchParams: Promise<AdminSearchParams> }) {
   const admin = createAdminClient();
   const params = await searchParams;
@@ -84,6 +91,7 @@ export default async function AdminKycPage({ searchParams }: { searchParams: Pro
                     <span className="font-semibold">{profile.full_name || profile.email}</span>
                     <Pill tone="warning">{profile.kyc_type ?? "unknown"}</Pill>
                   </div>
+                  <p className="text-xs text-foreground/40">Submitted {formatSubmittedDate(profile.created_at)}</p>
                   <p className="text-xs text-foreground/50">
                     {docs.length} document{docs.length === 1 ? "" : "s"} submitted:
                   </p>

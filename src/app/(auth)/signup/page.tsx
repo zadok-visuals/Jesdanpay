@@ -88,6 +88,18 @@ export default function SignupPage() {
           <Button type="submit" loading={pending} className="mt-2 w-full">
             {pending ? "Creating account…" : "Sign up"}
           </Button>
+
+          <p className="text-center text-xs text-foreground/50">
+            By signing up, you agree to our{" "}
+            <Link href="/terms" className="font-medium text-primary-600 hover:underline">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="font-medium text-primary-600 hover:underline">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </form>
 
         <p className="mt-6 text-center text-sm text-foreground/60">

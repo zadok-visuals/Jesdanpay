@@ -63,11 +63,19 @@ export function MarketingFooter() {
           </div>
         </div>
 
-        <div className="mt-10 border-t border-primary-900/10 pt-6">
+        <div className="mt-10 flex flex-col gap-3 border-t border-primary-900/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-relaxed text-primary-900/40">
             © {new Date().getFullYear()} JesDanPay. All transfers are subject to identity
             verification and the regulatory requirements applicable in each market served.
           </p>
+          <div className="flex shrink-0 gap-4 text-xs font-medium text-primary-900/50">
+            <Link href="/privacy" className="hover:text-primary-900 hover:underline">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="hover:text-primary-900 hover:underline">
+              Terms &amp; Conditions
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

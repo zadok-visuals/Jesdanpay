@@ -4,14 +4,17 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import type { Notification } from "@/lib/types/database";
 
 export function DashboardChrome({
   name,
   isAdmin = false,
+  notifications = [],
   children,
 }: {
   name: string;
   isAdmin?: boolean;
+  notifications?: Notification[];
   children: React.ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -41,7 +44,7 @@ export function DashboardChrome({
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-        <Topbar name={name} onMenuClick={() => setDrawerOpen(true)} />
+        <Topbar name={name} onMenuClick={() => setDrawerOpen(true)} notifications={notifications} />
         <main className="flex-1 bg-background p-4 sm:p-6">{children}</main>
       </div>
     </div>

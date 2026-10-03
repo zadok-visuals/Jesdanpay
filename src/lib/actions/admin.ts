@@ -252,3 +252,37 @@ export async function setSupplierRate(
   revalidatePath("/admin/pnl");
   return {};
 }
+
+export async function sendNotification(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  await requireAdminUser();
+
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const target = String(formData.get("target") ?? "all");
+  const userEmail = String(formData.get("userEmail") ?? "").trim();
+
+  if (!title || !body) {
+    return { error: "Title and body are required." };
+  }
+
+  const admin = createAdminClient();
+  let userId: string | null = null;
+
+  if (target === "user") {
+    if (!userEmail) return { error: "Enter the recipient's email." };
+    const { data: profile } = await admin.from("profiles").select("id").ilike("email", userEmail).maybeSingle();
+    if (!profile) return { error: "No user found with that email." };
+    userId = profile.id;
+  }
+
+  // user_id left null for a broadcast (target === "all") — every signed-in user's own RLS policy
+  // (migration 0037) already lets them read a null-user_id row, no separate fan-out insert needed.
+  const { error } = await admin.from("notifications").insert({ user_id: userId, title, body });
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/notifications");
+  return {};
+}

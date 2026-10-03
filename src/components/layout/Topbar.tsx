@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { NotificationBell } from "@/components/layout/NotificationBell";
+import type { Notification } from "@/lib/types/database";
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/);
@@ -11,9 +13,10 @@ function initials(name: string) {
 interface TopbarProps {
   name: string;
   onMenuClick?: () => void;
+  notifications?: Notification[];
 }
 
-export function Topbar({ name, onMenuClick }: TopbarProps) {
+export function Topbar({ name, onMenuClick, notifications = [] }: TopbarProps) {
   return (
     <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
@@ -33,6 +36,7 @@ export function Topbar({ name, onMenuClick }: TopbarProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+        <NotificationBell notifications={notifications} />
         <Link
           href="/settings"
           aria-label="Settings"

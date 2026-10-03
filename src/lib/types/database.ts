@@ -188,6 +188,17 @@ export type WithdrawalPin = {
   updated_at: string;
 };
 
+// user_id null = broadcast to every user; a real id = targeted at just that user. See migration
+// 0037's header comment for the known shared-read-state tradeoff on broadcast rows.
+export type Notification = {
+  id: string;
+  user_id: string | null;
+  title: string;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+};
+
 export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13";
@@ -280,6 +291,12 @@ export type Database = {
         Row: WithdrawalPin;
         Insert: Partial<WithdrawalPin> & Pick<WithdrawalPin, "user_id" | "pin_hash">;
         Update: Partial<WithdrawalPin>;
+        Relationships: [];
+      };
+      notifications: {
+        Row: Notification;
+        Insert: Partial<Notification> & Pick<Notification, "title" | "body">;
+        Update: Partial<Notification>;
         Relationships: [];
       };
     };

@@ -94,8 +94,9 @@ export default async function SettingsPage() {
         <Card className="p-6">
           <h2 className="mb-1 text-base font-semibold">Notifications & security</h2>
           <p className="text-sm text-foreground/50">
-            Notification preferences, password changes, and two-factor authentication are coming
-            in a later update.
+            Your notifications — including anything the team sends you — are available any time
+            from the bell icon in the top bar. Password changes and two-factor authentication are
+            coming in a later update.
           </p>
         </Card>
       </div>

@@ -1,4 +1,4 @@
-type PillTone = "success" | "danger" | "warning" | "neutral";
+export type PillTone = "success" | "danger" | "warning" | "neutral";
 
 const toneClasses: Record<PillTone, string> = {
   success: "bg-success-50 text-success-500",

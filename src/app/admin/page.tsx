@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
-import { Pill } from "@/components/ui/Pill";
+import { Pill, type PillTone } from "@/components/ui/Pill";
 
 async function countActive(
   admin: ReturnType<typeof createAdminClient>,
@@ -18,13 +18,15 @@ async function countActive(
 export default async function AdminIndexPage() {
   const admin = createAdminClient();
 
-  const [{ count: kycCount }, rmbCount, withdrawalCount] = await Promise.all([
+  const [{ count: kycCount }, rmbCount, withdrawalCount, { count: totalUsers }] = await Promise.all([
     admin.from("profiles").select("*", { count: "exact", head: true }).eq("kyc_status", "pending"),
     countActive(admin, "rmb_manual"),
     countActive(admin, "withdrawal"),
+    admin.from("profiles").select("*", { count: "exact", head: true }),
   ]);
 
-  const cards = [
+  const cards: { href: string; label: string; count: number | null; description: string; tone?: PillTone }[] = [
+    { href: "/admin/users", label: "Total Users", count: totalUsers ?? 0, description: "All registered profiles", tone: "neutral" },
     { href: "/admin/kyc", label: "KYC Review", count: kycCount ?? 0, description: "Pending identity verifications" },
     { href: "/admin/rmb", label: "CNY Exchange Queue", count: rmbCount, description: "Pending & processing RMB manual transfers" },
     { href: "/admin/withdrawals", label: "Withdrawal Requests", count: withdrawalCount, description: "Pending & processing payouts" },
@@ -41,7 +43,7 @@ export default async function AdminIndexPage() {
             <Card className="flex h-full flex-col gap-2 p-5 transition-colors hover:border-primary-300">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="font-semibold">{card.label}</h2>
-                {card.count != null && card.count > 0 && <Pill tone="warning">{card.count}</Pill>}
+                {card.count != null && card.count > 0 && <Pill tone={card.tone ?? "warning"}>{card.count}</Pill>}
               </div>
               <p className="text-xs text-foreground/50">{card.description}</p>
             </Card>

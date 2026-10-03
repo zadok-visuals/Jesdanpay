@@ -2,16 +2,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { KycQueueActions } from "@/components/admin/KycQueueActions";
+import { KycDocumentList } from "@/components/admin/KycDocumentList";
 import { QueueFilters } from "@/components/admin/QueueFilters";
 import { Pagination } from "@/components/admin/Pagination";
 import { resolveUserIdsByEmail } from "@/lib/admin/search";
 import { ADMIN_PAGE_SIZE, pageRange, parsePageParam, parseStringParam, type AdminSearchParams } from "@/lib/admin/pagination";
-
-// "bvn_or_nin" -> "Bvn or nin" — good enough for an internal admin label, no lookup table needed.
-function humanizeDocumentType(type: string): string {
-  const spaced = type.replace(/_/g, " ");
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
 
 // "Oct 2, 2026" — short enough for the review list, matches the created_at style already used
 // elsewhere in the admin panel (admin/withdrawals, admin/rmb) just with the month abbreviated
@@ -95,36 +90,7 @@ export default async function AdminKycPage({ searchParams }: { searchParams: Pro
                   <p className="text-xs text-foreground/50">
                     {docs.length} document{docs.length === 1 ? "" : "s"} submitted:
                   </p>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                    {docs.length === 0 && <span className="text-foreground/50">—</span>}
-                    {docs.map((d) => {
-                      const url = d.file_ref ? signedUrlByRef.get(d.file_ref) : undefined;
-                      if (url) {
-                        return (
-                          <a
-                            key={d.id}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-medium text-primary-600 hover:underline"
-                          >
-                            {d.document_type} — View document
-                          </a>
-                        );
-                      }
-                      // BUG: a kyc_documents row with no file_ref (phone_number, bvn_or_nin, tin,
-                      // ownership_structure — see src/lib/actions/kyc.ts) stores its actual
-                      // submitted value in the `value` column, but this only ever rendered the
-                      // document_type label — an admin reviewing KYC could see that a BVN/phone
-                      // number was submitted, never the actual number to verify against.
-                      return (
-                        <span key={d.id} className="text-foreground/60">
-                          {humanizeDocumentType(d.document_type)}
-                          {d.value != null ? `: ${d.value}` : ""}
-                        </span>
-                      );
-                    })}
-                  </div>
+                  <KycDocumentList docs={docs} signedUrlByRef={signedUrlByRef} />
                 </div>
                 <KycQueueActions userId={profile.id} />
               </Card>

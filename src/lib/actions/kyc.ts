@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { sendKycSubmissionAlert } from "@/lib/email";
 
 export interface KycActionState {
   error?: string;
@@ -83,6 +84,12 @@ export async function submitIndividualKyc(
     return { error: err instanceof Error ? err.message : "Something went wrong. Please try again." };
   }
 
+  // Best-effort — see sendKycSubmissionAlert's own header comment for why this never throws.
+  await sendKycSubmissionAlert({
+    userName: (user.user_metadata?.full_name as string | undefined) ?? user.email ?? "A user",
+    userEmail: user.email ?? "unknown",
+  });
+
   redirect("/onboarding/kyc/status");
 }
 
@@ -149,6 +156,12 @@ export async function submitBusinessKyc(
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Something went wrong. Please try again." };
   }
+
+  // Best-effort — see sendKycSubmissionAlert's own header comment for why this never throws.
+  await sendKycSubmissionAlert({
+    userName: businessName || (user.user_metadata?.full_name as string | undefined) || user.email || "A user",
+    userEmail: user.email ?? "unknown",
+  });
 
   redirect("/onboarding/kyc/status");
 }

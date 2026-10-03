@@ -1,7 +1,21 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
+import { requireAdminUser, getAdminRole } from "@/lib/auth/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
 import { Pill, type PillTone } from "@/components/ui/Pill";
+import {
+  UsersIcon,
+  ShieldCheckIcon,
+  ExchangeIcon,
+  WithdrawIcon,
+  TagIcon,
+  ChartBarIcon,
+  TrendingUpIcon,
+  ClockIcon,
+  PieChartIcon,
+  AdminIcon,
+} from "@/components/layout/NavIcons";
 import { formatBalance } from "@/lib/currency";
 import { sumByCurrency } from "@/lib/admin/aggregate";
 import type { Currency } from "@/lib/types/database";
@@ -43,11 +57,77 @@ function CurrencyStatRows({ totals }: { totals: Map<string, number> }) {
   );
 }
 
+// Three soft accents, all within the app's existing green/gold/neutral palette (no new colors) —
+// amber for things waiting on an admin, green for money, neutral for general overview stats.
+type Accent = "amber" | "green" | "neutral";
+
+const ACCENT_CLASSES: Record<Accent, string> = {
+  amber: "bg-accent-100 text-accent-700",
+  green: "bg-primary-100 text-primary-700",
+  neutral: "bg-black/[.05] text-foreground/60",
+};
+
+function SectionHeader({ children }: { children: ReactNode }) {
+  return <h2 className="mb-3 text-sm font-semibold text-foreground/60">{children}</h2>;
+}
+
+function StatCard({
+  href,
+  icon,
+  accent,
+  title,
+  count,
+  tone,
+  description,
+  children,
+}: {
+  href?: string;
+  icon: ReactNode;
+  accent: Accent;
+  title: string;
+  count?: number | null;
+  tone?: PillTone;
+  description?: string;
+  children?: ReactNode;
+}) {
+  const body = (
+    <Card className={`flex h-full flex-col gap-3 p-5 ${href ? "transition-colors hover:border-primary-300" : ""}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${ACCENT_CLASSES[accent]}`}>
+            {icon}
+          </div>
+          <h3 className="font-semibold">{title}</h3>
+        </div>
+        {count != null && count > 0 && <Pill tone={tone ?? "warning"}>{count}</Pill>}
+      </div>
+      {description && <p className="text-xs text-foreground/50">{description}</p>}
+      {children}
+    </Card>
+  );
+
+  return href ? <Link href={href}>{body}</Link> : body;
+}
+
+function QuickActionTile({ href, icon, label }: { href: string; icon: ReactNode; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-semibold transition-colors hover:border-primary-300 hover:bg-primary-50"
+    >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">{icon}</div>
+      {label}
+    </Link>
+  );
+}
+
 export default async function AdminIndexPage() {
+  const adminUser = await requireAdminUser();
   const admin = createAdminClient();
   const last24h = last24hCutoffIso();
 
   const [
+    role,
     { count: kycCount },
     rmbCount,
     withdrawalCount,
@@ -59,6 +139,7 @@ export default async function AdminIndexPage() {
     pendingKyc,
     rejectedKyc,
   ] = await Promise.all([
+    getAdminRole(adminUser.id, adminUser.email),
     admin.from("profiles").select("*", { count: "exact", head: true }).eq("kyc_status", "pending"),
     countActive(admin, "rmb_manual"),
     countActive(admin, "withdrawal"),
@@ -79,68 +160,112 @@ export default async function AdminIndexPage() {
   const last24hTotals = sumByCurrency(last24hTransactions ?? [], (t) => t.currency, (t) => t.amount);
   const last24hCount = last24hTransactions?.length ?? 0;
 
-  const cards: { href: string; label: string; count: number | null; description: string; tone?: PillTone }[] = [
-    { href: "/admin/users", label: "Total Users", count: totalUsers ?? 0, description: "All registered profiles", tone: "neutral" },
-    { href: "/admin/kyc", label: "KYC Review", count: kycCount ?? 0, description: "Pending identity verifications" },
-    { href: "/admin/rmb", label: "CNY Exchange Queue", count: rmbCount, description: "Pending & processing RMB manual transfers" },
-    { href: "/admin/withdrawals", label: "Withdrawal Requests", count: withdrawalCount, description: "Pending & processing payouts" },
-    { href: "/admin/rates", label: "Rates & Markup", count: null, description: "CNY tier rates, margin, and revenue collected" },
-    { href: "/admin/pnl", label: "PNL", count: null, description: "Realized margin vs. supplier cost" },
-  ];
-
   return (
     <div>
       <h1 className="mb-6 text-xl font-semibold">Admin Dashboard</h1>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((card) => (
-          <Link key={card.href} href={card.href}>
-            <Card className="flex h-full flex-col gap-2 p-5 transition-colors hover:border-primary-300">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="font-semibold">{card.label}</h2>
-                {card.count != null && card.count > 0 && <Pill tone={card.tone ?? "warning"}>{card.count}</Pill>}
+
+      <div className="mb-8 flex flex-wrap gap-3">
+        <QuickActionTile href="/admin/kyc" icon={<ShieldCheckIcon className="h-[18px] w-[18px]" />} label="KYC Review" />
+        <QuickActionTile href="/admin/rmb" icon={<ExchangeIcon className="h-[18px] w-[18px]" />} label="RMB Queue" />
+        <QuickActionTile href="/admin/withdrawals" icon={<WithdrawIcon className="h-[18px] w-[18px]" />} label="Withdrawals" />
+        {role === "super_admin" && (
+          <QuickActionTile href="/admin/administrators" icon={<AdminIcon className="h-[18px] w-[18px]" />} label="Administrators" />
+        )}
+      </div>
+
+      <section className="mb-8">
+        <SectionHeader>Needs attention</SectionHeader>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            href="/admin/kyc"
+            icon={<ShieldCheckIcon className="h-[18px] w-[18px]" />}
+            accent="amber"
+            title="KYC Review"
+            count={kycCount}
+            description="Pending identity verifications"
+          />
+          <StatCard
+            href="/admin/rmb"
+            icon={<ExchangeIcon className="h-[18px] w-[18px]" />}
+            accent="amber"
+            title="CNY Exchange Queue"
+            count={rmbCount}
+            description="Pending & processing RMB manual transfers"
+          />
+          <StatCard
+            href="/admin/withdrawals"
+            icon={<WithdrawIcon className="h-[18px] w-[18px]" />}
+            accent="amber"
+            title="Withdrawal Requests"
+            count={withdrawalCount}
+            description="Pending & processing payouts"
+          />
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <SectionHeader>Financials</SectionHeader>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <StatCard icon={<ChartBarIcon className="h-[18px] w-[18px]" />} accent="green" title="Total volume (completed transactions)">
+            <CurrencyStatRows totals={volumeTotals} />
+          </StatCard>
+          <StatCard icon={<TagIcon className="h-[18px] w-[18px]" />} accent="green" title="Wallet balances currently held">
+            <CurrencyStatRows totals={balanceTotals} />
+          </StatCard>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <StatCard
+            href="/admin/rates"
+            icon={<TagIcon className="h-[18px] w-[18px]" />}
+            accent="green"
+            title="Rates & Markup"
+            description="CNY tier rates, margin, and revenue collected"
+          />
+          <StatCard
+            href="/admin/pnl"
+            icon={<TrendingUpIcon className="h-[18px] w-[18px]" />}
+            accent="green"
+            title="PNL"
+            description="Realized margin vs. supplier cost"
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionHeader>Overview</SectionHeader>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            href="/admin/users"
+            icon={<UsersIcon className="h-[18px] w-[18px]" />}
+            accent="neutral"
+            title="Total Users"
+            description="All registered profiles"
+          >
+            <p className="text-2xl font-bold">{totalUsers ?? 0}</p>
+          </StatCard>
+          <StatCard icon={<ClockIcon className="h-[18px] w-[18px]" />} accent="neutral" title="Last 24 hours">
+            <p className="text-2xl font-bold">{last24hCount}</p>
+            <p className="-mt-2 mb-1 text-xs text-foreground/50">transaction{last24hCount === 1 ? "" : "s"}</p>
+            <CurrencyStatRows totals={last24hTotals} />
+          </StatCard>
+          <StatCard icon={<PieChartIcon className="h-[18px] w-[18px]" />} accent="neutral" title="KYC approval rate">
+            <div className="flex flex-col gap-1.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-foreground/50">Approved</span>
+                <span className="font-medium">{approvedKyc}</span>
               </div>
-              <p className="text-xs text-foreground/50">{card.description}</p>
-            </Card>
-          </Link>
-        ))}
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold">Total volume (completed transactions)</h2>
-          <CurrencyStatRows totals={volumeTotals} />
-        </Card>
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold">Wallet balances currently held</h2>
-          <CurrencyStatRows totals={balanceTotals} />
-        </Card>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold">Last 24 hours</h2>
-          <p className="text-2xl font-bold">{last24hCount}</p>
-          <p className="mb-3 text-xs text-foreground/50">transaction{last24hCount === 1 ? "" : "s"}</p>
-          <CurrencyStatRows totals={last24hTotals} />
-        </Card>
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold">KYC approval rate</h2>
-          <div className="flex flex-col gap-1.5 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-foreground/50">Approved</span>
-              <span className="font-medium">{approvedKyc}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-foreground/50">Pending</span>
+                <span className="font-medium">{pendingKyc}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-foreground/50">Rejected</span>
+                <span className="font-medium">{rejectedKyc}</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-foreground/50">Pending</span>
-              <span className="font-medium">{pendingKyc}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-foreground/50">Rejected</span>
-              <span className="font-medium">{rejectedKyc}</span>
-            </div>
-          </div>
-        </Card>
-      </div>
+          </StatCard>
+        </div>
+      </section>
     </div>
   );
 }

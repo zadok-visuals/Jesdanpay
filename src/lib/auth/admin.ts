@@ -43,28 +43,28 @@ export async function getAdminRole(userId: string, email: string | null | undefi
   return null;
 }
 
-function assertAdminEmail(user: { email?: string | null } | null): asserts user is { email: string } {
-  if (!user) redirect("/login");
-  if (!user.email || !adminEmails().includes(user.email.toLowerCase())) {
-    redirect("/home");
-  }
-}
-
 // Lighter gate used ONLY by the MFA enrollment/challenge pages themselves
-// (src/app/admin-mfa/*) — checks the ADMIN_EMAILS allowlist but deliberately skips the AAL/factor
-// check below, since those pages are how an admin GETS to aal2 in the first place. They live
-// outside src/app/admin/ specifically so they never inherit admin/layout.tsx's own
-// requireAdminUser() call — nesting them under /admin would re-trigger the full check on the very
-// page meant to satisfy it, an infinite redirect loop. Deliberately still the raw env var check,
-// not admin_users — these pages only need "is this person plausibly an admin at all", and staying
-// on the simpler check avoids a second place that needs to agree with getAdminRole's fallback
-// logic.
+// (src/app/admin-mfa/*) — checks getAdminRole (admin_users, or the ADMIN_EMAILS fallback) but
+// deliberately skips the AAL/factor check below, since those pages are how an admin GETS to aal2
+// in the first place. They live outside src/app/admin/ specifically so they never inherit
+// admin/layout.tsx's own requireAdminUser() call — nesting them under /admin would re-trigger the
+// full check on the very page meant to satisfy it, an infinite redirect loop.
+//
+// MUST use the same role resolution as requireAdminUser(), not just the raw ADMIN_EMAILS allowlist
+// — an admin added only through the Administrators screen (admin_users, never listed in
+// ADMIN_EMAILS at all) would otherwise pass requireAdminUser()'s role check, get redirected here to
+// enroll, and then immediately get bounced to /home by a stricter check on this page alone.
+// Confirmed live: exactly this happened before this was fixed.
 export async function requireAdminEmailOnly(): Promise<User> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  assertAdminEmail(user);
+  if (!user) redirect("/login");
+
+  const role = await getAdminRole(user.id, user.email);
+  if (!role) redirect("/home");
+
   return user;
 }
 

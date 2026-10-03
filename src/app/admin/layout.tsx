@@ -43,7 +43,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Admin
           </span>
         </div>
-        <LogoutButton className="inline-flex items-center gap-1.5 text-sm font-medium text-danger-500 hover:underline" />
+        <div className="flex items-center gap-4">
+          <a href="/admin-mfa/enroll" className="text-sm font-medium text-foreground/60 hover:text-foreground hover:underline">
+            Security
+          </a>
+          <LogoutButton className="inline-flex items-center gap-1.5 text-sm font-medium text-danger-500 hover:underline" />
+        </div>
       </header>
       <AdminNavTabs />
       <main className="p-6">{children}</main>

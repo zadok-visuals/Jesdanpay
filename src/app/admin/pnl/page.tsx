@@ -92,6 +92,20 @@ export default async function AdminPnlPage({ searchParams }: { searchParams: Pro
     pnlByPair.set(key, entry);
   }
 
+  // One row per underlying order feeding the aggregate above — same base/quote/volume/rate math,
+  // just kept per-row instead of folded into the pnlByPair totals. buyRate is whatever rateAt
+  // resolved for THIS order's own created_at (null when no supplier rate was on file yet, same
+  // "skipped" condition as the aggregate).
+  interface PerOrderRow {
+    createdAt: string;
+    base: string;
+    quote: string;
+    baseVolume: number;
+    customerRate: number;
+    buyRate: number | null;
+  }
+  const perOrderRows: PerOrderRow[] = [];
+
   for (const row of cnyConversions ?? []) {
     const isFromCny = row.from_currency === "CNY";
     const base = isFromCny ? row.to_currency : row.from_currency;
@@ -100,6 +114,7 @@ export default async function AdminPnlPage({ searchParams }: { searchParams: Pro
     const customerRate = isFromCny ? row.from_amount / row.to_amount : row.to_amount / row.from_amount;
     const baseVolume = isFromCny ? row.to_amount : row.from_amount;
     const supplierRate = rateAt(rates, base, quote, row.created_at);
+    perOrderRows.push({ createdAt: row.created_at, base, quote, baseVolume, customerRate, buyRate: supplierRate });
     if (supplierRate == null) {
       skipPair(base, quote);
       continue;
@@ -116,12 +131,15 @@ export default async function AdminPnlPage({ searchParams }: { searchParams: Pro
     const customerRate = isSourceUsdt ? row.target_amount / row.amount : row.amount / row.target_amount;
     const baseVolume = isSourceUsdt ? row.amount : row.target_amount;
     const supplierRate = rateAt(rates, base, quote, row.created_at);
+    perOrderRows.push({ createdAt: row.created_at, base, quote, baseVolume, customerRate, buyRate: supplierRate });
     if (supplierRate == null) {
       skipPair(base, quote);
       continue;
     }
     addPnl(base, quote, (customerRate - supplierRate) * baseVolume, baseVolume);
   }
+
+  perOrderRows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   const pairResults = ALL_PAIRS.map(({ base, quote }) => pnlByPair.get(pairKey(base, quote)) ?? { base, quote, pnl: 0, volume: 0, skipped: 0 });
   const totalsByQuote = new Map<string, number>();
@@ -190,6 +208,49 @@ export default async function AdminPnlPage({ searchParams }: { searchParams: Pro
             </tbody>
           </table>
         </Card>
+
+        <details className="mt-4 group">
+          <summary className="cursor-pointer list-none text-sm font-medium text-primary-600 hover:underline">
+            <span className="group-open:hidden">Show per-order breakdown ({perOrderRows.length})</span>
+            <span className="hidden group-open:inline">Hide per-order breakdown</span>
+          </summary>
+          <Card className="mt-3 overflow-x-auto p-5">
+            {perOrderRows.length === 0 ? (
+              <p className="text-sm text-foreground/50">No orders in this period.</p>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-xs uppercase tracking-wide text-foreground/40">
+                    <th className="py-2 pr-4 font-medium">Date</th>
+                    <th className="py-2 pr-4 font-medium">Pair</th>
+                    <th className="py-2 pr-4 font-medium">Amount (base)</th>
+                    <th className="py-2 pr-4 font-medium">Customer rate</th>
+                    <th className="py-2 pr-4 font-medium">Buy rate used</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perOrderRows.map((r, i) => (
+                    <tr key={i} className="border-b border-border last:border-0">
+                      <td className="py-2 pr-4 text-foreground/60">{new Date(r.createdAt).toLocaleString()}</td>
+                      <td className="py-2 pr-4 font-semibold">
+                        {r.base}/{r.quote}
+                      </td>
+                      <td className="py-2 pr-4">{formatBalance(r.base as Currency, r.baseVolume)}</td>
+                      <td className="py-2 pr-4">{r.customerRate.toLocaleString("en-US", { maximumFractionDigits: 6 })}</td>
+                      <td className="py-2 pr-4">
+                        {r.buyRate == null ? (
+                          <span className="text-foreground/40">No rate on file</span>
+                        ) : (
+                          r.buyRate.toLocaleString("en-US", { maximumFractionDigits: 6 })
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        </details>
       </section>
 
       <section>

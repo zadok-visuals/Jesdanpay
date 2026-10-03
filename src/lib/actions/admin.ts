@@ -389,3 +389,39 @@ export async function removeAdmin(_prevState: RemoveAdminState, formData: FormDa
   revalidatePath("/admin/administrators");
   return {};
 }
+
+export async function suspendUser(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  await requireAdminUser();
+
+  const userId = String(formData.get("userId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!userId) return { error: "Missing user." };
+  if (!reason) return { error: "A suspension reason is required." };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("profiles")
+    .update({ suspended_at: new Date().toISOString(), suspension_reason: reason })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/users/${userId}`);
+  return {};
+}
+
+export async function releaseUser(_prevState: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  await requireAdminUser();
+
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) return { error: "Missing user." };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("profiles")
+    .update({ suspended_at: null, suspension_reason: null })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/users/${userId}`);
+  return {};
+}

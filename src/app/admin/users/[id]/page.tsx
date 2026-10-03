@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
 import { Pill, statusTone } from "@/components/ui/Pill";
 import { KycDocumentList } from "@/components/admin/KycDocumentList";
+import { SuspendUserActions } from "@/components/admin/SuspendUserActions";
 import { formatBalance } from "@/lib/currency";
 import { COUNTRIES } from "@/lib/countries";
 import { sumByCurrency } from "@/lib/admin/aggregate";
@@ -40,7 +41,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("id, email, full_name, business_name, phone, country, kyc_type, kyc_status, kyc_rejection_reason, created_at")
+    .select(
+      "id, email, full_name, business_name, phone, country, kyc_type, kyc_status, kyc_rejection_reason, suspended_at, suspension_reason, created_at",
+    )
     .eq("id", id)
     .maybeSingle();
   if (!profile) notFound();
@@ -74,10 +77,14 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
       </div>
 
       <Card className="p-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold">{profile.full_name || profile.email}</h1>
-          <Pill tone={statusTone(profile.kyc_status)}>{profile.kyc_status}</Pill>
-          {profile.kyc_type && <Pill tone="neutral">{profile.kyc_type}</Pill>}
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl font-semibold">{profile.full_name || profile.email}</h1>
+            <Pill tone={statusTone(profile.kyc_status)}>{profile.kyc_status}</Pill>
+            {profile.kyc_type && <Pill tone="neutral">{profile.kyc_type}</Pill>}
+            {profile.suspended_at && <Pill tone="danger">suspended</Pill>}
+          </div>
+          <SuspendUserActions userId={profile.id} suspended={!!profile.suspended_at} />
         </div>
         <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <p>
@@ -100,6 +107,13 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
           {profile.kyc_status === "rejected" && profile.kyc_rejection_reason && (
             <p className="sm:col-span-2">
               <span className="text-foreground/50">Rejection reason:</span> {profile.kyc_rejection_reason}
+            </p>
+          )}
+          {profile.suspended_at && (
+            <p className="sm:col-span-2">
+              <span className="text-foreground/50">Suspended:</span>{" "}
+              {new Date(profile.suspended_at).toLocaleString()}
+              {profile.suspension_reason && ` — ${profile.suspension_reason}`}
             </p>
           )}
         </div>

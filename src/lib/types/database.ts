@@ -26,6 +26,8 @@ export type Profile = {
   kyc_status: KycStatus;
   kyc_rejection_reason: string | null;
   country: CountryCode | null;
+  suspended_at: string | null;
+  suspension_reason: string | null;
   created_at: string;
 };
 

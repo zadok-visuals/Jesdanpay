@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { NotificationBell } from "@/components/layout/NotificationBell";
+import { ChatSupportButton } from "@/components/layout/ChatSupportButton";
 import type { Notification } from "@/lib/types/database";
 
 function initials(name: string) {
@@ -37,6 +38,7 @@ export function Topbar({ name, onMenuClick, notifications = [] }: TopbarProps) {
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         <NotificationBell notifications={notifications} />
+        <ChatSupportButton />
         <Link
           href="/settings"
           aria-label="Settings"

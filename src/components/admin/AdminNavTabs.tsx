@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { AdminRole } from "@/lib/types/database";
 
 const TABS = [
   { href: "/admin", label: "Dashboard" },
@@ -12,14 +13,19 @@ const TABS = [
   { href: "/admin/rates", label: "Rates" },
   { href: "/admin/pnl", label: "PNL" },
   { href: "/admin/notifications", label: "Notifications" },
+  { href: "/admin/chat", label: "Chat Support" },
 ] as const;
 
-export function AdminNavTabs() {
+// role is passed down from admin/layout.tsx (already fetched there for requireAdminUser's own
+// check) — Administrators only ever renders for a super_admin, never a plain admin, since that
+// screen can add/remove admin access entirely.
+export function AdminNavTabs({ role }: { role: AdminRole | null }) {
   const pathname = usePathname();
+  const tabs = role === "super_admin" ? [...TABS, { href: "/admin/administrators", label: "Administrators" }] : TABS;
 
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-border bg-surface px-6 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {TABS.map(({ href, label }) => {
+      {tabs.map(({ href, label }) => {
         const active = href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
         return (
           <Link

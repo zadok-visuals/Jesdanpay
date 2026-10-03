@@ -31,17 +31,30 @@ function LogoutSubmitButton({
   );
 }
 
-// Owns its own <form action={logOut}> internally (previously the caller wrapped it) so it can gate
+// Owns its own <form action={action}> internally (previously the caller wrapped it) so it can gate
 // submission behind a confirm dialog — the button is type="button", not type="submit", and confirm
-// triggers the real submission via formRef.requestSubmit(). No toast here: logOut redirects
-// immediately via redirect(), so there's no post-completion moment on this page to toast on.
-export function LogoutButton({ className, icon }: { className: string; icon?: ReactNode }) {
+// triggers the real submission via formRef.requestSubmit(). No toast here: both logOut and
+// adminLogOut redirect immediately via redirect(), so there's no post-completion moment on this
+// page to toast on.
+//
+// `action` defaults to the regular logOut — the admin panel (src/app/admin/layout.tsx) passes
+// adminLogOut instead, which additionally logs a sign_out row (migration 0038) before signing out,
+// so this needs no awareness of admin-specific logging itself.
+export function LogoutButton({
+  className,
+  icon,
+  action = logOut,
+}: {
+  className: string;
+  icon?: ReactNode;
+  action?: () => Promise<void>;
+}) {
   const formRef = useRef<HTMLFormElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
     <>
-      <form action={logOut} ref={formRef}>
+      <form action={action} ref={formRef}>
         <LogoutSubmitButton className={className} icon={icon} onClick={() => setConfirmOpen(true)} />
       </form>
       <ConfirmDialog

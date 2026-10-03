@@ -1,9 +1,12 @@
 "use server";
 
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { requireAdminUser, requireSuperAdmin } from "@/lib/auth/admin";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Currency } from "@/lib/types/database";
+import type { AdminRole, Currency } from "@/lib/types/database";
 
 export interface AdminActionState {
   error?: string;
@@ -284,5 +287,105 @@ export async function sendNotification(
   if (error) return { error: error.message };
 
   revalidatePath("/admin/notifications");
+  return {};
+}
+
+// Short-lived, admin-scoped cookie so a sign_in row is only logged once per browser session, not
+// on every admin page navigation — src/components/admin/AdminSessionLogger.tsx fires this once on
+// mount from the persistent admin layout.
+const ADMIN_SESSION_COOKIE = "jdp_admin_session_logged";
+
+export async function logAdminSignInIfNeeded(): Promise<void> {
+  const user = await requireAdminUser();
+  const cookieStore = await cookies();
+  if (cookieStore.get(ADMIN_SESSION_COOKIE)) return;
+
+  const admin = createAdminClient();
+  const { data: adminUserRow } = await admin.from("admin_users").select("id").eq("id", user.id).maybeSingle();
+  // No admin_users row at all means this admin only exists via the ADMIN_EMAILS fallback (see
+  // getAdminRole) — nothing to attribute a log row to, so just skip logging rather than erroring.
+  if (adminUserRow) {
+    await admin.from("admin_login_log").insert({ admin_user_id: adminUserRow.id, event: "sign_in" });
+  }
+  cookieStore.set(ADMIN_SESSION_COOKIE, "1", { httpOnly: true, maxAge: 60 * 60 * 12, path: "/admin" });
+}
+
+// Same shape as src/lib/actions/auth.ts's logOut(), plus a sign_out log row — used by
+// LogoutButton ONLY when rendered from within the admin panel (src/app/admin/layout.tsx passes
+// this as its `action` prop instead of the default logOut).
+export async function adminLogOut(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    const admin = createAdminClient();
+    const { data: adminUserRow } = await admin.from("admin_users").select("id").eq("id", user.id).maybeSingle();
+    if (adminUserRow) {
+      await admin.from("admin_login_log").insert({ admin_user_id: adminUserRow.id, event: "sign_out" });
+    }
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.delete(ADMIN_SESSION_COOKIE);
+  await supabase.auth.signOut();
+  redirect("/login");
+}
+
+export interface AddAdminState {
+  error?: string;
+}
+
+export async function addAdmin(_prevState: AddAdminState, formData: FormData): Promise<AddAdminState> {
+  await requireSuperAdmin();
+
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const role = String(formData.get("role") ?? "") as AdminRole;
+  if (!email) return { error: "Enter an email address." };
+  if (role !== "super_admin" && role !== "admin") return { error: "Choose a role." };
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin.from("profiles").select("id").ilike("email", email).maybeSingle();
+  if (!profile) return { error: "No user found with that email." };
+
+  const { error } = await admin.from("admin_users").upsert({ id: profile.id, role });
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/administrators");
+  return {};
+}
+
+export interface RemoveAdminState {
+  error?: string;
+}
+
+export async function removeAdmin(_prevState: RemoveAdminState, formData: FormData): Promise<RemoveAdminState> {
+  await requireSuperAdmin();
+
+  const adminUserId = String(formData.get("adminUserId") ?? "");
+  if (!adminUserId) return { error: "Missing admin." };
+
+  const admin = createAdminClient();
+
+  // Never let the last super_admin remove themselves (or be removed) — that would leave nobody
+  // able to manage admins going forward, the exact lockout class this whole feature is meant to
+  // avoid repeating (see src/lib/auth/admin.ts's MFA enroll/challenge fallback for the same
+  // principle applied elsewhere).
+  const { data: target } = await admin.from("admin_users").select("role").eq("id", adminUserId).maybeSingle();
+  if (target?.role === "super_admin") {
+    const { count } = await admin
+      .from("admin_users")
+      .select("*", { count: "exact", head: true })
+      .eq("role", "super_admin");
+    if ((count ?? 0) <= 1) {
+      return { error: "Can't remove the last super admin." };
+    }
+  }
+
+  const { error } = await admin.from("admin_users").delete().eq("id", adminUserId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/administrators");
   return {};
 }

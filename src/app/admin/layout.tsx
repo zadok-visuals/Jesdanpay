@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { requireAdminUser, getAdminRole } from "@/lib/auth/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { adminLogOut } from "@/lib/actions/admin";
 import { Wordmark } from "@/components/layout/Wordmark";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { AdminNavTabs } from "@/components/admin/AdminNavTabs";
+import { AdminSessionLogger } from "@/components/admin/AdminSessionLogger";
 import type { Currency } from "@/lib/types/database";
 
 // handle_new_user() (migration 0020) only provisions a wallet for the local currency matching
@@ -33,10 +35,14 @@ async function backfillAdminWallets(userId: string) {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const adminUser = await requireAdminUser();
-  await backfillAdminWallets(adminUser.id);
+  const [role] = await Promise.all([
+    getAdminRole(adminUser.id, adminUser.email),
+    backfillAdminWallets(adminUser.id),
+  ]);
 
   return (
     <div className="min-h-dvh bg-background">
+      <AdminSessionLogger />
       <header className="flex h-16 items-center justify-between border-b border-border bg-surface px-6">
         <div className="flex items-center gap-3">
           <Wordmark className="h-6" />
@@ -51,10 +57,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Link href="/home" className="text-sm font-medium text-foreground/60 hover:text-foreground hover:underline">
             Back to app
           </Link>
-          <LogoutButton className="inline-flex items-center gap-1.5 text-sm font-medium text-danger-500 hover:underline" />
+          <LogoutButton
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-danger-500 hover:underline"
+            action={adminLogOut}
+          />
         </div>
       </header>
-      <AdminNavTabs />
+      <AdminNavTabs role={role} />
       <main className="p-6">{children}</main>
     </div>
   );

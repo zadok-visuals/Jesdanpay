@@ -188,6 +188,36 @@ export type WithdrawalPin = {
   updated_at: string;
 };
 
+export type AdminRole = "super_admin" | "admin";
+
+// id doubles as the primary key and the FK to profiles — one row per admin, keyed by their own
+// user id (migration 0038).
+export type AdminUser = {
+  id: string;
+  role: AdminRole;
+  created_at: string;
+};
+
+export type AdminLoginEvent = "sign_in" | "sign_out";
+
+export type AdminLoginLog = {
+  id: string;
+  admin_user_id: string;
+  event: AdminLoginEvent;
+  created_at: string;
+};
+
+export type SupportMessageSender = "user" | "admin";
+
+export type SupportMessage = {
+  id: string;
+  user_id: string;
+  sender: SupportMessageSender;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+};
+
 // user_id null = broadcast to every user; a real id = targeted at just that user. See migration
 // 0037's header comment for the known shared-read-state tradeoff on broadcast rows.
 export type Notification = {
@@ -297,6 +327,24 @@ export type Database = {
         Row: Notification;
         Insert: Partial<Notification> & Pick<Notification, "title" | "body">;
         Update: Partial<Notification>;
+        Relationships: [];
+      };
+      admin_users: {
+        Row: AdminUser;
+        Insert: Partial<AdminUser> & Pick<AdminUser, "id" | "role">;
+        Update: Partial<AdminUser>;
+        Relationships: [];
+      };
+      admin_login_log: {
+        Row: AdminLoginLog;
+        Insert: Partial<AdminLoginLog> & Pick<AdminLoginLog, "admin_user_id" | "event">;
+        Update: Partial<AdminLoginLog>;
+        Relationships: [];
+      };
+      support_messages: {
+        Row: SupportMessage;
+        Insert: Partial<SupportMessage> & Pick<SupportMessage, "user_id" | "sender" | "body">;
+        Update: Partial<SupportMessage>;
         Relationships: [];
       };
     };

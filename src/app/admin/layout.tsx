@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { adminLogOut } from "@/lib/actions/admin";
 import { Wordmark } from "@/components/layout/Wordmark";
 import { LogoutButton } from "@/components/auth/LogoutButton";
+import { buttonClassName } from "@/components/ui/Button";
 import { AdminNavTabs } from "@/components/admin/AdminNavTabs";
 import { AdminSessionLogger } from "@/components/admin/AdminSessionLogger";
 import type { Currency } from "@/lib/types/database";
@@ -50,17 +51,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Admin
           </span>
         </div>
-        <div className="flex items-center gap-4">
-          <a href="/admin-mfa/enroll" className="text-sm font-medium text-foreground/60 hover:text-foreground hover:underline">
+        <div className="flex items-center gap-3">
+          <a href="/admin-mfa/enroll" className={buttonClassName("secondary", "sm")}>
             Security
           </a>
-          <Link href="/home" className="text-sm font-medium text-foreground/60 hover:text-foreground hover:underline">
+          <Link href="/home" className={buttonClassName("secondary", "sm")}>
             Back to app
           </Link>
-          <LogoutButton
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-danger-500 hover:underline"
-            action={adminLogOut}
-          />
+          <LogoutButton className={buttonClassName("danger", "sm")} action={adminLogOut} />
         </div>
       </header>
       <AdminNavTabs role={role} />

@@ -1,24 +1,32 @@
 import type { ButtonHTMLAttributes } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
-type Size = "sm" | "md" | "lg";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+export type ButtonSize = "sm" | "md" | "lg";
 
-const variantClasses: Record<Variant, string> = {
+const variantClasses: Record<ButtonVariant, string> = {
   primary: "bg-primary-500 text-white hover:bg-primary-600 disabled:bg-primary-200",
   secondary: "bg-white text-primary-700 border border-border hover:bg-primary-50",
   ghost: "bg-transparent text-foreground hover:bg-black/[.04]",
   danger: "bg-danger-500 text-white hover:opacity-90",
 };
 
-const sizeClasses: Record<Size, string> = {
+const sizeClasses: Record<ButtonSize, string> = {
   sm: "h-9 px-3 text-sm",
   md: "h-11 px-5 text-sm",
   lg: "h-12 px-6 text-base",
 };
 
+// Exported so a plain <Link> (or any element that isn't a real <button>, e.g. LogoutButton's own
+// internal button via its className prop) can read exactly the same variant/size styling instead
+// of a parallel, possibly-drifting set of classes — nesting an actual <button> inside the <a> a
+// <Link> renders would be invalid, interactive-inside-interactive HTML.
+export function buttonClassName(variant: ButtonVariant = "primary", size: ButtonSize = "md", className = ""): string {
+  return `inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: Variant;
-  size?: Size;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   loading?: boolean;
 }
 
@@ -32,11 +40,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   return (
-    <button
-      disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
-      {...props}
-    >
+    <button disabled={disabled || loading} className={buttonClassName(variant, size, className)} {...props}>
       {loading && <Spinner />}
       {children}
     </button>

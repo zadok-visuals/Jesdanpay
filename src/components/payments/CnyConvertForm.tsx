@@ -112,6 +112,12 @@ export function CnyConvertForm({
     : null;
   const feeAmount = amountEntered ? round2(amountNum * markupRate) : null;
 
+  // The tier ladder is keyed by CNY amount regardless of direction — "from_cny" already has the
+  // CNY amount directly (amountNum, since spendCurrency is CNY in that direction); "to_cny" only
+  // knows the CNY amount once computeConversionAmounts has resolved it (amounts.cnyAmount).
+  const activeCnyAmount = amountEntered ? (direction === "from_cny" ? amountNum : (amounts?.cnyAmount ?? null)) : null;
+  const sortedTierRates = [...tierRates].sort((a, b) => a.tier_min_cny - b.tier_min_cny);
+
   // amounts.nonCnyAmount is always the non-CNY-side amount regardless of direction — USDT per 1
   // unit of itself is 1, so no rate multiplication needed there; fiat needs bushaRate (USDT per 1
   // unit of that fiat currency) to convert to its USDT equivalent.
@@ -309,6 +315,43 @@ export function CnyConvertForm({
             </div>
           </dl>
         </div>
+
+        {/* The rate above is just the resolved tier's rate — this shows the full ladder it came
+            from and highlights which band the amount currently falls into, so it's clear why the
+            rate changes as the CNY-equivalent amount crosses a threshold. */}
+        {sortedTierRates.length > 0 && (
+          <div className="overflow-hidden rounded-2xl border border-border bg-white">
+            <div className="border-b border-border px-6 py-4">
+              <p className="text-sm font-semibold text-foreground">CNY pricing tiers</p>
+            </div>
+            <ul className="divide-y divide-border">
+              {sortedTierRates.map((tier) => {
+                const isActive =
+                  activeCnyAmount != null && activeCnyAmount >= tier.tier_min_cny && activeCnyAmount <= tier.tier_max_cny;
+                return (
+                  <li
+                    key={tier.tier_min_cny}
+                    className={`flex items-center justify-between gap-4 px-6 py-3 text-sm ${
+                      isActive ? "bg-primary-50" : ""
+                    }`}
+                  >
+                    <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/60"}>
+                      CNY {tier.tier_min_cny.toLocaleString("en-US")} to {tier.tier_max_cny.toLocaleString("en-US")}
+                    </span>
+                    <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/70"}>
+                      rate {tier.usdt_to_cny_rate.toLocaleString("en-US", { maximumFractionDigits: 6 })}
+                      {isActive && (
+                        <span className="ml-2 rounded-full bg-primary-500 px-2 py-0.5 text-xs font-medium text-white">
+                          Your rate
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {actionState.error && <p className="text-sm text-danger-500">{actionState.error}</p>}
 

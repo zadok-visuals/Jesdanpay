@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardChrome } from "@/components/layout/DashboardChrome";
 import { isAdminEmail } from "@/lib/auth/admin";
+import { getUnreadSupportMessageCountForUser } from "@/lib/actions/support";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -10,7 +11,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: notifications }] = await Promise.all([
+  const [{ data: profile }, { data: notifications }, unreadChatCount] = await Promise.all([
     supabase.from("profiles").select("full_name, email").eq("id", user.id).single(),
     // Own targeted notifications + every broadcast (user_id null) — RLS (migration 0037) already
     // scopes this to rows this user is allowed to see, but the explicit .or() keeps this query
@@ -22,12 +23,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
       .or(`user_id.eq.${user.id},user_id.is.null`)
       .order("created_at", { ascending: false })
       .limit(20),
+    getUnreadSupportMessageCountForUser(),
   ]);
 
   const name = profile?.full_name || profile?.email || "there";
 
   return (
-    <DashboardChrome name={name} isAdmin={isAdminEmail(user.email)} notifications={notifications ?? []}>
+    <DashboardChrome name={name} isAdmin={isAdminEmail(user.email)} notifications={notifications ?? []} unreadChatCount={unreadChatCount}>
       {children}
     </DashboardChrome>
   );

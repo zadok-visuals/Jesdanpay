@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdminUser, getAdminRole } from "@/lib/auth/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adminLogOut } from "@/lib/actions/admin";
+import { getUnreadSupportMessageCountForAdmin } from "@/lib/actions/support";
 import { Wordmark } from "@/components/layout/Wordmark";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { buttonClassName } from "@/components/ui/Button";
@@ -36,9 +37,10 @@ async function backfillAdminWallets(userId: string) {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const adminUser = await requireAdminUser();
-  const [role] = await Promise.all([
+  const [role, , chatUnreadCount] = await Promise.all([
     getAdminRole(adminUser.id, adminUser.email),
     backfillAdminWallets(adminUser.id),
+    getUnreadSupportMessageCountForAdmin(),
   ]);
 
   return (
@@ -61,7 +63,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <LogoutButton className={buttonClassName("danger", "sm")} action={adminLogOut} />
         </div>
       </header>
-      <AdminNavTabs role={role} />
+      <AdminNavTabs role={role} chatUnreadCount={chatUnreadCount} />
       <main className="p-6">{children}</main>
     </div>
   );

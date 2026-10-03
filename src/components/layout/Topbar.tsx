@@ -15,9 +15,10 @@ interface TopbarProps {
   name: string;
   onMenuClick?: () => void;
   notifications?: Notification[];
+  unreadChatCount?: number;
 }
 
-export function Topbar({ name, onMenuClick, notifications = [] }: TopbarProps) {
+export function Topbar({ name, onMenuClick, notifications = [], unreadChatCount = 0 }: TopbarProps) {
   return (
     <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
@@ -38,7 +39,7 @@ export function Topbar({ name, onMenuClick, notifications = [] }: TopbarProps) {
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         <NotificationBell notifications={notifications} />
-        <ChatSupportButton />
+        <ChatSupportButton initialUnreadCount={unreadChatCount} />
         <Link
           href="/settings"
           aria-label="Settings"

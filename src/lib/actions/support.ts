@@ -38,6 +38,25 @@ export async function sendSupportMessage(body: string): Promise<{ error?: string
   return {};
 }
 
+// Lean count-only query (no row bodies) for the chat icon's unread badge
+// (src/components/layout/ChatSupportButton.tsx) — fetched once server-side alongside notifications
+// in src/app/(dashboard)/layout.tsx, same pattern as that layout's own notifications query.
+export async function getUnreadSupportMessageCountForUser(): Promise<number> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const { count } = await supabase
+    .from("support_messages")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("sender", "admin")
+    .is("read_at", null);
+  return count ?? 0;
+}
+
 // Marks every unread admin reply in the caller's own thread read — called when the user opens
 // the chat panel (src/components/layout/ChatSupportButton.tsx).
 export async function markSupportMessagesReadByUser(): Promise<void> {
@@ -104,6 +123,20 @@ export async function getSupportThreads(): Promise<SupportThreadSummary[]> {
       };
     })
     .sort((a, b) => (a.lastMessageAt < b.lastMessageAt ? 1 : -1));
+}
+
+// Lean count-only query for AdminNavTabs' "Chat Support" tab badge — summed across every thread,
+// unlike getSupportThreads()' per-thread unreadCount which needs the full message+profile fetch
+// this avoids on every admin page load.
+export async function getUnreadSupportMessageCountForAdmin(): Promise<number> {
+  await requireAdminUser();
+  const admin = createAdminClient();
+  const { count } = await admin
+    .from("support_messages")
+    .select("*", { count: "exact", head: true })
+    .eq("sender", "user")
+    .is("read_at", null);
+  return count ?? 0;
 }
 
 export async function getSupportThreadMessages(userId: string): Promise<SupportMessage[]> {

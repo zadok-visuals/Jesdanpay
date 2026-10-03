@@ -11,12 +11,13 @@ import type { SupportMessage } from "@/lib/types/database";
 // no reason to poll a chat panel nobody's looking at.
 const POLL_MS = 17_000;
 
-export function ChatSupportButton() {
+export function ChatSupportButton({ initialUnreadCount = 0 }: { initialUnreadCount?: number }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // handleSend also needs to trigger a reload after sending — kept as its own function for that,
@@ -69,17 +70,24 @@ export function ChatSupportButton() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setOpen(true);
+          setUnreadCount(0);
+        }}
         aria-label="Chat with support"
-        className="flex h-9 w-9 items-center justify-center rounded-full text-foreground/60 hover:bg-black/[.04]"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-foreground/60 hover:bg-black/[.04]"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path
-            d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M4 14v-2a8 8 0 0 1 16 0v2" strokeLinecap="round" strokeLinejoin="round" />
+          <rect x="2.5" y="14" width="4" height="6" rx="1.5" />
+          <rect x="17.5" y="14" width="4" height="6" rx="1.5" />
+          <path d="M19.5 20v.5a3 3 0 0 1-3 3H13" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
+        {unreadCount > 0 && (
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-500 px-1 text-[10px] font-semibold text-white">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Support">

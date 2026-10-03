@@ -143,8 +143,47 @@ export interface DepositQuoteState {
   // recomputed client-side, so the payment-instructions screen can never show a net figure that
   // drifts from what actually gets credited.
   netAmount?: string;
+  // Busha's own quoted source_amount — the real, possibly grossed-up figure to show as
+  // "Transfer exactly"/"Send exactly". See quoteForDesiredNetDeposit's header comment for why
+  // this can legitimately differ from `amount` below.
+  grossAmount?: string;
+  // The user's originally typed amount — kept separate from grossAmount/netAmount so
+  // initiateDeposit's minimum-deposit re-check keeps applying to what the user actually asked to
+  // have credited, not the grossed-up transfer figure.
   amount?: string;
   currency?: Currency;
+}
+
+// Confirmed live (not assumed) against the real Busha account: requesting a same-currency deposit
+// quote via plain `source_amount` behaves DIFFERENTLY depending on the currency's fee type.
+//   - KES (a PERCENTAGE fee): source_amount is treated as the desired NET — the response's own
+//     source_amount already comes back grossed up to cover the fee, and target_amount exactly
+//     equals what was requested. No second quote needed.
+//   - NGN (a FIXED fee): source_amount is echoed back unchanged (a true forward quote) and
+//     target_amount = source_amount - fee, i.e. LESS than what was requested.
+//   - USDT: no fee at all currently: source_amount == target_amount either way.
+// Rather than hardcode which currency behaves which way (that's exactly the kind of assumption
+// this task asked not to make, and it'd silently go stale if Busha's fee model for any of these
+// ever changes), this only re-quotes with (desiredNet + fee) as source_amount when the FIRST
+// quote's target_amount doesn't already match the desired net — correct and minimal for both
+// behaviors observed live, and self-correcting either way.
+async function quoteForDesiredNetDeposit(currency: Currency, desiredNet: number): Promise<busha.BushaQuote> {
+  const quote1 = await busha.createQuote({
+    sourceCurrency: currency,
+    targetCurrency: currency,
+    sourceAmount: desiredNet.toString(),
+    isDeposit: true,
+  });
+  if (Math.abs(Number(quote1.target_amount) - desiredNet) < 0.01) {
+    return quote1;
+  }
+  const fee = quote1.fees.reduce((sum, f) => sum + Number(f.amount.amount), 0);
+  return busha.createQuote({
+    sourceCurrency: currency,
+    targetCurrency: currency,
+    sourceAmount: (desiredNet + fee).toString(),
+    isDeposit: true,
+  });
 }
 
 // Real pricing preview against Busha's confirmed /v1/quotes endpoint (same-currency quote).
@@ -171,14 +210,16 @@ export async function getDepositQuote(
   }
 
   try {
-    const quote = await busha.createQuote({
-      sourceCurrency: currency,
-      targetCurrency: currency,
-      sourceAmount: amount,
-      isDeposit: true,
-    });
+    const quote = await quoteForDesiredNetDeposit(currency, Number(amount));
     const fee = quote.fees.reduce((sum, f) => sum + Number(f.amount.amount), 0);
-    return { quoteId: quote.id, fee: fee.toFixed(2), netAmount: quote.target_amount, amount, currency };
+    return {
+      quoteId: quote.id,
+      fee: fee.toFixed(2),
+      netAmount: quote.target_amount,
+      grossAmount: quote.source_amount,
+      amount,
+      currency,
+    };
   } catch (err) {
     return { error: toCustomerError(err, "busha.getDepositQuote") };
   }

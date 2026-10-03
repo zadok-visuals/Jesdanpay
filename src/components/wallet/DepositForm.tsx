@@ -268,9 +268,9 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
           </p>
           <div className="flex items-center gap-1.5">
             <p className="text-3xl font-bold text-primary-800">
-              {formatBalance(currency as Currency, Number(quoteState.amount))}
+              {formatBalance(currency as Currency, Number(quoteState.grossAmount))}
             </p>
-            <CopyButton value={String(quoteState.amount ?? "")} label="Copy amount" />
+            <CopyButton value={String(quoteState.grossAmount ?? "")} label="Copy amount" />
           </div>
           {expiresAt && (
             <p className={`text-xs font-medium ${expired ? "text-danger-500" : "text-primary-700/70"}`}>
@@ -338,8 +338,8 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
               Send exactly
             </p>
             <div className="flex items-center gap-1.5">
-              <p className="text-3xl font-bold text-primary-800">{quoteState.amount} USDT</p>
-              <CopyButton value={String(quoteState.amount ?? "")} label="Copy amount" />
+              <p className="text-3xl font-bold text-primary-800">{quoteState.grossAmount} USDT</p>
+              <CopyButton value={String(quoteState.grossAmount ?? "")} label="Copy amount" />
             </div>
             {expiresAt && (
               <p className={`text-xs font-medium ${expired ? "text-danger-500" : "text-primary-700/70"}`}>
@@ -415,20 +415,29 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
       {quoteState.error && <p className="text-sm text-danger-500">{quoteState.error}</p>}
 
       {quoteState.quoteId ? (
-        <div className="flex items-center justify-between gap-4 rounded-xl bg-primary-50 px-4 py-3.5">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-primary-700/70">You deposit</p>
-            <p className="text-xl font-bold text-primary-800">
-              {formatBalance(currency as Currency, Number(quoteState.amount))}
-            </p>
+        // Same three figures as the final payment-instructions screen (gross to transfer, fee,
+        // net credited) shown here too, before the user commits — not just a "You deposit"/"Fee"
+        // pair that never actually showed what they'd receive.
+        <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-primary-50">
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-primary-700/70">Amount to transfer</dt>
+            <dd className="text-sm font-semibold text-primary-800">
+              {formatBalance(currency as Currency, Number(quoteState.grossAmount))}
+            </dd>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-primary-700/70">Fee</p>
-            <p className="text-sm font-semibold text-primary-800">
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-primary-700/70">Deposit fee</dt>
+            <dd className="text-sm font-medium text-primary-800">
               {formatBalance(currency as Currency, Number(quoteState.fee))}
-            </p>
+            </dd>
           </div>
-        </div>
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <dt className="text-sm text-primary-700/70">You will receive</dt>
+            <dd className="text-sm font-semibold text-primary-800">
+              {formatBalance(currency as Currency, Number(quoteState.netAmount))}
+            </dd>
+          </div>
+        </dl>
       ) : null}
 
       {depositState.error && <p className="text-sm text-danger-500">{depositState.error}</p>}

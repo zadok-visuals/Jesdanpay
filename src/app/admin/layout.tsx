@@ -7,6 +7,7 @@ import { Wordmark } from "@/components/layout/Wordmark";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { buttonClassName } from "@/components/ui/Button";
 import { AdminNavTabs } from "@/components/admin/AdminNavTabs";
+import { AdminHeaderMenu } from "@/components/admin/AdminHeaderMenu";
 import { AdminSessionLogger } from "@/components/admin/AdminSessionLogger";
 import type { Currency } from "@/lib/types/database";
 
@@ -53,7 +54,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Admin
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="hidden items-center gap-3 sm:flex">
           <a href="/admin-mfa/enroll" className={buttonClassName("secondary", "sm")}>
             Security
           </a>
@@ -62,6 +63,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </Link>
           <LogoutButton className={buttonClassName("danger", "sm")} action={adminLogOut} />
         </div>
+        <AdminHeaderMenu />
       </header>
       <AdminNavTabs role={role} chatUnreadCount={chatUnreadCount} />
       <main className="p-6">{children}</main>

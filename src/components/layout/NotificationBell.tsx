@@ -62,7 +62,7 @@ export function NotificationBell({ notifications: initial }: { notifications: No
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface shadow-lg">
+        <div className="fixed inset-x-4 top-16 z-30 max-h-[70vh] overflow-hidden rounded-2xl border border-border bg-surface shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:max-w-[calc(100vw-2rem)] sm:max-h-none">
           <div className="border-b border-border px-4 py-3">
             <p className="text-sm font-semibold">Notifications</p>
           </div>

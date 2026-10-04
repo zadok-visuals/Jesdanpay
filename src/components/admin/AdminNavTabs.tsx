@@ -13,6 +13,7 @@ const TABS = [
   { href: "/admin/withdrawals", label: "Withdrawals" },
   { href: "/admin/rates", label: "Rates" },
   { href: "/admin/pnl", label: "PNL" },
+  { href: "/admin/transactions", label: "Transactions" },
   { href: "/admin/notifications", label: "Notifications" },
   { href: "/admin/chat", label: "Chat Support" },
 ] as const;

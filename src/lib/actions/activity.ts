@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdminUser } from "@/lib/auth/admin";
 import type { Currency, TransactionStatus } from "@/lib/types/database";
 import { summarizeRmbRecipient } from "@/lib/rmbRecipient";
 import { isMostRecentForCurrency, type UnifiedActivity } from "@/lib/transactions";
@@ -193,6 +195,111 @@ export async function getActivityDetail(
       confirmedAmount: null,
       balanceAfter,
       isMostRecent,
+    },
+  };
+}
+
+// ---- Admin-facing: look up any user's transaction by its provider reference, for support agents
+// (src/app/admin/transactions/page.tsx) who have a reference number from a user but no other way
+// to find the matching record. Reuses the same ActivityDetail shape as the user-facing lookup
+// above (minus balanceAfter/isMostRecent, which only make sense when resolving "my" current wallet
+// state from a logged-in session) plus whoever the transaction belongs to.
+
+export interface AdminActivityLookup extends Omit<ActivityDetail, "balanceAfter" | "isMostRecent"> {
+  userId: string;
+  userEmail: string;
+  // Only ever set for a failed/cancelled withdrawal that went through the automated Busha payout
+  // path (migration 0030) — the one place in the schema an actual provider-side failure detail is
+  // captured today. Deposits currently store no equivalent detail beyond their bare `status`.
+  automatedPayoutFailedReason: string | null;
+}
+
+export interface ActivityLookupState {
+  result?: AdminActivityLookup;
+  error?: string;
+}
+
+export async function searchActivityByReference(reference: string): Promise<ActivityLookupState> {
+  await requireAdminUser();
+  const trimmed = reference.trim();
+  if (!trimmed) return { error: "Enter a reference number." };
+
+  const admin = createAdminClient();
+  const [{ data: deposit }, { data: tx }] = await Promise.all([
+    admin.from("deposits").select("*").eq("provider_reference", trimmed).maybeSingle(),
+    admin.from("transactions").select("*").eq("provider_reference", trimmed).maybeSingle(),
+  ]);
+
+  if (!deposit && !tx) return { error: `No transaction found with reference "${trimmed}".` };
+
+  if (deposit) {
+    const { data: profile } = await admin.from("profiles").select("email").eq("id", deposit.user_id).maybeSingle();
+    return {
+      result: {
+        source: "deposit",
+        type: "deposit",
+        status: deposit.status,
+        createdAt: deposit.created_at,
+        sourceAmount: deposit.amount,
+        sourceCurrency: deposit.currency,
+        targetAmount: null,
+        targetCurrency: null,
+        fee: null,
+        reference: deposit.provider_reference,
+        description: null,
+        rejectionReason: null,
+        confirmedAmount: deposit.confirmed_amount,
+        automatedPayoutFailedReason: null,
+        userId: deposit.user_id,
+        userEmail: profile?.email ?? "Unknown",
+      },
+    };
+  }
+
+  const t = tx!;
+  let description: string | null = null;
+  let fee: number | null = null;
+
+  if (t.type === "rmb_manual" || t.type === "rmb_auto") {
+    const { data: recipient } = await admin.from("rmb_recipients").select("*").eq("transaction_id", t.id).maybeSingle();
+    description = recipient ? summarizeRmbRecipient(recipient) : null;
+  } else if (t.type === "withdrawal") {
+    const { data: recipient } = await admin
+      .from("withdrawal_recipients")
+      .select("*")
+      .eq("user_id", t.user_id)
+      .eq("currency", t.currency)
+      .maybeSingle();
+    description = recipient
+      ? recipient.wallet_address
+        ? `USDT (BSC) · ${recipient.wallet_address}`
+        : `${recipient.bank_name} · ${recipient.bank_account_number} · ${recipient.account_holder_name}`
+      : null;
+    if (t.target_amount != null) fee = t.amount - t.target_amount;
+  } else if (t.type === "usdt_ngn") {
+    description = "USDT exchange";
+  }
+
+  const { data: profile } = await admin.from("profiles").select("email").eq("id", t.user_id).maybeSingle();
+
+  return {
+    result: {
+      source: "transaction",
+      type: t.type,
+      status: t.status,
+      createdAt: t.created_at,
+      sourceAmount: t.amount,
+      sourceCurrency: t.currency,
+      targetAmount: t.actual_target_amount ?? t.target_amount,
+      targetCurrency: t.target_currency,
+      fee,
+      reference: t.provider_reference,
+      description,
+      rejectionReason: t.rejection_reason,
+      confirmedAmount: null,
+      automatedPayoutFailedReason: t.automated_payout_attempt_failed_reason,
+      userId: t.user_id,
+      userEmail: profile?.email ?? "Unknown",
     },
   };
 }

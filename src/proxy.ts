@@ -14,5 +14,10 @@ export const config = {
   // Authorization: Bearer CRON_SECRET check from ever being reached at all, and for the Busha
   // webhook specifically this is very likely the real reason it has never once fired successfully
   // (previously suspected to be an unregistered URL on Busha's dashboard).
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // `opengraph-image`/`twitter-image` (src/app/opengraph-image.tsx, src/app/twitter-image.tsx) are
+  // excluded for the same reason — a link-preview crawler (Slack, Twitter, Facebook, iMessage,
+  // etc.) hits these with no Supabase session at all, and without this exclusion they fell through
+  // to the same `!user` redirect-to-/login branch, so no crawler could ever actually fetch the
+  // generated share image.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|opengraph-image|twitter-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };

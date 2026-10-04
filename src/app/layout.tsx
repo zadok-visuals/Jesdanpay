@@ -22,8 +22,13 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
+  // Same APP_URL convention as src/lib/email.ts, src/lib/actions/klasha.ts, src/lib/actions/auth.ts
+  // — without this, Next resolves the og:image/twitter:image meta tags' URL against
+  // http://localhost:3000 in every environment, breaking link previews in production.
+  metadataBase: new URL(process.env.APP_URL ?? "http://localhost:3000"),
   title: "JesDanPay",
   description: "Facilitating suppliers payment to China.",
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({

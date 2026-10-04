@@ -113,7 +113,7 @@ function QuickActionTile({ href, icon, label }: { href: string; icon: ReactNode;
   return (
     <Link
       href={href}
-      className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-semibold transition-colors hover:border-primary-300 hover:bg-primary-50"
+      className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-semibold transition-colors hover:border-primary-300 hover:bg-primary-50 sm:w-auto"
     >
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">{icon}</div>
       {label}
@@ -164,7 +164,7 @@ export default async function AdminIndexPage() {
     <div>
       <h1 className="mb-6 text-xl font-semibold">Admin Dashboard</h1>
 
-      <div className="mb-8 flex flex-wrap gap-3">
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
         <QuickActionTile href="/admin/kyc" icon={<ShieldCheckIcon className="h-[18px] w-[18px]" />} label="KYC Review" />
         <QuickActionTile href="/admin/rmb" icon={<ExchangeIcon className="h-[18px] w-[18px]" />} label="RMB Queue" />
         <QuickActionTile href="/admin/withdrawals" icon={<WithdrawIcon className="h-[18px] w-[18px]" />} label="Withdrawals" />

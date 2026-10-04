@@ -195,6 +195,9 @@ function SourceStep({
   // (6.5/6.6), not a stacked fee, and settlement is always manual anyway (the admin enters the
   // real delivered CNY afterward), so this estimate is the tier rate's own output, unmarked-up.
   const estimatedCny = amounts ? amounts.cnyAmount : null;
+  // Same ladder CnyConvertForm.tsx shows on the Conversions page — sorted so the tier the current
+  // amount falls into can be highlighted in order.
+  const sortedTierRates = [...tierRates].sort((a, b) => a.tier_min_cny - b.tier_min_cny);
 
   // Dual-input bidirectional CNY field: state.amount (the source-currency amount) stays the
   // canonical value threaded through every later step; this local string mirrors it in CNY terms
@@ -371,6 +374,44 @@ function SourceStep({
             An estimate — the actual transfer is confirmed manually by our team, usually within
             1–2 hours.
           </p>
+        </div>
+      )}
+
+      {/* Same card as CnyConvertForm.tsx's Conversions page — shows the full tier ladder the Live
+          rate above came from, highlighting which band the estimated CNY amount currently falls
+          into. Skipped for isCnySource same as the Live rate card, since there's no tier lookup
+          to show when sending CNY directly. */}
+      {!isCnySource && sortedTierRates.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="border-b border-border px-6 py-4">
+            <p className="text-sm font-semibold text-foreground">CNY pricing tiers</p>
+          </div>
+          <ul className="divide-y divide-border">
+            {sortedTierRates.map((tier) => {
+              const isActive =
+                estimatedCny != null && estimatedCny >= tier.tier_min_cny && estimatedCny <= tier.tier_max_cny;
+              return (
+                <li
+                  key={tier.tier_min_cny}
+                  className={`flex items-center justify-between gap-4 px-6 py-3 text-sm ${
+                    isActive ? "bg-primary-50" : ""
+                  }`}
+                >
+                  <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/60"}>
+                    CNY {tier.tier_min_cny.toLocaleString("en-US")} to {tier.tier_max_cny.toLocaleString("en-US")}
+                  </span>
+                  <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/70"}>
+                    rate {tier.usdt_to_cny_rate.toLocaleString("en-US", { maximumFractionDigits: 6 })}
+                    {isActive && (
+                      <span className="ml-2 rounded-full bg-primary-500 px-2 py-0.5 text-xs font-medium text-white">
+                        Your rate
+                      </span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

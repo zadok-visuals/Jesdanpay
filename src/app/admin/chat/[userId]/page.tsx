@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSupportThreadMessages } from "@/lib/actions/support";
 import { Card } from "@/components/ui/Card";
 import { AdminChatThread } from "@/components/admin/AdminChatThread";
+import { LinkPendingDot } from "@/components/admin/LinkPendingDot";
 
 export default async function AdminChatThreadPage({ params }: { params: Promise<{ userId: string }> }) {
   await requireAdminUser();
@@ -22,6 +23,7 @@ export default async function AdminChatThreadPage({ params }: { params: Promise<
       <div>
         <Link href="/admin/chat" className="text-sm text-primary-600 hover:underline">
           ← Back to Chat Support
+          <LinkPendingDot />
         </Link>
       </div>
       <h1 className="text-xl font-semibold">{profile.full_name || profile.email}</h1>

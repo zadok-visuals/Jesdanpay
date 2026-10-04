@@ -3,6 +3,7 @@ import { requireAdminUser } from "@/lib/auth/admin";
 import { getSupportThreads } from "@/lib/actions/support";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
+import { LinkPendingDot } from "@/components/admin/LinkPendingDot";
 
 export default async function AdminChatPage() {
   await requireAdminUser();
@@ -21,6 +22,7 @@ export default async function AdminChatPage() {
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{t.fullName || t.email}</span>
+                    <LinkPendingDot />
                     {t.unreadCount > 0 && <Pill tone="danger">{t.unreadCount} unread</Pill>}
                   </div>
                   <p className="truncate text-xs text-foreground/50">{t.lastMessage}</p>

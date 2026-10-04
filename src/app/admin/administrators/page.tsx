@@ -11,11 +11,12 @@ function formatTimestamp(ts: string | undefined): string {
 }
 
 export default async function AdminAdministratorsPage() {
-  await requireSuperAdmin();
+  const currentAdmin = await requireSuperAdmin();
   const admin = createAdminClient();
 
   const { data: adminUsers } = await admin.from("admin_users").select("*").order("created_at", { ascending: true });
   const adminUserIds = (adminUsers ?? []).map((a) => a.id);
+  const superAdminCount = (adminUsers ?? []).filter((a) => a.role === "super_admin").length;
 
   const [{ data: profiles }, { data: loginLog }] = await Promise.all([
     adminUserIds.length
@@ -82,7 +83,17 @@ export default async function AdminAdministratorsPage() {
                     <p className="text-foreground/40">Last sign-out</p>
                     <p>{formatTimestamp(lastEvents.sign_out)}</p>
                   </div>
-                  <RemoveAdminButton adminUserId={a.id} email={profile?.email ?? a.id} />
+                  <RemoveAdminButton
+                    adminUserId={a.id}
+                    email={profile?.email ?? a.id}
+                    disabledReason={
+                      a.id === currentAdmin.id
+                        ? "You can't remove your own admin access."
+                        : a.role === "super_admin" && superAdminCount <= 1
+                          ? "At least one super admin must remain."
+                          : undefined
+                    }
+                  />
                 </div>
               </Card>
             );

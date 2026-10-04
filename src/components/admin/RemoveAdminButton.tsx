@@ -7,7 +7,18 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const initialState: RemoveAdminState = {};
 
-export function RemoveAdminButton({ adminUserId, email }: { adminUserId: string; email: string }) {
+export function RemoveAdminButton({
+  adminUserId,
+  email,
+  disabledReason,
+}: {
+  adminUserId: string;
+  email: string;
+  // Set when removeAdmin's own server-side guard (see src/lib/actions/admin.ts) would reject this
+  // removal anyway — own row, or the last remaining super_admin. Disables the button rather than
+  // hiding it, with this text as the tooltip, so it's never a confusing dead click.
+  disabledReason?: string;
+}) {
   const [state, formAction, pending] = useActionState(removeAdmin, initialState);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -28,8 +39,9 @@ export function RemoveAdminButton({ adminUserId, email }: { adminUserId: string;
         <button
           type="button"
           onClick={() => setConfirmOpen(true)}
-          disabled={pending}
-          className="text-xs font-medium text-danger-500 hover:underline disabled:opacity-50"
+          disabled={pending || !!disabledReason}
+          title={disabledReason}
+          className="text-xs font-medium text-danger-500 hover:underline disabled:cursor-not-allowed disabled:text-foreground/30 disabled:no-underline"
         >
           {pending ? "Removing…" : "Remove"}
         </button>

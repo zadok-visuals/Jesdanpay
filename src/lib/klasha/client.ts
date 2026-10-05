@@ -32,15 +32,13 @@
 //      KLASHA_API_BASE_URL plus the live credentials, no code change needed.
 //
 // Things NOT guessed at and still needing a real test now that sandbox access works:
-//   1. The 3DES parameters below are almost certainly WRONG. Klasha's docs say 3DES (which
-//      needs a 16- or 24-byte key), but the real KLASHA_ENCRYPTION_SECRET base64-decodes to
-//      exactly 32 bytes — a valid AES-256 key length, not a valid 3DES one. Every live test so
-//      far has returned the same account-wide 403 regardless of encryption scheme (even a
-//      bodyless GET fails identically), so this has never actually been exercised end-to-end —
-//      and the 403s seen then were most likely just production credentials being used against
-//      this sandbox host, not evidence against 3DES specifically. Re-check both now that login
-//      actually succeeds against sandbox: try AES-256-CBC (32-byte decoded key, 16-byte IV)
-//      first, before assuming 3DES is correct just because it's what the docs say.
+//   1. KLASHA_ENCRYPTION_SECRET must be the Klasha dashboard's "New encryption key" (24
+//      characters) — NOT the separate, longer "Encryption key" (44 characters) also shown
+//      there. Only the 24-character one is a valid 3DES key length; the 44-character one is a
+//      different value entirely and would silently produce ciphertext Klasha's side can't
+//      decrypt. encryptBody()/decryptBody() below now throw a clear KlashaError (length only,
+//      never the secret itself) if what's configured isn't exactly 24 bytes, rather than that
+//      failing silently.
 //   2. Whether the collection webhook (`charge.completed`) payload is encrypted the same way
 //      as request bodies — undocumented; the webhook route tries a plaintext parse first.
 
@@ -76,11 +74,23 @@ function getBaseUrl(): string {
   return raw.replace(/\/+$/, "");
 }
 
+// Klasha's dashboard shows two different keys — only the 24-character "New encryption key" is a
+// valid 3DES key length; the longer 44-character "Encryption key" is a different value entirely
+// and silently produces ciphertext Klasha's side can't decrypt. checkSecretLength below exists so
+// pasting the wrong one fails loudly, with a length (never the secret itself) in the error.
+function checkSecretLength(secret: string): void {
+  const length = Buffer.byteLength(secret, "utf8");
+  if (length !== 24) {
+    throw new KlashaError(`KLASHA_ENCRYPTION_SECRET must be exactly 24 characters (currently ${length})`, 500);
+  }
+}
+
 // 3DES-CBC, 24-byte key, IV = first 8 bytes of the key, PKCS7 padding, base64-encoded — per
 // Klasha's documented encryption-algorithm section. The secret must be exactly 24 bytes.
 function encryptBody(payload: unknown): string {
   const secret = readEnv("KLASHA_ENCRYPTION_SECRET").trimmed;
   if (!secret) throw new KlashaError("KLASHA_ENCRYPTION_SECRET is not configured", 500);
+  checkSecretLength(secret);
 
   const key = Buffer.from(secret, "utf8");
   const iv = key.subarray(0, 8);
@@ -92,6 +102,7 @@ function encryptBody(payload: unknown): string {
 export function decryptBody(encrypted: string): unknown {
   const secret = readEnv("KLASHA_ENCRYPTION_SECRET").trimmed;
   if (!secret) throw new KlashaError("KLASHA_ENCRYPTION_SECRET is not configured", 500);
+  checkSecretLength(secret);
 
   const key = Buffer.from(secret, "utf8");
   const iv = key.subarray(0, 8);

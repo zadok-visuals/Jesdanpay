@@ -46,8 +46,6 @@
 
 import { createCipheriv, createDecipheriv } from "node:crypto";
 
-const BASE_URL = process.env.KLASHA_API_BASE_URL ?? "https://dev.kcookery.com";
-
 export class KlashaError extends Error {
   constructor(
     message: string,
@@ -58,10 +56,30 @@ export class KlashaError extends Error {
   }
 }
 
+// Every Klasha env var read goes through this — a stray leading/trailing space (easy to paste
+// in by accident into a dashboard env var field) would otherwise silently produce a wrong
+// username/password/key or a malformed URL. Read inside each function that needs it rather than
+// once at module load, so a value changed/corrected at runtime (e.g. in tests) is always trimmed
+// too, and so login()'s diagnostic logging can report whether the RAW value actually had
+// whitespace before it got trimmed away.
+function readEnv(name: string): { raw: string; trimmed: string | undefined; hadWhitespace: boolean } {
+  const raw = process.env[name] ?? "";
+  const trimmed = raw.trim();
+  return { raw, trimmed: trimmed || undefined, hadWhitespace: raw !== trimmed };
+}
+
+// KLASHA_API_BASE_URL also gets trailing slashes stripped (on top of the trim every other var
+// gets) — every call site below appends a leading-slash path, so a base URL pasted with a
+// trailing slash would otherwise produce "https://host//path".
+function getBaseUrl(): string {
+  const raw = readEnv("KLASHA_API_BASE_URL").trimmed ?? "https://dev.kcookery.com";
+  return raw.replace(/\/+$/, "");
+}
+
 // 3DES-CBC, 24-byte key, IV = first 8 bytes of the key, PKCS7 padding, base64-encoded — per
 // Klasha's documented encryption-algorithm section. The secret must be exactly 24 bytes.
 function encryptBody(payload: unknown): string {
-  const secret = process.env.KLASHA_ENCRYPTION_SECRET;
+  const secret = readEnv("KLASHA_ENCRYPTION_SECRET").trimmed;
   if (!secret) throw new KlashaError("KLASHA_ENCRYPTION_SECRET is not configured", 500);
 
   const key = Buffer.from(secret, "utf8");
@@ -72,7 +90,7 @@ function encryptBody(payload: unknown): string {
 }
 
 export function decryptBody(encrypted: string): unknown {
-  const secret = process.env.KLASHA_ENCRYPTION_SECRET;
+  const secret = readEnv("KLASHA_ENCRYPTION_SECRET").trimmed;
   if (!secret) throw new KlashaError("KLASHA_ENCRYPTION_SECRET is not configured", 500);
 
   const key = Buffer.from(secret, "utf8");
@@ -113,12 +131,16 @@ const TOKEN_REFRESH_MARGIN_MS = 90_000;
 // KLASHA_LOGIN_PASSWORD), not the API key/public key pair. Exported so a caller can force a
 // fresh login (or inspect the decoded expiry) without going through the request() cache.
 export async function login(): Promise<KlashaSession> {
-  const username = process.env.KLASHA_LOGIN_EMAIL;
-  const password = process.env.KLASHA_LOGIN_PASSWORD;
+  const emailEnv = readEnv("KLASHA_LOGIN_EMAIL");
+  const passwordEnv = readEnv("KLASHA_LOGIN_PASSWORD");
+  const publicKeyEnv = readEnv("KLASHA_PUBLIC_KEY");
+
+  const username = emailEnv.trimmed;
+  const password = passwordEnv.trimmed;
   if (!username || !password) {
     throw new KlashaError("KLASHA_LOGIN_EMAIL / KLASHA_LOGIN_PASSWORD are not configured", 500);
   }
-  const publicKey = process.env.KLASHA_PUBLIC_KEY;
+  const publicKey = publicKeyEnv.trimmed;
   if (!publicKey) {
     throw new KlashaError("KLASHA_PUBLIC_KEY is not configured", 500);
   }
@@ -126,7 +148,8 @@ export async function login(): Promise<KlashaSession> {
   // Confirmed live in Postman (Klasha support): login against the sandbox host also requires
   // x-auth-token, not just username/password — without it (or with production credentials
   // against this sandbox host) the call returns 401, not just the downstream request() calls.
-  const res = await fetch(`${BASE_URL}/auth/account/v2/login`, {
+  const url = `${getBaseUrl()}/auth/account/v2/login`;
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-auth-token": publicKey },
     body: JSON.stringify({ username, password }),
@@ -136,6 +159,20 @@ export async function login(): Promise<KlashaSession> {
   const token: string | undefined = json?.data?.token;
   if (!res.ok || json?.error || !token) {
     const message = json?.message ?? json?.error ?? `Klasha login failed (${res.status})`;
+    // Diagnostic only — deliberately no email/password/public key/token values, just enough
+    // shape (lengths, whitespace) to tell "wrong credentials" apart from "credentials pasted
+    // with a stray space" apart from "wrong host/environment" without a console full of secrets.
+    console.error("[klasha.login]", {
+      status: res.status,
+      message,
+      url,
+      usernameLength: username.length,
+      passwordLength: password.length,
+      publicKeyLength: publicKey.length,
+      usernameHadWhitespace: emailEnv.hadWhitespace,
+      passwordHadWhitespace: passwordEnv.hadWhitespace,
+      publicKeyHadWhitespace: publicKeyEnv.hadWhitespace,
+    });
     throw new KlashaError(message, res.status);
   }
 
@@ -160,13 +197,13 @@ async function request<T>(
   options: { method: "GET" | "POST"; body?: unknown },
   isRetry = false,
 ): Promise<T> {
-  const publicKey = process.env.KLASHA_PUBLIC_KEY;
+  const publicKey = readEnv("KLASHA_PUBLIC_KEY").trimmed;
   if (!publicKey) {
     throw new KlashaError("KLASHA_PUBLIC_KEY is not configured", 500);
   }
 
   const token = await getValidToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${getBaseUrl()}${path}`, {
     method: options.method,
     headers: {
       "Content-Type": "application/json",

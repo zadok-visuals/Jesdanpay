@@ -16,14 +16,20 @@ export default async function HomePage() {
   if (!user) redirect("/login");
 
   const [{ data: profile }, { data: wallets }, activity] = await Promise.all([
-    supabase.from("profiles").select("kyc_status").eq("id", user.id).single(),
+    supabase.from("profiles").select("kyc_status, kyc_type, kyc_rejection_reason").eq("id", user.id).single(),
     supabase.from("wallets").select("*").eq("user_id", user.id).order("currency"),
     fetchUnifiedActivity(supabase, user.id, 5),
   ]);
 
   return (
     <div className="flex flex-col gap-6">
-      {profile && <KycStatusBanner status={profile.kyc_status} />}
+      {profile && (
+        <KycStatusBanner
+          status={profile.kyc_status}
+          kycType={profile.kyc_type}
+          kycRejectionReason={profile.kyc_rejection_reason}
+        />
+      )}
 
       <TotalBalanceCard wallets={wallets ?? []} />
 

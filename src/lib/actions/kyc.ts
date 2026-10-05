@@ -75,6 +75,18 @@ export async function submitIndividualKyc(
       );
     if (docsError) throw docsError;
 
+    // admin_reject_kyc (migration 0033) flips EVERY one of this user's kyc_documents rows to
+    // "rejected", not just the ones a reviewer called out — so a resubmission that only touches
+    // some document_types (e.g. just the phone number, no new selfie/proof of address) would
+    // otherwise leave those untouched rows stuck at "rejected" right next to the freshly
+    // "pending" ones above. The RLS "kyc_documents: update own" policy (also migration 0033)
+    // already covers this update under the user's own session.
+    const { error: resetError } = await supabase
+      .from("kyc_documents")
+      .update({ status: "pending" })
+      .eq("user_id", user.id);
+    if (resetError) throw resetError;
+
     const { error: profileError } = await supabase
       .from("profiles")
       .update({ phone, kyc_type: "individual", kyc_status: "pending", kyc_rejection_reason: null })
@@ -147,6 +159,13 @@ export async function submitBusinessKyc(
         { onConflict: "user_id,document_type" },
       );
     if (docsError) throw docsError;
+
+    // Same stale-rejected-row sweep as submitIndividualKyc above — see that comment.
+    const { error: resetError } = await supabase
+      .from("kyc_documents")
+      .update({ status: "pending" })
+      .eq("user_id", user.id);
+    if (resetError) throw resetError;
 
     const { error: profileError } = await supabase
       .from("profiles")

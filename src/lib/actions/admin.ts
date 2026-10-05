@@ -113,6 +113,18 @@ export async function rejectKyc(
   const { error } = await admin.rpc("admin_reject_kyc", { p_user_id: userId, p_reason: reason });
 
   if (error) return { error: error.message };
+
+  // Best effort — the rejection itself already succeeded via the RPC above, that's the
+  // authoritative action, so a failed notification insert shouldn't turn this into an error the
+  // admin has to retry. The user still sees the reason via KycStatusBanner on /home and the KYC
+  // status page regardless of whether this notification lands.
+  const { error: notifyError } = await admin.from("notifications").insert({
+    user_id: userId,
+    title: "Your verification needs attention",
+    body: `We couldn't verify your details: ${reason}. Use the banner on your home page to fix and resubmit.`,
+  });
+  if (notifyError) console.error("[rejectKyc] notification insert failed:", notifyError);
+
   revalidatePath("/admin/kyc");
   return {};
 }

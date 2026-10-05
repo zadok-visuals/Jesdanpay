@@ -14,10 +14,15 @@ export const config = {
   // Authorization: Bearer CRON_SECRET check from ever being reached at all, and for the Busha
   // webhook specifically this is very likely the real reason it has never once fired successfully
   // (previously suspected to be an unregistered URL on Busha's dashboard).
-  // `opengraph-image`/`twitter-image` (src/app/opengraph-image.tsx, src/app/twitter-image.tsx) are
-  // excluded for the same reason — a link-preview crawler (Slack, Twitter, Facebook, iMessage,
-  // etc.) hits these with no Supabase session at all, and without this exclusion they fell through
-  // to the same `!user` redirect-to-/login branch, so no crawler could ever actually fetch the
-  // generated share image.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|opengraph-image|twitter-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // `opengraph-image`/`twitter-image` (src/app/opengraph-image.tsx, src/app/twitter-image.tsx),
+  // and `sitemap.xml`/`robots.txt` (src/app/sitemap.ts, src/app/robots.ts) are all excluded for
+  // the same reason — a crawler (a link-preview bot, Googlebot fetching the sitemap/robots file
+  // itself, etc.) hits these with no Supabase session at all, and without this exclusion they
+  // fell through to the same `!user` redirect-to-/login branch below, so no crawler could ever
+  // actually fetch the generated file — for robots.txt specifically that would be especially
+  // self-defeating, since it's the file telling crawlers what they're allowed to fetch in the
+  // first place.
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|opengraph-image|twitter-image|sitemap\\.xml|robots\\.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

@@ -31,7 +31,7 @@ export interface SwapRateState {
 export async function previewSwapRate(fiatCurrency: Currency): Promise<SwapRateState> {
   try {
     const rates = await getUsdtPairRates(fiatCurrency);
-    if (!rates) return { error: `USDT/${fiatCurrency} isn't available on Busha right now.` };
+    if (!rates) return { error: `Conversions from ${fiatCurrency} aren't available right now. Please try again later.` };
     return { buyRate: rates.buyRate, sellRate: rates.sellRate };
   } catch (err) {
     return { error: toCustomerError(err, "busha.previewSwapRate") };
@@ -79,7 +79,7 @@ export async function executeSwap(
         ? amountNum
         : await (async () => {
             const rates = await getUsdtPairRates(sourceCurrency);
-            if (!rates) throw new Error(`USDT/${sourceCurrency} isn't available on Busha right now.`);
+            if (!rates) throw new Error(`Conversions from ${sourceCurrency} aren't available right now. Please try again later.`);
             return amountNum / rates.buyRate;
           })();
     if (usdtEquivalent < MINIMUM_USDT_EQUIVALENT) {

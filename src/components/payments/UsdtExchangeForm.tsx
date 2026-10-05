@@ -48,7 +48,7 @@ function SuccessScreen({
         <div>
           <p className="text-base font-semibold">Exchange didn&rsquo;t go through</p>
           <p className="mt-1 text-sm text-foreground/60">
-            Busha couldn&rsquo;t complete this exchange, and your balance has been refunded. Please try
+            We couldn&rsquo;t complete this exchange, and your balance has been refunded. Please try
             again.
           </p>
         </div>
@@ -72,7 +72,7 @@ function SuccessScreen({
         <p className="mt-1 text-sm text-foreground/60">
           {isCompleted
             ? "Your balance has been updated."
-            : "Confirming with Busha — this updates automatically, usually within a minute or two. Track its status on the Transactions page."}
+            : "Confirming your exchange — this updates automatically, usually within a minute or two. Track its status on the Transactions page."}
         </p>
       </div>
       <Button variant="secondary" onClick={onReset}>

@@ -71,7 +71,7 @@ export async function attemptAutomatedPayout(transactionId: string, userId: stri
     if (usdtEquivalent < MINIMUM_WITHDRAWAL_USDT_THRESHOLD) {
       await admin.rpc("record_automated_payout_failure", {
         p_transaction_id: transactionId,
-        p_reason: `Below Busha's minimum payout amount (${MINIMUM_WITHDRAWAL_USDT_THRESHOLD} USDT equivalent)`,
+        p_reason: `Below the minimum payout amount (${MINIMUM_WITHDRAWAL_USDT_THRESHOLD} USDT equivalent)`,
       });
       return;
     }

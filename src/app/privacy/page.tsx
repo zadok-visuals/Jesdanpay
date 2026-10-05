@@ -85,9 +85,8 @@ export default function PrivacyPolicyPage() {
             <LegalSection number={3} title="Who We Share Your Information With">
               <p>
                 <strong className="font-semibold text-primary-900">Payment and liquidity partners:</strong>{" "}
-                we share the minimum information necessary with our payment processing partners
-                (currently Busha and Klasha) to execute your deposits, withdrawals, and vendor
-                payments.
+                we share the minimum information necessary with our licensed payment partners to
+                execute your deposits, withdrawals, and vendor payments.
               </p>
               <p>
                 <strong className="font-semibold text-primary-900">Regulators and law enforcement:</strong>{" "}

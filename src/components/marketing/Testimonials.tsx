@@ -6,19 +6,19 @@ const TESTIMONIALS = [
   {
     quote:
       "JesDanPay took the guesswork out of paying our suppliers in Guangzhou. What used to take days now takes minutes.",
-    name: "Placeholder Name",
+    name: "Jeffrey Edward",
     role: "Import business owner, Lagos",
   },
   {
     quote:
       "The rate I see is the rate I get. No more surprises once the transfer actually lands.",
-    name: "Placeholder Name",
+    name: "Tonia Philips",
     role: "Trader, Accra",
   },
   {
     quote: "Withdrawals are fast and the verification process was painless from day one.",
-    name: "Placeholder Name",
-    role: "Entrepreneur, Nairobi",
+    name: "Eze John",
+    role: "Entrepreneur, Nigeria",
   },
 ];
 

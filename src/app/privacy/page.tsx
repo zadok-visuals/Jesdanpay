@@ -152,7 +152,27 @@ export default function PrivacyPolicyPage() {
               </p>
             </LegalSection>
 
-            <LegalSection number={10} title="Contact Us">
+            <LegalSection number={10} title="Analytics">
+              <p>
+                We use Google Analytics on our public marketing and sign in pages only — pages
+                like this one, the blog, and the login and sign up screens. It collects page
+                views, device and browser information, and your approximate location, using
+                cookies. Google Analytics is not used anywhere inside your logged in dashboard or
+                the admin area, so it never sees your transaction, balance, or KYC data. You can
+                read more about how Google handles this information in{" "}
+                <a
+                  href="https://policies.google.com/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-primary-700 underline underline-offset-2"
+                >
+                  Google&rsquo;s Privacy Policy
+                </a>
+                .
+              </p>
+            </LegalSection>
+
+            <LegalSection number={11} title="Contact Us">
               <p>
                 Questions about this policy or your data can be sent to{" "}
                 <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-primary-700 underline underline-offset-2">

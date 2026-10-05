@@ -130,45 +130,12 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
   }
 
   if (state.bankDetails) {
-    const { bankName, accountNumber, amount: bankAmount, expiresAt } = state.bankDetails;
     return (
-      <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold">Complete your deposit</p>
-          <button type="button" onClick={onClose} className="text-xs text-foreground/50 hover:text-foreground">
-            Close
-          </button>
-        </div>
-        <p className="text-xs text-foreground/50">
-          Transfer to the account below from your bank app. Your wallet is credited automatically
-          once the payment is confirmed.
-        </p>
-        <dl className="flex flex-col gap-2 rounded-lg bg-black/[.03] p-3 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <dt className="text-foreground/50">Bank</dt>
-            <dd className="font-medium">{bankName}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <dt className="text-foreground/50">Account number</dt>
-            <dd className="flex items-center gap-1 font-medium">
-              {accountNumber}
-              <CopyButton value={accountNumber} label="Copy account number" />
-            </dd>
-          </div>
-          {bankAmount != null && (
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-foreground/50">Amount</dt>
-              <dd className="font-medium">{formatBalance(currency, bankAmount)}</dd>
-            </div>
-          )}
-          {expiresAt && (
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-foreground/50">Expires</dt>
-              <dd className="font-medium">{new Date(expiresAt).toLocaleString()}</dd>
-            </div>
-          )}
-        </dl>
-      </div>
+      <KlashaBankDetailsCard
+        bankDetails={state.bankDetails}
+        onClose={onClose}
+        onStartNew={() => setState({})}
+      />
     );
   }
 
@@ -209,6 +176,92 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
           <p className="text-xs text-foreground/50">Enter an amount to continue</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// Pulled out of KlashaDepositForm so useCountdown is called unconditionally at this component's
+// own top level — KlashaDepositForm only mounts this when state.bankDetails is set, and a hook
+// can't live inside that conditional branch directly (Rules of Hooks), but a conditionally
+// *mounted child component* that calls its own hooks unconditionally is fine.
+function KlashaBankDetailsCard({
+  bankDetails,
+  onClose,
+  onStartNew,
+}: {
+  bankDetails: NonNullable<KlashaDepositState["bankDetails"]>;
+  onClose: () => void;
+  onStartNew: () => void;
+}) {
+  const currency = "GHS" as const;
+  const { bankName, accountNumber, amount: bankAmount, expiresAt } = bankDetails;
+
+  // Guard against a missing or unparseable expiry — passing that straight into useCountdown
+  // would tick toward NaN:NaN forever instead of just not showing a countdown at all.
+  const validExpiresAt = expiresAt && !Number.isNaN(new Date(expiresAt).getTime()) ? expiresAt : undefined;
+  const secondsLeft = useCountdown(validExpiresAt);
+  const expired = validExpiresAt ? secondsLeft <= 0 : false;
+
+  return (
+    <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">Complete your deposit</p>
+        <button type="button" onClick={onClose} className="text-xs text-foreground/50 hover:text-foreground">
+          Close
+        </button>
+      </div>
+
+      {!expired && (
+        <p className="text-xs text-foreground/50">
+          Transfer to the account below from your bank app. Your wallet is credited automatically
+          once the payment is confirmed.
+        </p>
+      )}
+
+      <dl className="flex flex-col gap-2 rounded-lg bg-black/[.03] p-3 text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-foreground/50">Bank</dt>
+          <dd className="font-medium">{bankName}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-foreground/50">Account number</dt>
+          <dd className="flex items-center gap-1 font-medium">
+            {accountNumber}
+            {/* Hidden once expired — nothing left worth copying for a reference that's no
+                longer live. */}
+            {!expired && <CopyButton value={accountNumber} label="Copy account number" />}
+          </dd>
+        </div>
+        {bankAmount != null && (
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-foreground/50">Amount</dt>
+            <dd className="font-medium">{formatBalance(currency, bankAmount)}</dd>
+          </div>
+        )}
+        {expiresAt && (
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-foreground/50">Expires</dt>
+            <dd className="font-medium">{new Date(expiresAt).toLocaleString()}</dd>
+          </div>
+        )}
+      </dl>
+
+      {validExpiresAt && (
+        <p className={`text-xs font-medium ${expired ? "text-danger-500" : "text-foreground/50"}`}>
+          {expired ? "Expired" : `Expires in ${formatCountdown(secondsLeft)}`}
+        </p>
+      )}
+
+      {expired && (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-black/[.02] p-4 text-center">
+          <p className="text-sm text-foreground/60">
+            This deposit expired before we received your payment. No funds were taken.
+          </p>
+          <Button variant="secondary" onClick={onStartNew}>
+            Start a new deposit
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

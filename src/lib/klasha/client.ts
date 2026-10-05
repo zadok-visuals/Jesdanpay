@@ -207,7 +207,7 @@ async function request<T>(
   path: string,
   options: { method: "GET" | "POST"; body?: unknown },
   isRetry = false,
-): Promise<T> {
+): Promise<{ data: T; status: number }> {
   const publicKey = readEnv("KLASHA_PUBLIC_KEY").trimmed;
   if (!publicKey) {
     throw new KlashaError("KLASHA_PUBLIC_KEY is not configured", 500);
@@ -236,9 +236,14 @@ async function request<T>(
     const message = json?.message ?? json?.error ?? `Klasha request failed (${res.status})`;
     throw new KlashaError(message, res.status);
   }
-  return (json.data ?? json) as T;
+  return { data: (json.data ?? json) as T, status: res.status };
 }
 
+// transfer_account/transfer_bank/transfer_amount/account_expiration are the only banktransfer
+// fields ever confirmed (from docs, and from the original NGN implementation before that moved
+// to Busha) — there's no separate "account holder name" field documented or seen live, so none
+// is assumed here. If a real banktransfer response one day includes one, add it here rather than
+// guessing a key name now.
 export type KlashaCollectionResult = {
   tx_ref: string;
   meta: {
@@ -259,7 +264,7 @@ export type KlashaCollectionResult = {
 // account-wide). GHS (like ZAR) returns a redirect URL to Klasha's hosted payment page —
 // confirmed from docs, not guessed. No separate quote/fee-preview step exists for this
 // endpoint, unlike Busha's quote-then-transfer pattern.
-export function createCollection(params: {
+export async function createCollection(params: {
   txRef: string;
   currency: "GHS";
   amount: string;
@@ -268,22 +273,39 @@ export function createCollection(params: {
   fullName: string;
   redirectUrl: string;
 }): Promise<KlashaCollectionResult> {
-  return request(`/pay/aggregators/${params.currency}/banktransfer/v3`, {
-    method: "POST",
-    body: {
-      tx_ref: params.txRef,
-      amount: params.amount,
-      email: params.email,
-      phone_number: params.phoneNumber,
-      currency: params.currency,
-      narration: "JesDanPay wallet deposit",
-      rate: 1,
-      paymentType: "woo",
-      productType: "COLLECTION",
-      sourceCurrency: params.currency,
-      sourceAmount: Number(params.amount),
-      fullname: params.fullName,
-      redirect_url: params.redirectUrl,
+  const { data: result, status } = await request<KlashaCollectionResult>(
+    `/pay/aggregators/${params.currency}/banktransfer/v3`,
+    {
+      method: "POST",
+      body: {
+        tx_ref: params.txRef,
+        amount: params.amount,
+        email: params.email,
+        phone_number: params.phoneNumber,
+        currency: params.currency,
+        narration: "JesDanPay wallet deposit",
+        rate: 1,
+        paymentType: "woo",
+        productType: "COLLECTION",
+        sourceCurrency: params.currency,
+        sourceAmount: Number(params.amount),
+        fullname: params.fullName,
+        redirect_url: params.redirectUrl,
+      },
     },
+  );
+
+  // Safe shape summary only — this is exactly what caught the "redirect silently missing" bug:
+  // the deposit button did nothing because initiateKlashaDeposit() returned a redirectUrl of
+  // undefined with no error, and nothing here logged enough to tell why. Never the full body
+  // (which can carry transfer_account/account numbers) and never tokens/keys/passwords.
+  console.error("[klasha.createCollection]", {
+    status,
+    topLevelKeys: Object.keys(result ?? {}),
+    authorizationMode: result?.meta?.authorization?.mode,
+    hasRedirect: !!result?.meta?.authorization?.redirect,
+    authorizationKeys: Object.keys(result?.meta?.authorization ?? {}),
   });
+
+  return result;
 }

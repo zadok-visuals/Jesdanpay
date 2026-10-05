@@ -120,9 +120,54 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
           Finish this payment on the secure page that opens next. Your wallet is credited
           automatically once it&rsquo;s confirmed.
         </p>
-        <a href={state.redirectUrl} target="_blank" rel="noopener noreferrer" className="self-start">
+        {/* Plain link, no target="_blank" — a new-tab popup can be blocked on mobile browsers,
+            which would look exactly like this button silently doing nothing all over again. */}
+        <a href={state.redirectUrl} className="self-start">
           <Button>Complete payment</Button>
         </a>
+      </div>
+    );
+  }
+
+  if (state.bankDetails) {
+    const { bankName, accountNumber, amount: bankAmount, expiresAt } = state.bankDetails;
+    return (
+      <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">Complete your deposit</p>
+          <button type="button" onClick={onClose} className="text-xs text-foreground/50 hover:text-foreground">
+            Close
+          </button>
+        </div>
+        <p className="text-xs text-foreground/50">
+          Transfer to the account below from your bank app. Your wallet is credited automatically
+          once the payment is confirmed.
+        </p>
+        <dl className="flex flex-col gap-2 rounded-lg bg-black/[.03] p-3 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-foreground/50">Bank</dt>
+            <dd className="font-medium">{bankName}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-foreground/50">Account number</dt>
+            <dd className="flex items-center gap-1 font-medium">
+              {accountNumber}
+              <CopyButton value={accountNumber} label="Copy account number" />
+            </dd>
+          </div>
+          {bankAmount != null && (
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-foreground/50">Amount</dt>
+              <dd className="font-medium">{formatBalance(currency, bankAmount)}</dd>
+            </div>
+          )}
+          {expiresAt && (
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-foreground/50">Expires</dt>
+              <dd className="font-medium">{new Date(expiresAt).toLocaleString()}</dd>
+            </div>
+          )}
+        </dl>
       </div>
     );
   }

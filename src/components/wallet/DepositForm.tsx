@@ -196,11 +196,25 @@ function KlashaBankDetailsCard({
   const currency = "GHS" as const;
   const { bankName, accountNumber, amount: bankAmount, expiresAt } = bankDetails;
 
-  // Guard against a missing or unparseable expiry — passing that straight into useCountdown
-  // would tick toward NaN:NaN forever instead of just not showing a countdown at all.
-  const validExpiresAt = expiresAt && !Number.isNaN(new Date(expiresAt).getTime()) ? expiresAt : undefined;
-  const secondsLeft = useCountdown(validExpiresAt);
-  const expired = validExpiresAt ? secondsLeft <= 0 : false;
+  // Decided ONCE, at mount, from the expiresAt this component received — not recomputed every
+  // tick — so a timestamp that genuinely counts down to zero while the user watches is trusted
+  // all the way to a real "Expired" (the normal case), but a timestamp that looks already-past
+  // the moment it arrives (seen live: a Klasha account_expiration with no timezone designator,
+  // parsed as local server time — see client.ts's normalizeExpiry) is never trusted at all, not
+  // even after it "passes". Also rejects anything more than 24h out as implausible for a deposit
+  // window, same defensive reasoning. Server-side normalization (client.ts) should mean this
+  // almost never distrusts a real value going forward, but this is the client-side backstop for
+  // whatever Klasha sends that still doesn't add up.
+  const [trustExpiry] = useState(() => {
+    if (!expiresAt) return false;
+    const parsed = new Date(expiresAt);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const msUntil = parsed.getTime() - Date.now();
+    return msUntil > 0 && msUntil <= 24 * 60 * 60 * 1000;
+  });
+
+  const secondsLeft = useCountdown(trustExpiry ? expiresAt : undefined);
+  const expired = trustExpiry ? secondsLeft <= 0 : false;
 
   return (
     <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
@@ -246,10 +260,12 @@ function KlashaBankDetailsCard({
         )}
       </dl>
 
-      {validExpiresAt && (
+      {trustExpiry ? (
         <p className={`text-xs font-medium ${expired ? "text-danger-500" : "text-foreground/50"}`}>
           {expired ? "Expired" : `Expires in ${formatCountdown(secondsLeft)}`}
         </p>
+      ) : (
+        <p className="text-xs text-foreground/50">Valid for a limited time.</p>
       )}
 
       {expired && (

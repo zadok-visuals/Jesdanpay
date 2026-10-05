@@ -239,6 +239,29 @@ async function request<T>(
   return { data: (json.data ?? json) as T, status: res.status };
 }
 
+// Klasha's account_expiration has been observed with no timezone designator (e.g.
+// "2026-10-05 17:30:00") — a string like that is parsed by JS's Date constructor as LOCAL
+// server time, not UTC, so on a server not running in whatever zone Klasha actually means, the
+// computed deadline can land in the past the instant it's received, which is exactly what made
+// the deposit screen's countdown show "Expired" immediately. Klasha support hasn't confirmed
+// which zone they use — the raw value is logged in createCollection below specifically so that
+// can be confirmed from real traffic. Until then, treat a timezone-less value as UTC (append
+// "Z") — the safer default for a payment deadline, since it never shows MORE time remaining than
+// what's actually left. A value that already carries an explicit designator (Z, or a +/-hh:mm
+// offset at the end) is trusted as-is. Returns undefined (never throws) if the result still
+// doesn't parse, so a garbled value from Klasha can't crash the deposit flow.
+function normalizeExpiry(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  const hasTimezoneDesignator = /(Z|[+-]\d{2}:?\d{2})$/.test(trimmed);
+  const candidate = hasTimezoneDesignator ? trimmed : `${trimmed.replace(" ", "T")}Z`;
+
+  const parsed = new Date(candidate);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+}
+
 // transfer_account/transfer_bank/transfer_amount/account_expiration are the only banktransfer
 // fields ever confirmed (from docs, and from the original NGN implementation before that moved
 // to Busha) — there's no separate "account holder name" field documented or seen live, so none
@@ -295,17 +318,36 @@ export async function createCollection(params: {
     },
   );
 
+  const rawExpiry = result?.meta?.authorization?.account_expiration;
+
   // Safe shape summary only — this is exactly what caught the "redirect silently missing" bug:
   // the deposit button did nothing because initiateKlashaDeposit() returned a redirectUrl of
   // undefined with no error, and nothing here logged enough to tell why. Never the full body
   // (which can carry transfer_account/account numbers) and never tokens/keys/passwords.
+  //
+  // expiryFieldName/expiryRawValue/serverTimeIso are here so a real response can confirm which
+  // timezone Klasha's account_expiration is actually in (see normalizeExpiry's own comment) —
+  // comparing the raw value against serverTimeIso across a few real deposits is the only way to
+  // actually answer that, Klasha support hasn't documented it.
   console.error("[klasha.createCollection]", {
     status,
     topLevelKeys: Object.keys(result ?? {}),
     authorizationMode: result?.meta?.authorization?.mode,
     hasRedirect: !!result?.meta?.authorization?.redirect,
     authorizationKeys: Object.keys(result?.meta?.authorization ?? {}),
+    expiryFieldName: "account_expiration",
+    expiryRawValue: rawExpiry ?? null,
+    serverTimeIso: new Date().toISOString(),
   });
+
+  // Normalize in place, before returning, so every caller (just initiateKlashaDeposit today)
+  // always sees a real, unambiguous ISO string rather than whatever raw format Klasha sent —
+  // see normalizeExpiry's own comment for why. Left untouched if it doesn't parse at all, so an
+  // outright garbled value is still visible (as "Invalid Date") rather than silently vanishing.
+  const normalizedExpiry = normalizeExpiry(rawExpiry);
+  if (result?.meta?.authorization && normalizedExpiry) {
+    result.meta.authorization.account_expiration = normalizedExpiry;
+  }
 
   return result;
 }

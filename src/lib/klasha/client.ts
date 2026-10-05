@@ -24,20 +24,23 @@
 //   3. Token lifetime is undocumented anywhere (confirmed directly by Klasha support) — this
 //      decodes the JWT's own `exp` claim rather than assuming a fixed TTL, and refreshes a
 //      little before that deadline rather than waiting to be rejected.
-//   4. Base URL for both auth and the GHS collection endpoint is confirmed by Klasha support
-//      to be https://dev.kcookery.com — their real intentional host, just not branded as
-//      klasha.com. Still overridable via KLASHA_API_BASE_URL: "dev" in the hostname is worth
-//      staying cautious about in case a separate production host turns out to exist later.
+//   4. Base URL for both auth and the GHS collection endpoint is https://dev.kcookery.com —
+//      confirmed by Klasha support (Jeremiah) to be their SANDBOX environment, not production.
+//      It has its own separate user store and sandbox credentials/keys — production account
+//      credentials do not work against it. Production uses a different live base URL that
+//      Klasha will provide once sandbox testing is finished; switching is just
+//      KLASHA_API_BASE_URL plus the live credentials, no code change needed.
 //
-// Things NOT guessed at and still needing a real production test once Klasha support clears
-// account access:
+// Things NOT guessed at and still needing a real test now that sandbox access works:
 //   1. The 3DES parameters below are almost certainly WRONG. Klasha's docs say 3DES (which
 //      needs a 16- or 24-byte key), but the real KLASHA_ENCRYPTION_SECRET base64-decodes to
 //      exactly 32 bytes — a valid AES-256 key length, not a valid 3DES one. Every live test so
 //      far has returned the same account-wide 403 regardless of encryption scheme (even a
-//      bodyless GET fails identically), so this has never actually been exercised end-to-end.
-//      Try AES-256-CBC (32-byte decoded key, 16-byte IV) first once account access clears,
-//      before assuming 3DES is correct just because it's what the docs say.
+//      bodyless GET fails identically), so this has never actually been exercised end-to-end —
+//      and the 403s seen then were most likely just production credentials being used against
+//      this sandbox host, not evidence against 3DES specifically. Re-check both now that login
+//      actually succeeds against sandbox: try AES-256-CBC (32-byte decoded key, 16-byte IV)
+//      first, before assuming 3DES is correct just because it's what the docs say.
 //   2. Whether the collection webhook (`charge.completed`) payload is encrypted the same way
 //      as request bodies — undocumented; the webhook route tries a plaintext parse first.
 
@@ -115,10 +118,17 @@ export async function login(): Promise<KlashaSession> {
   if (!username || !password) {
     throw new KlashaError("KLASHA_LOGIN_EMAIL / KLASHA_LOGIN_PASSWORD are not configured", 500);
   }
+  const publicKey = process.env.KLASHA_PUBLIC_KEY;
+  if (!publicKey) {
+    throw new KlashaError("KLASHA_PUBLIC_KEY is not configured", 500);
+  }
 
+  // Confirmed live in Postman (Klasha support): login against the sandbox host also requires
+  // x-auth-token, not just username/password — without it (or with production credentials
+  // against this sandbox host) the call returns 401, not just the downstream request() calls.
   const res = await fetch(`${BASE_URL}/auth/account/v2/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-auth-token": publicKey },
     body: JSON.stringify({ username, password }),
   });
 

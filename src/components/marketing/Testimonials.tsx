@@ -28,7 +28,7 @@ export function Testimonials() {
       <div className="mx-auto max-w-6xl">
         <Reveal className="mx-auto max-w-xl text-center">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary-800/50">
-            Trusted Across The Corridor
+            Trusted Across The Continents
           </p>
           <h2 className="mt-3 font-[family-name:var(--font-serif)] text-3xl text-primary-900 sm:text-4xl">
             What Our Customers Say

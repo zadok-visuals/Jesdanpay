@@ -21,18 +21,28 @@ export async function signUp(
   }
 
   const supabase = await createClient();
+  // Server-only — never read in client code, same APP_URL convention as requestPasswordReset
+  // below and src/lib/email.ts.
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName, country } },
+    options: {
+      data: { full_name: fullName, country },
+      // Confirmation email link goes through the existing /auth/callback, which exchanges the
+      // code and redirects to `next` — landing a freshly-confirmed user on /home, never on KYC.
+      emailRedirectTo: `${appUrl}/auth/callback?next=/home`,
+    },
   });
 
   if (error) {
     return { error: error.message };
   }
 
+  // A new user must land on the dashboard, never be forced into KYC — the only way into KYC is
+  // the user's own click on the /home banner or a link they choose (see KycStatusBanner.tsx).
   if (data.session) {
-    redirect("/onboarding/kyc");
+    redirect("/home");
   }
 
   redirect("/auth/check-email");

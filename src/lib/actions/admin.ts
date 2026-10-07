@@ -7,6 +7,7 @@ import { requireAdminUser, requireSuperAdmin } from "@/lib/auth/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AdminRole, Currency } from "@/lib/types/database";
+import { sendKycApprovedEmail } from "@/lib/email";
 
 export interface AdminActionState {
   error?: string;
@@ -90,9 +91,40 @@ export async function approveKyc(
   const userId = String(formData.get("userId") ?? "");
 
   const admin = createAdminClient();
-  const { error } = await admin.rpc("admin_approve_kyc", { p_user_id: userId });
 
+  // Checked BEFORE the RPC runs — admin_approve_kyc itself is idempotent (just re-sets the same
+  // status), but the notification/email below must only ever fire on a REAL not-approved ->
+  // approved transition, not on a double-click or a second admin tab acting on the same
+  // already-approved submission.
+  const { data: beforeProfile } = await admin
+    .from("profiles")
+    .select("kyc_status, email, full_name")
+    .eq("id", userId)
+    .maybeSingle();
+  const wasAlreadyApproved = beforeProfile?.kyc_status === "approved";
+
+  const { error } = await admin.rpc("admin_approve_kyc", { p_user_id: userId });
   if (error) return { error: error.message };
+
+  if (!wasAlreadyApproved) {
+    // Best effort — the approval itself already succeeded via the RPC above, that's the
+    // authoritative action, so a failed notification/email shouldn't turn this into an error the
+    // admin has to retry. Same pattern rejectKyc already uses below.
+    const { error: notifyError } = await admin.from("notifications").insert({
+      user_id: userId,
+      title: "Your verification is approved",
+      body: "Your identity verification is approved. You now have full access.",
+    });
+    if (notifyError) console.error("[approveKyc] notification insert failed:", notifyError);
+
+    if (beforeProfile?.email) {
+      await sendKycApprovedEmail({
+        userName: beforeProfile.full_name ?? beforeProfile.email,
+        userEmail: beforeProfile.email,
+      });
+    }
+  }
+
   revalidatePath("/admin/kyc");
   return {};
 }

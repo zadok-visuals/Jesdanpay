@@ -39,11 +39,12 @@ export default function PrivacyPolicyPage() {
               </p>
               <p>
                 <strong className="font-semibold text-primary-900">Identity verification (KYC):</strong>{" "}
-                depending on your tier and country, we collect your BVN or NIN (Nigeria) or a
-                government issued ID and its category (Ghana, Kenya), a selfie photo for identity
-                matching, and proof of address documents. Business accounts additionally provide a
-                tax identification number, ownership structure details, incorporation certificate,
-                director identification, and proof of business address.
+                depending on your tier and country, we collect your BVN or NIN for users in
+                Nigeria, or a government ID number and ID type for users elsewhere, plus a photo
+                of the government issued ID, and proof of address documents. Business accounts
+                additionally provide a tax identification number, ownership structure details,
+                incorporation certificate, director identification, and proof of business
+                address.
               </p>
               <p>
                 <strong className="font-semibold text-primary-900">Transaction data:</strong> records

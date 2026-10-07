@@ -6,7 +6,7 @@ import { Pill, statusTone } from "@/components/ui/Pill";
 import { Button } from "@/components/ui/Button";
 
 const STATUS_COPY: Record<string, string> = {
-  pending: "We're reviewing your submission. This usually takes 1-2 business days.",
+  pending: "We're reviewing your submission. This usually takes 1 to 2 hours.",
   approved: "You're verified! You now have full access to JesDanPay.",
   rejected: "We couldn't verify your details. Please review and resubmit.",
 };

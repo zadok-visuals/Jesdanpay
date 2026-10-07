@@ -39,15 +39,29 @@ export async function submitIndividualKyc(
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Decided here, from the stored profile — NEVER from a client-sent value, so a crafted
+  // request can't claim to be Nigerian (or not) to pick which fields get validated/stored.
+  const { data: profile } = await supabase.from("profiles").select("country").eq("id", user.id).maybeSingle();
+  const isNigerian = profile?.country === "NG";
+
   const phone = String(formData.get("phone") ?? "").trim();
   const bvnOrNin = String(formData.get("bvnOrNin") ?? "").trim();
+  const govIdNumber = String(formData.get("govIdNumber") ?? "").trim();
+  const govIdType = String(formData.get("govIdType") ?? "").trim();
 
   if (!phone) {
     return { error: "Phone number is required." };
   }
+  // Both-or-neither — the UI's own step gating already enforces this, this is just defense in
+  // depth against a request that bypasses it and sends only one of the two.
+  if (!isNigerian && (govIdNumber || govIdType) && !(govIdNumber && govIdType)) {
+    return { error: "Enter both your Gov ID No and the ID type." };
+  }
 
   try {
-    const selfiePath = await verifiedKycFileRef(supabase, user.id, formData, "selfie");
+    // Renamed from "selfie" — this is now a photo of a government-issued ID (passport, driver's
+    // licence, national ID, voter's card), not a face-match selfie. Prefix tier2-government-id.
+    const governmentIdPath = await verifiedKycFileRef(supabase, user.id, formData, "governmentId");
     const proofOfAddressPath = await verifiedKycFileRef(supabase, user.id, formData, "proofOfAddress");
 
     const documents: {
@@ -57,11 +71,16 @@ export async function submitIndividualKyc(
       file_ref?: string;
     }[] = [{ tier: "individual_tier_1", document_type: "phone_number", value: phone }];
 
-    if (bvnOrNin) {
-      documents.push({ tier: "individual_tier_2", document_type: "bvn_or_nin", value: bvnOrNin });
+    if (isNigerian) {
+      if (bvnOrNin) {
+        documents.push({ tier: "individual_tier_2", document_type: "bvn_or_nin", value: bvnOrNin });
+      }
+    } else if (govIdNumber && govIdType) {
+      documents.push({ tier: "individual_tier_2", document_type: "gov_id_number", value: govIdNumber });
+      documents.push({ tier: "individual_tier_2", document_type: "gov_id_type", value: govIdType });
     }
-    if (selfiePath) {
-      documents.push({ tier: "individual_tier_2", document_type: "selfie", file_ref: selfiePath });
+    if (governmentIdPath) {
+      documents.push({ tier: "individual_tier_2", document_type: "government_id", file_ref: governmentIdPath });
     }
     if (proofOfAddressPath) {
       documents.push({

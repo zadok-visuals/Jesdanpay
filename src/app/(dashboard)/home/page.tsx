@@ -16,7 +16,7 @@ export default async function HomePage() {
   if (!user) redirect("/login");
 
   const [{ data: profile }, { data: wallets }, activity] = await Promise.all([
-    supabase.from("profiles").select("kyc_status, kyc_type, kyc_rejection_reason").eq("id", user.id).single(),
+    supabase.from("profiles").select("kyc_status, kyc_type, kyc_rejection_reason, phone").eq("id", user.id).single(),
     supabase.from("wallets").select("*").eq("user_id", user.id).order("currency"),
     fetchUnifiedActivity(supabase, user.id, 5),
   ]);
@@ -26,6 +26,7 @@ export default async function HomePage() {
       {profile && (
         <KycStatusBanner
           status={profile.kyc_status}
+          phone={profile.phone}
           kycType={profile.kyc_type}
           kycRejectionReason={profile.kyc_rejection_reason}
         />

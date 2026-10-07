@@ -52,7 +52,7 @@ export async function initiateKlashaDeposit(
     .eq("id", user.id)
     .single();
   if (!profile?.phone) {
-    return { error: "Add a phone number to your profile (complete KYC) before depositing." };
+    return { error: "Finish setting up your account (add a phone number) before depositing." };
   }
 
   const txRef = randomUUID();

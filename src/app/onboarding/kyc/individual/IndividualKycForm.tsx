@@ -9,12 +9,15 @@ import { FileDropzone } from "@/components/ui/FileDropzone";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 
 const initialState: KycActionState = {};
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 2;
 
+// Phone is no longer collected here — it's gathered in the quick onboarding step
+// (saveOnboardingBasics, src/app/onboarding/kyc/page.tsx) right after signup, before a user can
+// even reach this form (see the page-level guard in page.tsx). This is now ID submission only:
+// identity details + a government ID photo, then proof of address.
 export function IndividualKycForm({ userId, country }: { userId: string; country: string | null }) {
   const [state, formAction, pending] = useActionState(submitIndividualKyc, initialState);
   const [step, setStep] = useState(1);
-  const [phone, setPhone] = useState("");
   const [bvnOrNin, setBvnOrNin] = useState("");
   const [govIdNumber, setGovIdNumber] = useState("");
   const [govIdType, setGovIdType] = useState("");
@@ -26,16 +29,13 @@ export function IndividualKycForm({ userId, country }: { userId: string; country
   // database, never trusting this client-side value for what gets written.
   const isNigerian = country === "NG";
 
-  const canContinueStep1 = phone.trim().length > 0;
   const identityFieldsFilled = isNigerian
     ? bvnOrNin.trim().length > 0
     : govIdNumber.trim().length > 0 && govIdType.trim().length > 0;
-  const canContinueStep2 = identityFieldsFilled && governmentIdPath !== null;
+  const canContinueStep1 = identityFieldsFilled && governmentIdPath !== null;
 
   let continueDisabledReason: string | null = null;
   if (step === 1 && !canContinueStep1) {
-    continueDisabledReason = "Enter your phone number to continue";
-  } else if (step === 2 && !canContinueStep2) {
     if (isNigerian) {
       if (!bvnOrNin.trim() && !governmentIdPath) {
         continueDisabledReason = "Enter your BVN or NIN and upload your ID to continue";
@@ -61,23 +61,7 @@ export function IndividualKycForm({ userId, country }: { userId: string; country
 
       <form action={formAction} className="flex flex-col gap-4">
         <div className={step === 1 ? "flex flex-col gap-4" : "hidden"}>
-          <h1 className="mb-1 text-lg font-semibold">Tier 1 — Phone verification</h1>
-          <p className="mb-2 text-sm text-foreground/60">
-            Unlocks a low transaction limit to get you started.
-          </p>
-          <Input
-            label="Phone number"
-            id="phone"
-            name="phone"
-            type="tel"
-            placeholder="+234…"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </div>
-
-        <div className={step === 2 ? "flex flex-col gap-4" : "hidden"}>
-          <h1 className="mb-1 text-lg font-semibold">Tier 2 — Identity verification</h1>
+          <h1 className="mb-1 text-lg font-semibold">Identity verification</h1>
           <p className="mb-2 text-sm text-foreground/60">
             Raises your limit. Provide your identity details and a photo of your government
             issued ID.
@@ -129,8 +113,8 @@ export function IndividualKycForm({ userId, country }: { userId: string; country
           />
         </div>
 
-        <div className={step === 3 ? "flex flex-col gap-4" : "hidden"}>
-          <h1 className="mb-1 text-lg font-semibold">Tier 3 — Proof of address</h1>
+        <div className={step === 2 ? "flex flex-col gap-4" : "hidden"}>
+          <h1 className="mb-1 text-lg font-semibold">Proof of address</h1>
           <p className="mb-2 text-sm text-foreground/60">
             Unlocks your highest transaction limit. A recent utility bill or bank statement works.
           </p>
@@ -171,7 +155,7 @@ export function IndividualKycForm({ userId, country }: { userId: string; country
             <div className="flex flex-col items-end gap-1.5">
               <Button
                 type="button"
-                disabled={step === 1 ? !canContinueStep1 : !canContinueStep2}
+                disabled={!canContinueStep1}
                 onClick={() => setStep(step + 1)}
                 title={continueDisabledReason ?? undefined}
               >

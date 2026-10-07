@@ -15,7 +15,23 @@ export default async function IndividualKycPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("country").eq("id", user.id).maybeSingle();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("country, kyc_type, phone")
+    .eq("id", user.id)
+    .maybeSingle();
 
-  return <IndividualKycForm userId={user.id} country={profile?.country ?? null} />;
+  // Quick onboarding (account type + phone) hasn't happened yet — this form needs both to make
+  // sense (the ID it asks for depends on country, and the phone is meant to already be on file),
+  // so send them there first rather than letting them submit an incomplete profile.
+  if (!profile?.kyc_type || !profile?.phone) {
+    redirect("/onboarding/kyc");
+  }
+  // Wrong form for this account type — e.g. a business account's own link/bookmark to the
+  // individual form. Redirect to the one that actually matches, not a dead end.
+  if (profile.kyc_type !== "individual") {
+    redirect("/onboarding/kyc/business");
+  }
+
+  return <IndividualKycForm userId={user.id} country={profile.country} />;
 }

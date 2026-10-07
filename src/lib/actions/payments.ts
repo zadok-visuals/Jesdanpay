@@ -8,21 +8,11 @@ import { toCustomerError } from "@/lib/provider-error";
 import { probeFiatToUsdtRate } from "@/lib/busha/rate";
 import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/tiers";
 import { MINIMUM_USDT_EQUIVALENT } from "@/lib/busha/limits";
+import { verifyOwnedUpload } from "@/lib/storage/verifyUpload";
 
 export interface PaymentsActionState {
   error?: string;
   transactionId?: string;
-}
-
-async function uploadRecipientQrCode(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  file: File,
-) {
-  const path = `${userId}/qr-${Date.now()}-${file.name}`;
-  const { error } = await supabase.storage.from("rmb-recipient-qr").upload(path, file);
-  if (error) throw error;
-  return path;
 }
 
 export async function submitRmbExchange(
@@ -38,7 +28,11 @@ export async function submitRmbExchange(
   const payoutMethod = String(formData.get("payoutMethod") ?? "") as PayoutMethod;
   const sourceCurrency = String(formData.get("sourceCurrency") ?? "") as Currency;
   const amount = Number(formData.get("amount"));
-  const qrCodeFile = formData.get("qrCodeFile") as File | null;
+  // The browser uploads the QR screenshot straight to the "rmb-recipient-qr" bucket before this
+  // action ever runs (see FileDropzone/clientUpload.ts) — only the resulting path string arrives
+  // here, same fix as src/lib/actions/kyc.ts, and for the same reason: a QR screenshot easily
+  // exceeded the server action body limit and crashed with no error shown to the user.
+  const qrCodePath = String(formData.get("qrCodePath") ?? "").trim();
   const saveRecipient = formData.get("saveRecipient") === "true";
   const saveLabel = String(formData.get("saveLabel") ?? "").trim();
 
@@ -53,12 +47,10 @@ export async function submitRmbExchange(
   }
 
   let qrCodeRef: string | undefined;
-  if (qrCodeFile && qrCodeFile.size > 0) {
-    try {
-      qrCodeRef = await uploadRecipientQrCode(supabase, user.id, qrCodeFile);
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : "Could not upload the QR code image." };
-    }
+  if (qrCodePath) {
+    const ok = await verifyOwnedUpload(supabase, "rmb-recipient-qr", user.id, qrCodePath);
+    if (!ok) return { error: "We couldn't verify the uploaded QR code. Please try uploading it again." };
+    qrCodeRef = qrCodePath;
   }
 
   let recipientInsert: Partial<RmbRecipient> & Pick<RmbRecipient, "user_id" | "payout_method"> = {

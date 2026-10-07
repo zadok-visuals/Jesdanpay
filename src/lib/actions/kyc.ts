@@ -3,20 +3,29 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { sendKycSubmissionAlert } from "@/lib/email";
+import { verifyOwnedUpload } from "@/lib/storage/verifyUpload";
 
 export interface KycActionState {
   error?: string;
 }
 
-async function uploadKycFile(
+// Files are no longer posted through this action's own FormData — the browser uploads straight
+// to the "kyc-documents" bucket first (see clientUpload.ts) and only this resulting path string
+// comes through here, avoiding Next's server action body limit entirely for what used to be a
+// multi-megabyte phone photo. A path is still untrusted client input though, so it's verified
+// (own folder + object actually exists) before being written into kyc_documents for a reviewer
+// to later open. Returns null (silently skip) for a blank field, since every upload is optional
+// at the form level; throws a friendly, UI-safe message if a non-blank path fails verification.
+async function verifiedKycFileRef(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  file: File,
-  prefix: string,
-) {
-  const path = `${userId}/${prefix}-${Date.now()}-${file.name}`;
-  const { error } = await supabase.storage.from("kyc-documents").upload(path, file);
-  if (error) throw error;
+  formData: FormData,
+  field: string,
+): Promise<string | null> {
+  const path = String(formData.get(field) ?? "").trim();
+  if (!path) return null;
+  const ok = await verifyOwnedUpload(supabase, "kyc-documents", userId, path);
+  if (!ok) throw new Error("We couldn't verify one of your uploaded files. Please try uploading it again.");
   return path;
 }
 
@@ -32,14 +41,15 @@ export async function submitIndividualKyc(
 
   const phone = String(formData.get("phone") ?? "").trim();
   const bvnOrNin = String(formData.get("bvnOrNin") ?? "").trim();
-  const selfie = formData.get("selfie") as File | null;
-  const proofOfAddress = formData.get("proofOfAddress") as File | null;
 
   if (!phone) {
     return { error: "Phone number is required." };
   }
 
   try {
+    const selfiePath = await verifiedKycFileRef(supabase, user.id, formData, "selfie");
+    const proofOfAddressPath = await verifiedKycFileRef(supabase, user.id, formData, "proofOfAddress");
+
     const documents: {
       tier: "individual_tier_1" | "individual_tier_2" | "individual_tier_3";
       document_type: string;
@@ -50,16 +60,14 @@ export async function submitIndividualKyc(
     if (bvnOrNin) {
       documents.push({ tier: "individual_tier_2", document_type: "bvn_or_nin", value: bvnOrNin });
     }
-    if (selfie && selfie.size > 0) {
-      const path = await uploadKycFile(supabase, user.id, selfie, "tier2-selfie");
-      documents.push({ tier: "individual_tier_2", document_type: "selfie", file_ref: path });
+    if (selfiePath) {
+      documents.push({ tier: "individual_tier_2", document_type: "selfie", file_ref: selfiePath });
     }
-    if (proofOfAddress && proofOfAddress.size > 0) {
-      const path = await uploadKycFile(supabase, user.id, proofOfAddress, "tier3-address");
+    if (proofOfAddressPath) {
       documents.push({
         tier: "individual_tier_3",
         document_type: "proof_of_address",
-        file_ref: path,
+        file_ref: proofOfAddressPath,
       });
     }
 
@@ -118,37 +126,35 @@ export async function submitBusinessKyc(
   const businessName = String(formData.get("businessName") ?? "").trim();
   const tin = String(formData.get("tin") ?? "").trim();
   const ownershipStructure = String(formData.get("ownershipStructure") ?? "").trim();
-  const cacCertificate = formData.get("cacCertificate") as File | null;
-  const directorId = formData.get("directorId") as File | null;
-  const proofOfBusinessAddress = formData.get("proofOfBusinessAddress") as File | null;
 
   if (!businessName || !tin) {
     return { error: "Business name and TIN are required." };
   }
 
   try {
+    const cacCertificatePath = await verifiedKycFileRef(supabase, user.id, formData, "cacCertificate");
+    const directorIdPath = await verifiedKycFileRef(supabase, user.id, formData, "directorId");
+    const proofOfBusinessAddressPath = await verifiedKycFileRef(
+      supabase,
+      user.id,
+      formData,
+      "proofOfBusinessAddress",
+    );
+
     const documents: { document_type: string; value?: string; file_ref?: string }[] = [
       { document_type: "tin", value: tin },
     ];
     if (ownershipStructure) {
       documents.push({ document_type: "ownership_structure", value: ownershipStructure });
     }
-    if (cacCertificate && cacCertificate.size > 0) {
-      const path = await uploadKycFile(supabase, user.id, cacCertificate, "cac-certificate");
-      documents.push({ document_type: "cac_certificate", file_ref: path });
+    if (cacCertificatePath) {
+      documents.push({ document_type: "cac_certificate", file_ref: cacCertificatePath });
     }
-    if (directorId && directorId.size > 0) {
-      const path = await uploadKycFile(supabase, user.id, directorId, "director-id");
-      documents.push({ document_type: "director_id", file_ref: path });
+    if (directorIdPath) {
+      documents.push({ document_type: "director_id", file_ref: directorIdPath });
     }
-    if (proofOfBusinessAddress && proofOfBusinessAddress.size > 0) {
-      const path = await uploadKycFile(
-        supabase,
-        user.id,
-        proofOfBusinessAddress,
-        "proof-of-business-address",
-      );
-      documents.push({ document_type: "proof_of_business_address", file_ref: path });
+    if (proofOfBusinessAddressPath) {
+      documents.push({ document_type: "proof_of_business_address", file_ref: proofOfBusinessAddressPath });
     }
 
     // Same upsert-on-resubmission fix as submitIndividualKyc above.

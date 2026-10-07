@@ -40,9 +40,11 @@ interface SendState {
   recipientBankAccountNumber: string;
   recipientBankName: string;
   recipientAccountHolderName: string;
-  // QR code, as an alternative to typing the Alipay/WeChat ID
+  // QR code, as an alternative to typing the Alipay/WeChat ID. Uploaded straight to storage from
+  // the browser (see FileDropzone/clientUpload.ts) — qrCodePath is the resulting storage path,
+  // never a raw File, so submitRmbExchange's own FormData only ever carries a small string.
   useQrCode: boolean;
-  qrCodeFile: File | null;
+  qrCodePath: string | null;
   qrCodeFileName: string;
   // Save for next time
   saveRecipient: boolean;
@@ -62,7 +64,7 @@ const DEFAULT_STATE: SendState = {
   recipientBankName: "",
   recipientAccountHolderName: "",
   useQrCode: false,
-  qrCodeFile: null,
+  qrCodePath: null,
   qrCodeFileName: "",
   saveRecipient: false,
   saveLabel: "",
@@ -442,12 +444,14 @@ function RecipientStep({
   onBack,
   onNext,
   savedRecipients,
+  userId,
 }: {
   state: SendState;
   onChange: (patch: Partial<SendState>) => void;
   onBack: () => void;
   onNext: () => void;
   savedRecipients: SavedRmbRecipient[];
+  userId: string;
 }) {
   // Validation per method. For Alipay/WeChat, the contact detail (text or QR) and the two name
   // fields are independent requirements — a QR upload satisfies the contact detail but never
@@ -455,7 +459,7 @@ function RecipientStep({
   const isAlipayOrWechat = state.payoutMethod === "alipay" || state.payoutMethod === "wechat";
   const contactValid = isAlipayOrWechat
     ? state.useQrCode
-      ? state.qrCodeFile !== null
+      ? state.qrCodePath !== null
       : state.payoutMethod === "alipay"
         ? state.recipientAlipayId.trim().length > 0
         : state.recipientWechatId.trim().length > 0
@@ -504,7 +508,7 @@ function RecipientStep({
       recipientBankName: recipient.recipient_bank_name ?? "",
       recipientAccountHolderName: recipient.recipient_account_holder_name ?? "",
       useQrCode: false,
-      qrCodeFile: null,
+      qrCodePath: null,
       qrCodeFileName: "",
     });
   }
@@ -627,9 +631,11 @@ function RecipientStep({
             <FileDropzone
               label={`${state.payoutMethod === "alipay" ? "Alipay" : "WeChat Pay"} QR code`}
               accept="image/*"
-              onFileSelected={(file) =>
-                onChange({ qrCodeFile: file, qrCodeFileName: file?.name ?? "" })
-              }
+              bucket="rmb-recipient-qr"
+              userId={userId}
+              prefix="qr"
+              path={state.qrCodePath}
+              onUploaded={(path, fileName) => onChange({ qrCodePath: path, qrCodeFileName: fileName ?? "" })}
             />
           )}
         </div>
@@ -829,10 +835,12 @@ export function RmbExchangeForm({
   wallets,
   savedRecipients = [],
   tierRates,
+  userId,
 }: {
   wallets: Wallet[];
   savedRecipients?: SavedRmbRecipient[];
   tierRates: CnyTierRate[];
+  userId: string;
 }) {
   const [step, setStep] = useState<Step>("source");
   const [formState, setFormState] = useState<SendState>(DEFAULT_STATE);
@@ -857,7 +865,7 @@ export function RmbExchangeForm({
     fd.set("recipientBankAccountNumber", formState.recipientBankAccountNumber);
     fd.set("recipientBankName", formState.recipientBankName);
     fd.set("recipientAccountHolderName", formState.recipientAccountHolderName);
-    if (formState.qrCodeFile) fd.set("qrCodeFile", formState.qrCodeFile);
+    if (formState.qrCodePath) fd.set("qrCodePath", formState.qrCodePath);
     fd.set("saveRecipient", String(formState.saveRecipient));
     fd.set("saveLabel", formState.saveLabel);
 
@@ -916,6 +924,7 @@ export function RmbExchangeForm({
           onBack={() => setStep("source")}
           onNext={() => setStep("confirm")}
           savedRecipients={savedRecipients}
+          userId={userId}
         />
       )}
 

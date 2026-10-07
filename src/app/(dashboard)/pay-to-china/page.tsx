@@ -26,6 +26,7 @@ export default async function PayToChinaPage() {
         wallets={wallets ?? []}
         savedRecipients={savedRecipients ?? []}
         tierRates={tierRates ?? []}
+        userId={user.id}
       />
     </div>
   );

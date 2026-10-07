@@ -19,24 +19,34 @@ import { BushaError } from "@/lib/busha/client";
 // feature (src/lib/actions/busha.ts) — both need "the live rate for this pair," and both hit
 // the exact same account constraints, so this is the one place that logic lives.
 export async function probeFiatToUsdtRate(fiatCurrency: string): Promise<number> {
-  async function quoteAt(amount: string) {
+  async function quoteAt(amount: string, quiet = false) {
     const quote = await busha.createQuote({
       sourceCurrency: fiatCurrency,
       targetCurrency: "USDT",
       sourceAmount: amount,
+      quiet,
     });
     return Number(quote.target_amount) / Number(quote.source_amount);
   }
 
   try {
-    return await quoteAt("1");
+    // Confirmed live: this 1-unit probe is rejected with a "minimum ... amount is X" message for
+    // almost every pair — it's the expected, routine first step of discovering the real minimum,
+    // not a genuine failure, so it runs quiet to avoid logging an "error" on every single call.
+    return await quoteAt("1", true);
   } catch (err) {
     if (err instanceof BushaError) {
       // Busha's wording varies ("minimum sale amount", "Minimum trade amount") depending on
       // the pair — confirmed live for both — so match loosely on "minimum ... amount is X".
       const match = err.message.match(/minimum .*?amount is ([\d.]+)/i);
+      // Retry at the real minimum NOT quiet — a failure here is no longer the routine case, so
+      // it logs through request()'s own normal path same as before this change.
       if (match) return await quoteAt(match[1]);
     }
+    // The 1-unit probe failed with something other than the expected "minimum amount" message —
+    // not the routine case the quiet probe above was meant to swallow. That call was quiet, so
+    // log it here instead, same discipline as any other real failure.
+    console.error("[busha.rate] probeFiatToUsdtRate failed", { fiatCurrency, error: err });
     throw err;
   }
 }

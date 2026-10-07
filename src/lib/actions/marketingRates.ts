@@ -22,7 +22,15 @@ export interface LiveCnyRate {
   amount: number;
 }
 
-const FIAT_CURRENCIES: Currency[] = ["NGN", "GHS", "KES"];
+// GHS deliberately excluded — Busha has no GHS pair on this account at all (confirmed live),
+// so probing it always fails with a validation error, every ~55s, for every page view, forever.
+// That's not a transient/real failure Promise.allSettled should be swallowing silently; it's a
+// currency with no live-rate source at all. A manually-maintained GHS rate would be the correct
+// fix (use it here with the same markup/staleness rules as the rest of this card), but no such
+// feature exists in this codebase today — no manual_rates table, no admin GHS-rate screen,
+// confirmed by searching the whole repo. Until one exists, GHS is simply omitted from this
+// public card rather than probed and logged as a false "failure" on every call.
+const FIAT_CURRENCIES: Currency[] = ["NGN", "KES"];
 
 // probeFiatToUsdtRate creates a real quote against Busha's live API on every call — fine for an
 // authenticated user changing a currency dropdown, not fine for an unauthenticated marketing page

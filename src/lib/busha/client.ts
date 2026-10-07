@@ -34,7 +34,13 @@ async function request<T>(
   // revalidate: opt-in Next.js cache lifetime (seconds) for the rare read-only endpoint that
   // wants one (e.g. getBanks below) — omitted everywhere else so every mutating/time-sensitive
   // call (quotes, transfers, recipients) stays fully uncached, as it must.
-  options: { method: "GET" | "POST"; body?: unknown; revalidate?: number },
+  // quiet: set by a caller that EXPECTS this specific call might fail as part of routine,
+  // intended control flow (e.g. probeFiatToUsdtRate's first 1-unit probe, which Busha rejects
+  // for almost every pair as a normal way of discovering the real minimum) — suppresses the
+  // error-response console.error below, but never changes the thrown BushaError itself, so the
+  // caller still sees and can act on the real failure. A genuine, unexpected failure must never
+  // be marked quiet — this is strictly for already-anticipated control-flow errors.
+  options: { method: "GET" | "POST"; body?: unknown; revalidate?: number; quiet?: boolean },
 ): Promise<T> {
   const apiKey = process.env.BUSHA_API_KEY;
   if (!apiKey) throw new BushaError("BUSHA_API_KEY is not configured", 500);
@@ -60,7 +66,9 @@ async function request<T>(
     // errors likely name the specific invalid field under one of these keys (standard for this
     // kind of response). Logging the full raw error here (not guessing which key it is) so the
     // real shape is visible in server logs the first time this actually fires.
-    console.error("[busha.request] error response", { path, status: res.status, error: json?.error ?? json });
+    if (!options.quiet) {
+      console.error("[busha.request] error response", { path, status: res.status, error: json?.error ?? json });
+    }
     const detail = json?.error?.details ?? json?.error?.errors ?? json?.error?.fields;
     const detailText = detail != null ? ` — ${typeof detail === "string" ? detail : JSON.stringify(detail)}` : "";
     throw new BushaError(`${message}${detailText}`, res.status);
@@ -142,6 +150,9 @@ export function createQuote(params: {
   // recipientId is optional here (only sent when present) and address/network are the crypto
   // path's own fields, independent of it.
   payOut?: { type: string; recipientId?: string; address?: string; network?: string };
+  // Passed straight through to request() — see its own comment. Used by probeFiatToUsdtRate's
+  // first, routinely-rejected 1-unit probe.
+  quiet?: boolean;
 }): Promise<BushaQuote> {
   const currency = params.sourceCurrency.toUpperCase();
   const payIn = params.isDeposit
@@ -162,6 +173,7 @@ export function createQuote(params: {
 
   return request("/v1/quotes", {
     method: "POST",
+    quiet: params.quiet,
     body: {
       source_currency: currency,
       target_currency: params.targetCurrency.toUpperCase(),

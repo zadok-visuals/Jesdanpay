@@ -82,3 +82,90 @@ export async function sendKycApprovedEmail(params: { userName: string; userEmail
     console.error("[kyc approved email] failed to send via Resend", err);
   }
 }
+
+// Fire-and-forget completion notice for the customer (src/lib/actions/admin.ts's
+// completeRmbTransaction). Same never-throws, skip-quietly-without-RESEND_API_KEY discipline as
+// the KYC emails above — the completion itself has already taken effect by the time this runs.
+export async function sendRmbCompletedEmail(params: {
+  userName: string;
+  userEmail: string;
+  deliveredAmount: number;
+  hasProof: boolean;
+}): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn("[rmb completed email] RESEND_API_KEY is not configured — skipping completion email");
+    return;
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const transactionsUrl = `${appUrl}/transactions`;
+    const safeName = escapeHtml(params.userName);
+    const amountText = `¥${params.deliveredAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    const proofLine = params.hasProof ? " You can view the proof of payment in the app, on this transaction." : "";
+
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: params.userEmail,
+      subject: "Your payment to China is complete",
+      text: `Hi ${params.userName},\n\nGood news - the vendor has been paid. ${amountText} was delivered.${proofLine}\n\nView your transactions: ${transactionsUrl}`,
+      html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#171717;max-width:480px;margin:0 auto;">
+  <p>Hi ${safeName},</p>
+  <p>Good news, the vendor has been paid. <strong>${amountText}</strong> was delivered.${proofLine}</p>
+  <p style="margin:24px 0;">
+    <a href="${transactionsUrl}" style="display:inline-block;background:#1b7a4b;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:500;">View your transactions</a>
+  </p>
+</div>`,
+    });
+    if (error) {
+      console.error("[rmb completed email] Resend returned an error", error);
+    }
+  } catch (err) {
+    console.error("[rmb completed email] failed to send via Resend", err);
+  }
+}
+
+// Fire-and-forget rejection notice for the customer (src/lib/actions/admin.ts's
+// rejectRmbTransaction). Same discipline as sendRmbCompletedEmail above.
+export async function sendRmbRejectedEmail(params: {
+  userName: string;
+  userEmail: string;
+  reason: string;
+}): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn("[rmb rejected email] RESEND_API_KEY is not configured — skipping rejection email");
+    return;
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const transactionsUrl = `${appUrl}/transactions`;
+    const safeName = escapeHtml(params.userName);
+    const safeReason = escapeHtml(params.reason);
+
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: params.userEmail,
+      subject: "Your payment to China was not completed",
+      text: `Hi ${params.userName},\n\nWe could not complete your payment to China.\n\nReason: ${params.reason}\n\nThe amount you set aside has been returned to your balance. You can review your transactions here: ${transactionsUrl}`,
+      html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#171717;max-width:480px;margin:0 auto;">
+  <p>Hi ${safeName},</p>
+  <p>We could not complete your payment to China.</p>
+  <p><strong>Reason:</strong> ${safeReason}</p>
+  <p>The amount you set aside has been returned to your balance.</p>
+  <p style="margin:24px 0;">
+    <a href="${transactionsUrl}" style="display:inline-block;background:#1b7a4b;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:500;">Review your transactions</a>
+  </p>
+</div>`,
+    });
+    if (error) {
+      console.error("[rmb rejected email] Resend returned an error", error);
+    }
+  } catch (err) {
+    console.error("[rmb rejected email] failed to send via Resend", err);
+  }
+}

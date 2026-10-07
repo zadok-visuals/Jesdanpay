@@ -63,6 +63,21 @@ export function TransactionDetailModal({
           {detail.status === "failed" && detail.rejectionReason && (
             <Row label="Rejection reason" value={detail.rejectionReason} />
           )}
+          {detail.paymentProofUrl && (
+            <Row
+              label="Proof of payment"
+              value={
+                <a
+                  href={detail.paymentProofUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-primary-600 hover:underline"
+                >
+                  View proof of payment
+                </a>
+              }
+            />
+          )}
           {detail.description && <Row label="Description" value={detail.description} />}
           {detail.reference && <Row label="Reference" value={detail.reference} />}
           {(() => {

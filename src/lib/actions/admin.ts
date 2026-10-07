@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -7,7 +8,7 @@ import { requireAdminUser, requireSuperAdmin } from "@/lib/auth/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AdminRole, Currency } from "@/lib/types/database";
-import { sendKycApprovedEmail } from "@/lib/email";
+import { sendKycApprovedEmail, sendRmbCompletedEmail, sendRmbRejectedEmail } from "@/lib/email";
 
 export interface AdminActionState {
   error?: string;
@@ -32,9 +33,50 @@ export async function markRmbProcessing(
   return {};
 }
 
-// Records what was actually delivered to the vendor in China (via Klasha's OTC desk) so margin
-// becomes computable — requested `amount` vs. `actual_target_amount`, at whatever rate the
-// admin actually got. Replaces the old plain status-flip.
+export interface RmbProofUploadUrlState {
+  error?: string;
+  path?: string;
+  token?: string;
+}
+
+// Admin-gated — the destination folder is the CUSTOMER's own user id, not the admin's, so there's
+// no RLS path for the admin's own browser session to upload directly (see migration 0043's header
+// comment). This mints a short-lived signed upload token via the service-role client instead; the
+// browser then finishes the upload itself (uploadToSignedUrl, src/lib/storage/clientUpload.ts) so
+// the file bytes never pass through this server action's own 1MB body limit.
+export async function createRmbProofUploadUrl(
+  transactionId: string,
+  fileName: string,
+): Promise<RmbProofUploadUrlState> {
+  await requireAdminUser();
+  if (!transactionId) return { error: "Missing transaction." };
+
+  const admin = createAdminClient();
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("user_id")
+    .eq("id", transactionId)
+    .eq("type", "rmb_manual")
+    .maybeSingle();
+  if (!tx) return { error: "We could not find that request. Please refresh and try again." };
+
+  const extMatch = /\.([a-zA-Z0-9]{1,5})$/.exec(fileName);
+  const ext = extMatch ? extMatch[1].toLowerCase() : "bin";
+  const path = `${tx.user_id}/${transactionId}-${randomUUID().replace(/-/g, "").slice(0, 16)}.${ext}`;
+
+  const { data, error } = await admin.storage.from("rmb-payment-proof").createSignedUploadUrl(path);
+  if (error) {
+    console.error("[createRmbProofUploadUrl]", error);
+    return { error: "We could not prepare the upload. Please try again." };
+  }
+
+  return { path: data.path, token: data.token };
+}
+
+// Records what was actually delivered to the vendor in China so margin becomes computable —
+// requested `amount` vs. `actual_target_amount`, at whatever rate the admin actually got — and
+// optionally attaches a payment proof screenshot the customer can view (see createRmbProofUploadUrl
+// above for how that file gets uploaded).
 export async function completeRmbTransaction(
   _prevState: AdminActionState,
   formData: FormData,
@@ -43,19 +85,63 @@ export async function completeRmbTransaction(
   const transactionId = String(formData.get("transactionId") ?? "");
   const actualTargetAmount = Number(formData.get("actualTargetAmount"));
   const note = String(formData.get("note") ?? "").trim();
+  const proofRefRaw = String(formData.get("proofRef") ?? "").trim();
 
   if (!Number.isFinite(actualTargetAmount) || actualTargetAmount <= 0) {
     return { error: "Enter the actual CNY amount delivered." };
   }
 
   const admin = createAdminClient();
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("user_id")
+    .eq("id", transactionId)
+    .eq("type", "rmb_manual")
+    .maybeSingle();
+  if (!tx) return { error: "We could not find that request. Please refresh and try again." };
+
+  // Untrusted client input — must point into THIS transaction's own user's folder, never another
+  // user's (same discipline as verifyOwnedUpload, src/lib/storage/verifyUpload.ts, applied to
+  // user-initiated uploads).
+  let proofRef: string | null = null;
+  if (proofRefRaw) {
+    if (!proofRefRaw.startsWith(`${tx.user_id}/`)) {
+      return { error: "That payment proof upload doesn't match this request. Please re-upload it." };
+    }
+    proofRef = proofRefRaw;
+  }
+
   const { error } = await admin.rpc("admin_complete_rmb_transaction", {
     p_transaction_id: transactionId,
     p_actual_target_amount: actualTargetAmount,
     p_note: note,
+    p_proof_ref: proofRef,
   });
 
   if (error) return { error: error.message };
+
+  // Best effort from here on — the completion itself already succeeded via the RPC above, that's
+  // the authoritative action, so a failed notification/email shouldn't turn this into an error the
+  // admin has to retry. Same pattern approveKyc/rejectKyc already use.
+  const { data: profile } = await admin.from("profiles").select("full_name, email").eq("id", tx.user_id).maybeSingle();
+
+  const { error: notifyError } = await admin.from("notifications").insert({
+    user_id: tx.user_id,
+    title: "Your payment to China is complete",
+    body: `The vendor has been paid. ¥${actualTargetAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} was delivered.`,
+    attachment_ref: proofRef,
+  });
+  if (notifyError) console.error("[completeRmbTransaction] notification insert failed:", notifyError);
+
+  if (profile?.email) {
+    await sendRmbCompletedEmail({
+      userName: profile.full_name ?? profile.email,
+      userEmail: profile.email,
+      deliveredAmount: actualTargetAmount,
+      hasProof: !!proofRef,
+    });
+  }
+
   revalidatePath("/admin/rmb");
   return {};
 }
@@ -73,12 +159,46 @@ export async function rejectRmbTransaction(
   }
 
   const admin = createAdminClient();
+
+  // Needed up front so the notification/email below know who to reach — fetched before the RPC
+  // runs, but only ever used after it succeeds (see the `if (error) return` below). The RPC itself
+  // already raises on a transaction that's already `failed`, so that guard alone keeps these from
+  // firing on a repeat rejection.
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("user_id")
+    .eq("id", transactionId)
+    .eq("type", "rmb_manual")
+    .maybeSingle();
+  if (!tx) return { error: "Transaction not found." };
+
   const { error } = await admin.rpc("admin_reject_rmb_transaction", {
     p_transaction_id: transactionId,
     p_reason: reason,
   });
 
   if (error) return { error: error.message };
+
+  // Best effort — the rejection itself already succeeded via the RPC above, that's the
+  // authoritative action, so a failed notification/email shouldn't turn this into an error the
+  // admin has to retry.
+  const { data: profile } = await admin.from("profiles").select("full_name, email").eq("id", tx.user_id).maybeSingle();
+
+  const { error: notifyError } = await admin.from("notifications").insert({
+    user_id: tx.user_id,
+    title: "Your payment to China was not completed",
+    body: `We could not complete this request: ${reason}. The amount you set aside has been returned to your balance.`,
+  });
+  if (notifyError) console.error("[rejectRmbTransaction] notification insert failed:", notifyError);
+
+  if (profile?.email) {
+    await sendRmbRejectedEmail({
+      userName: profile.full_name ?? profile.email,
+      userEmail: profile.email,
+      reason,
+    });
+  }
+
   revalidatePath("/admin/rmb");
   return {};
 }

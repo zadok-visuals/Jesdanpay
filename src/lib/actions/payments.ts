@@ -100,7 +100,13 @@ export async function submitRmbExchange(
     .insert(recipientInsert)
     .select("id")
     .single();
-  if (recipientError) return { error: recipientError.message };
+  if (recipientError) {
+    // Never show raw database error text to the user (constraint names, column names, etc. are
+    // provider internals, same discipline as toCustomerError elsewhere in this file) — log it for
+    // debugging and return one clean, actionable message instead.
+    console.error("[submitRmbExchange] recipient insert failed", recipientError);
+    return { error: "We could not submit your request. Please check the details and try again." };
+  }
 
   const { data: transactionId, error: rpcError } = await supabase.rpc(
     "create_rmb_manual_transaction",
@@ -108,9 +114,10 @@ export async function submitRmbExchange(
   );
 
   if (rpcError) {
+    console.error("[submitRmbExchange] create_rmb_manual_transaction failed", rpcError);
     // Keep the recipients table clean if the transaction couldn't be created.
     await supabase.from("rmb_recipients").delete().eq("id", recipient.id);
-    return { error: rpcError.message };
+    return { error: "We could not submit your request. Please check the details and try again." };
   }
 
   if (saveRecipient) {

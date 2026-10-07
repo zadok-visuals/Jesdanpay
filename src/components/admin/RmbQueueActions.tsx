@@ -3,10 +3,12 @@
 import { useActionState, useState } from "react";
 import {
   completeRmbTransaction,
+  createRmbProofUploadUrl,
   markRmbProcessing,
   rejectRmbTransaction,
   type AdminActionState,
 } from "@/lib/actions/admin";
+import { uploadToSignedUrl } from "@/lib/storage/clientUpload";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import type { TransactionStatus } from "@/lib/types/database";
@@ -67,6 +69,33 @@ function RejectAction({ transactionId }: { transactionId: string }) {
 function CompleteForm({ transactionId }: { transactionId: string }) {
   const [state, formAction, pending] = useActionState(completeRmbTransaction, initialState);
   const [open, setOpen] = useState(false);
+  const [proofPath, setProofPath] = useState<string | null>(null);
+  const [proofFileName, setProofFileName] = useState<string | null>(null);
+  const [proofStatus, setProofStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [proofError, setProofError] = useState<string | null>(null);
+
+  // Two steps because the file never passes through this form's own server action (that would
+  // hit the 1MB body limit) — first ask the server for a signed upload token scoped to this
+  // transaction's own user folder (createRmbProofUploadUrl), then upload straight to Storage with
+  // it. Only the resulting path is submitted with the rest of the form.
+  async function handleProofFile(file: File) {
+    setProofFileName(file.name);
+    setProofStatus("uploading");
+    setProofError(null);
+    setProofPath(null);
+    try {
+      const prep = await createRmbProofUploadUrl(transactionId, file.name);
+      if (prep.error || !prep.path || !prep.token) {
+        throw new Error(prep.error ?? "We could not prepare the upload. Please try again.");
+      }
+      const path = await uploadToSignedUrl({ bucket: "rmb-payment-proof", path: prep.path, token: prep.token, file });
+      setProofPath(path);
+      setProofStatus("idle");
+    } catch (err) {
+      setProofStatus("error");
+      setProofError(err instanceof Error ? err.message : "We could not upload that file. Please try again.");
+    }
+  }
 
   if (!open) {
     return (
@@ -79,9 +108,10 @@ function CompleteForm({ transactionId }: { transactionId: string }) {
   return (
     <form
       action={formAction}
-      className="flex w-full flex-col items-end gap-2 sm:w-64"
+      className="flex w-full flex-col items-end gap-2 sm:w-72"
     >
       <input type="hidden" name="transactionId" value={transactionId} />
+      <input type="hidden" name="proofRef" value={proofPath ?? ""} />
       <Input
         label="Actual CNY delivered"
         id={`actualTargetAmount-${transactionId}`}
@@ -101,12 +131,41 @@ function CompleteForm({ transactionId }: { transactionId: string }) {
         placeholder="e.g. rate used, settlement notes"
         className="w-full"
       />
+      <div className="flex w-full flex-col gap-1.5">
+        <label className="text-sm font-medium text-foreground/80">Payment proof (screenshot of the transfer)</label>
+        <label
+          className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-3 py-3 text-center transition-colors ${
+            proofStatus === "uploading"
+              ? "cursor-wait border-border opacity-70"
+              : "cursor-pointer border-border hover:border-primary-300 hover:bg-primary-50"
+          }`}
+        >
+          <span className="text-xs text-foreground/50">
+            {proofStatus === "uploading"
+              ? `Uploading ${proofFileName}…`
+              : proofPath
+                ? `✓ ${proofFileName ?? "Uploaded"}`
+                : "Click to upload (optional)"}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={proofStatus === "uploading"}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              if (file) handleProofFile(file);
+            }}
+          />
+        </label>
+        {proofStatus === "error" && proofError && <p className="text-xs text-danger-500">{proofError}</p>}
+      </div>
       {state.error && <p className="text-xs text-danger-500">{state.error}</p>}
       <div className="flex gap-2">
         <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)} disabled={pending}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" loading={pending}>
+        <Button type="submit" size="sm" loading={pending || proofStatus === "uploading"}>
           Confirm
         </Button>
       </div>

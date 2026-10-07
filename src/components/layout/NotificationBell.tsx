@@ -42,6 +42,15 @@ export function NotificationBell({ notifications: initial }: { notifications: No
     await supabase.from("notifications").update({ read_at: now }).in("id", unreadIds).is("read_at", null);
   }
 
+  // Signed client-side, not server-side, because the recipient only ever views their own receipt
+  // from their own session — the bucket's "read own folder" policy (migration 0043) already
+  // permits this, no server round trip needed.
+  async function handleViewReceipt(attachmentRef: string) {
+    const supabase = createClient();
+    const { data } = await supabase.storage.from("rmb-payment-proof").createSignedUrl(attachmentRef, 3600);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <div className="relative" ref={containerRef}>
       <button
@@ -77,6 +86,15 @@ export function NotificationBell({ notifications: initial }: { notifications: No
                     <span className="shrink-0 text-xs text-foreground/40">{formatWhen(n.created_at)}</span>
                   </div>
                   <p className="text-xs text-foreground/60">{n.body}</p>
+                  {n.attachment_ref && (
+                    <button
+                      type="button"
+                      onClick={() => handleViewReceipt(n.attachment_ref!)}
+                      className="mt-1 self-start text-xs font-medium text-primary-600 hover:underline"
+                    >
+                      View receipt
+                    </button>
+                  )}
                 </div>
               ))
             )}

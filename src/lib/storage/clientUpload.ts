@@ -114,3 +114,38 @@ export async function uploadToStorage({ bucket, userId, prefix, file }: UploadTo
   }
   return path;
 }
+
+export interface UploadToSignedUrlOptions {
+  bucket: string;
+  path: string;
+  token: string;
+  file: File;
+}
+
+// For uploads into a folder the current browser session has no RLS insert grant on — e.g. an
+// admin attaching payment proof into a CUSTOMER's own folder (see createRmbProofUploadUrl,
+// src/lib/actions/admin.ts). The server mints a short-lived signed upload token (service-role,
+// bypasses RLS) and this just finishes the upload with it, reusing the same size/type checks and
+// image compression as uploadToStorage above.
+export async function uploadToSignedUrl({ bucket, path, token, file }: UploadToSignedUrlOptions): Promise<string> {
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf";
+  if (!isImage && !isPdf) {
+    throw new Error("Only image or PDF files are allowed.");
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error("That file is too large (max 8MB). Please choose a smaller file.");
+  }
+
+  const uploadFile = isImage ? await compressImage(file) : file;
+
+  const supabase = createClient();
+  const { error } = await supabase.storage.from(bucket).uploadToSignedUrl(path, token, uploadFile, {
+    contentType: uploadFile.type || undefined,
+  });
+  if (error) {
+    console.error("[uploadToSignedUrl]", { bucket, path, message: error.message });
+    throw new Error(FRIENDLY_UPLOAD_ERROR);
+  }
+  return path;
+}

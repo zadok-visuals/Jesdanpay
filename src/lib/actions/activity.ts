@@ -31,6 +31,9 @@ export interface ActivityDetail {
   // Only set for deposits where the amount actually confirmed on-chain (or via the payment
   // provider) differs from what was originally requested — see migration 0028.
   confirmedAmount: number | null;
+  // Only set for a completed rmb_manual transaction that has a payment_proof_ref (migration
+  // 0043) — a signed URL computed server-side so the client never needs its own Storage call.
+  paymentProofUrl: string | null;
   // The relevant wallet's balance at request time (destination currency for a conversion/
   // exchange, this activity's own currency for a deposit/withdrawal) — null only if the wallet
   // row itself couldn't be found. isMostRecent decides the row's label: "New balance" when
@@ -93,6 +96,7 @@ export async function getActivityDetail(
         description: null,
         rejectionReason: null,
         confirmedAmount: data.confirmed_amount,
+        paymentProofUrl: null,
         balanceAfter,
         isMostRecent,
       },
@@ -124,6 +128,7 @@ export async function getActivityDetail(
         description: data.direction === "to_cny" ? "Converted to CNY" : "Converted from CNY",
         rejectionReason: null,
         confirmedAmount: null,
+        paymentProofUrl: null,
         balanceAfter,
         isMostRecent,
       },
@@ -170,6 +175,12 @@ export async function getActivityDetail(
     description = "USDT exchange";
   }
 
+  let paymentProofUrl: string | null = null;
+  if (tx.type === "rmb_manual" && tx.status === "completed" && tx.payment_proof_ref) {
+    const { data: signed } = await supabase.storage.from("rmb-payment-proof").createSignedUrl(tx.payment_proof_ref, 3600);
+    paymentProofUrl = signed?.signedUrl ?? null;
+  }
+
   const resolvedTargetAmount = tx.actual_target_amount ?? tx.target_amount;
   // Same conversion-vs-withdrawal test the modal itself applies to decide whether to show a
   // target-amount row at all — reused here so the balance lookup targets the same currency the
@@ -193,6 +204,7 @@ export async function getActivityDetail(
       description,
       rejectionReason: tx.rejection_reason,
       confirmedAmount: null,
+      paymentProofUrl,
       balanceAfter,
       isMostRecent,
     },
@@ -249,6 +261,7 @@ export async function searchActivityByReference(reference: string): Promise<Acti
         description: null,
         rejectionReason: null,
         confirmedAmount: deposit.confirmed_amount,
+        paymentProofUrl: null,
         automatedPayoutFailedReason: null,
         userId: deposit.user_id,
         userEmail: profile?.email ?? "Unknown",
@@ -280,6 +293,12 @@ export async function searchActivityByReference(reference: string): Promise<Acti
     description = "USDT exchange";
   }
 
+  let paymentProofUrl: string | null = null;
+  if (t.type === "rmb_manual" && t.status === "completed" && t.payment_proof_ref) {
+    const { data: signed } = await admin.storage.from("rmb-payment-proof").createSignedUrl(t.payment_proof_ref, 3600);
+    paymentProofUrl = signed?.signedUrl ?? null;
+  }
+
   const { data: profile } = await admin.from("profiles").select("email").eq("id", t.user_id).maybeSingle();
 
   return {
@@ -295,6 +314,7 @@ export async function searchActivityByReference(reference: string): Promise<Acti
       fee,
       reference: t.provider_reference,
       description,
+      paymentProofUrl,
       rejectionReason: t.rejection_reason,
       confirmedAmount: null,
       automatedPayoutFailedReason: t.automated_payout_attempt_failed_reason,

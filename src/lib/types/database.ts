@@ -62,6 +62,7 @@ export type Transaction = {
   actual_target_amount: number | null;
   actual_rate_note: string | null;
   rejection_reason: string | null;
+  payment_proof_ref: string | null;
   provider_reference: string | null;
   raw_target_amount: number | null;
   requires_extra_verification: boolean;
@@ -227,6 +228,7 @@ export type Notification = {
   user_id: string | null;
   title: string;
   body: string;
+  attachment_ref: string | null;
   read_at: string | null;
   created_at: string;
 };
@@ -361,7 +363,12 @@ export type Database = {
         Returns: undefined;
       };
       admin_complete_rmb_transaction: {
-        Args: { p_transaction_id: string; p_actual_target_amount: number; p_note: string };
+        Args: {
+          p_transaction_id: string;
+          p_actual_target_amount: number;
+          p_note: string;
+          p_proof_ref?: string | null;
+        };
         Returns: undefined;
       };
       set_transaction_provider_reference: {

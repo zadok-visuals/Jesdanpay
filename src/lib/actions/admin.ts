@@ -8,10 +8,64 @@ import { requireAdminUser, requireSuperAdmin } from "@/lib/auth/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AdminRole, Currency } from "@/lib/types/database";
-import { sendKycApprovedEmail, sendRmbCompletedEmail, sendRmbRejectedEmail } from "@/lib/email";
+import {
+  sendKycApprovedEmail,
+  sendRmbCompletedEmail,
+  sendRmbRejectedEmail,
+  sendNotificationEmail,
+  type EmailResult,
+} from "@/lib/email";
 
 export interface AdminActionState {
   error?: string;
+  // A few actions (sendNotification, sendTestEmail) succeed but still have something worth
+  // telling the admin — e.g. the notification saved fine but the email didn't go out. Every other
+  // action just leaves this unset.
+  message?: string;
+}
+
+// Inserts the notification row every admin-initiated user notification needs, then optionally
+// emails the same user with the same title/body via the generic sendNotificationEmail template.
+// `sendEmail: false` is for callers that already send their OWN richer, dedicated email for this
+// exact event (approveKyc, completeRmbTransaction, rejectRmbTransaction) — notifyUser still owns
+// writing the notification row for those, it just skips sending a second, plainer email on top.
+async function notifyUser(
+  admin: ReturnType<typeof createAdminClient>,
+  params: {
+    userId: string;
+    title: string;
+    body: string;
+    attachmentRef?: string | null;
+    emailCtaUrl?: string;
+    emailCtaLabel?: string;
+    sendEmail?: boolean;
+  },
+): Promise<{ email: EmailResult }> {
+  const { userId, title, body, attachmentRef = null, emailCtaUrl, emailCtaLabel, sendEmail = true } = params;
+
+  const { error: notifyError } = await admin
+    .from("notifications")
+    .insert({ user_id: userId, title, body, attachment_ref: attachmentRef });
+  if (notifyError) console.error("[email] notifyUser: notification insert failed", notifyError);
+
+  if (!sendEmail) {
+    return { email: { sent: false, reason: "A dedicated email already covers this notification" } };
+  }
+
+  const { data: profile } = await admin.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
+  if (!profile?.email) {
+    return { email: { sent: false, reason: "No email on file for this user" } };
+  }
+
+  const email = await sendNotificationEmail({
+    to: profile.email,
+    name: profile.full_name ?? profile.email,
+    title,
+    body,
+    ctaUrl: emailCtaUrl,
+    ctaLabel: emailCtaLabel,
+  });
+  return { email };
 }
 
 export async function markRmbProcessing(
@@ -124,14 +178,12 @@ export async function completeRmbTransaction(
   // the authoritative action, so a failed notification/email shouldn't turn this into an error the
   // admin has to retry. Same pattern approveKyc/rejectKyc already use.
   const { data: profile } = await admin.from("profiles").select("full_name, email").eq("id", tx.user_id).maybeSingle();
+  const title = "Your payment to China is complete";
+  const body = `The vendor has been paid. ¥${actualTargetAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} was delivered.`;
 
-  const { error: notifyError } = await admin.from("notifications").insert({
-    user_id: tx.user_id,
-    title: "Your payment to China is complete",
-    body: `The vendor has been paid. ¥${actualTargetAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} was delivered.`,
-    attachment_ref: proofRef,
-  });
-  if (notifyError) console.error("[completeRmbTransaction] notification insert failed:", notifyError);
+  // sendEmail: false — sendRmbCompletedEmail below is the dedicated template for this event
+  // (mentions the proof screenshot specifically), notifyUser here only writes the notification row.
+  await notifyUser(admin, { userId: tx.user_id, title, body, attachmentRef: proofRef, sendEmail: false });
 
   if (profile?.email) {
     await sendRmbCompletedEmail({
@@ -184,12 +236,14 @@ export async function rejectRmbTransaction(
   // admin has to retry.
   const { data: profile } = await admin.from("profiles").select("full_name, email").eq("id", tx.user_id).maybeSingle();
 
-  const { error: notifyError } = await admin.from("notifications").insert({
-    user_id: tx.user_id,
+  // sendEmail: false — sendRmbRejectedEmail below is the dedicated template for this event,
+  // notifyUser here only writes the notification row.
+  await notifyUser(admin, {
+    userId: tx.user_id,
     title: "Your payment to China was not completed",
     body: `We could not complete this request: ${reason}. The amount you set aside has been returned to your balance.`,
+    sendEmail: false,
   });
-  if (notifyError) console.error("[rejectRmbTransaction] notification insert failed:", notifyError);
 
   if (profile?.email) {
     await sendRmbRejectedEmail({
@@ -230,12 +284,14 @@ export async function approveKyc(
     // Best effort — the approval itself already succeeded via the RPC above, that's the
     // authoritative action, so a failed notification/email shouldn't turn this into an error the
     // admin has to retry. Same pattern rejectKyc already uses below.
-    const { error: notifyError } = await admin.from("notifications").insert({
-      user_id: userId,
+    // sendEmail: false — sendKycApprovedEmail below is the dedicated template for this event,
+    // notifyUser here only writes the notification row.
+    await notifyUser(admin, {
+      userId,
       title: "Your verification is approved",
       body: "Your identity verification is approved. You now have full access.",
+      sendEmail: false,
     });
-    if (notifyError) console.error("[approveKyc] notification insert failed:", notifyError);
 
     if (beforeProfile?.email) {
       await sendKycApprovedEmail({
@@ -267,15 +323,17 @@ export async function rejectKyc(
   if (error) return { error: error.message };
 
   // Best effort — the rejection itself already succeeded via the RPC above, that's the
-  // authoritative action, so a failed notification insert shouldn't turn this into an error the
+  // authoritative action, so a failed notification/email shouldn't turn this into an error the
   // admin has to retry. The user still sees the reason via KycStatusBanner on /home and the KYC
-  // status page regardless of whether this notification lands.
-  const { error: notifyError } = await admin.from("notifications").insert({
-    user_id: userId,
+  // status page regardless of whether either of these lands.
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  await notifyUser(admin, {
+    userId,
     title: "Your verification needs attention",
     body: `We couldn't verify your details: ${reason}. Use the banner on your home page to fix and resubmit.`,
+    emailCtaUrl: `${appUrl}/home`,
+    emailCtaLabel: "Go to your dashboard",
   });
-  if (notifyError) console.error("[rejectKyc] notification insert failed:", notifyError);
 
   revalidatePath("/admin/kyc");
   return {};
@@ -420,6 +478,50 @@ export async function setSupplierRate(
   return {};
 }
 
+// Keeps one broadcast "Also email every user" send from trying to fire hundreds of emails at
+// once from inside a single server action request — Resend's own rate limits aside, that's just
+// not a reasonable thing for one request to do. A send larger than this cap still notifies
+// everyone in-app (the notification row itself has no cap), it just only emails the first
+// BROADCAST_EMAIL_MAX_RECIPIENTS of them; growing past that is a background-job problem, not a
+// bigger-number-here problem.
+const BROADCAST_EMAIL_BATCH_SIZE = 50;
+const BROADCAST_EMAIL_BATCH_DELAY_MS = 1000;
+const BROADCAST_EMAIL_MAX_RECIPIENTS = 500;
+
+async function emailAllUsers(
+  admin: ReturnType<typeof createAdminClient>,
+  title: string,
+  body: string,
+): Promise<{ sent: number; attempted: number }> {
+  const { data: recipients } = await admin
+    .from("profiles")
+    .select("email, full_name")
+    .is("suspended_at", null)
+    .not("email", "is", null)
+    .limit(BROADCAST_EMAIL_MAX_RECIPIENTS);
+
+  const list = recipients ?? [];
+  let sent = 0;
+
+  for (let i = 0; i < list.length; i += BROADCAST_EMAIL_BATCH_SIZE) {
+    const batch = list.slice(i, i + BROADCAST_EMAIL_BATCH_SIZE);
+    // One send per recipient (never a shared To/Cc) — a batch is just "run these concurrently",
+    // not one combined email.
+    const results = await Promise.all(
+      batch.map((p) => sendNotificationEmail({ to: p.email, name: p.full_name ?? p.email, title, body })),
+    );
+    for (const result of results) {
+      if (result.sent) sent += 1;
+      else console.error(`[email] broadcast: failed to send — ${result.reason ?? "unknown reason"}`);
+    }
+    if (i + BROADCAST_EMAIL_BATCH_SIZE < list.length) {
+      await new Promise((resolve) => setTimeout(resolve, BROADCAST_EMAIL_BATCH_DELAY_MS));
+    }
+  }
+
+  return { sent, attempted: list.length };
+}
+
 export async function sendNotification(
   _prevState: AdminActionState,
   formData: FormData,
@@ -430,28 +532,66 @@ export async function sendNotification(
   const body = String(formData.get("body") ?? "").trim();
   const target = String(formData.get("target") ?? "all");
   const userEmail = String(formData.get("userEmail") ?? "").trim();
+  const emailAll = formData.get("emailAll") === "true";
 
   if (!title || !body) {
     return { error: "Title and body are required." };
   }
 
   const admin = createAdminClient();
-  let userId: string | null = null;
 
   if (target === "user") {
     if (!userEmail) return { error: "Enter the recipient's email." };
     const { data: profile } = await admin.from("profiles").select("id").ilike("email", userEmail).maybeSingle();
     if (!profile) return { error: "No user found with that email." };
-    userId = profile.id;
+
+    const { email } = await notifyUser(admin, { userId: profile.id, title, body });
+    revalidatePath("/admin/notifications");
+    return {
+      message: email.sent
+        ? "Notification sent. Email delivered."
+        : `Notification saved, but the email was not sent: ${email.reason ?? "Unknown error"}`,
+    };
   }
 
-  // user_id left null for a broadcast (target === "all") — every signed-in user's own RLS policy
-  // (migration 0037) already lets them read a null-user_id row, no separate fan-out insert needed.
-  const { error } = await admin.from("notifications").insert({ user_id: userId, title, body });
+  // user_id left null for a broadcast — every signed-in user's own RLS policy (migration 0037)
+  // already lets them read a null-user_id row, no separate fan-out insert needed for the in-app
+  // side; emailAllUsers below is only for the opt-in email fan-out.
+  const { error } = await admin.from("notifications").insert({ user_id: null, title, body });
   if (error) return { error: error.message };
 
+  if (!emailAll) {
+    revalidatePath("/admin/notifications");
+    return { message: "Notification sent to all users." };
+  }
+
+  const { sent, attempted } = await emailAllUsers(admin, title, body);
   revalidatePath("/admin/notifications");
-  return {};
+  return {
+    message:
+      sent === attempted
+        ? `Notification sent. Email delivered to ${sent} of ${attempted} users.`
+        : `Notification sent. Email delivered to ${sent} of ${attempted} users (${attempted - sent} failed — see server logs).`,
+  };
+}
+
+// Admin-only sanity check for the Resend setup itself — sends to the signed-in admin's own
+// address so the whole notification-email pipeline can be verified without waiting for (or
+// faking) a real KYC/RMB event.
+export async function sendTestEmail(): Promise<AdminActionState> {
+  const adminUser = await requireAdminUser();
+  if (!adminUser.email) return { error: "Your admin account has no email address." };
+
+  const result = await sendNotificationEmail({
+    to: adminUser.email,
+    name: adminUser.email,
+    title: "JesDanPay test email",
+    body: "This is a test email from the admin notifications page. If you're reading this, Resend is configured correctly.",
+  });
+
+  return {
+    message: result.sent ? `Test email sent to ${adminUser.email}.` : `Test email was not sent: ${result.reason ?? "Unknown error"}`,
+  };
 }
 
 // Short-lived, admin-scoped cookie so a sign_in row is only logged once per browser session, not

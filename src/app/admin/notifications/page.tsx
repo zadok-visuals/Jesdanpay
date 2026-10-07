@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { NotificationComposeForm } from "@/components/admin/NotificationComposeForm";
+import { SendTestEmailButton } from "@/components/admin/SendTestEmailButton";
 
 export default async function AdminNotificationsPage() {
   const admin = createAdminClient();
@@ -25,9 +26,19 @@ export default async function AdminNotificationsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="mb-6 text-xl font-semibold">Notifications</h1>
-        <Card className="max-w-lg p-5">
-          <NotificationComposeForm />
-        </Card>
+        <div className="flex max-w-lg flex-col gap-4">
+          <Card className="p-5">
+            <NotificationComposeForm />
+          </Card>
+          <Card className="p-5">
+            <p className="mb-1 text-sm font-medium text-foreground/80">Verify Resend setup</p>
+            <p className="mb-3 text-xs text-foreground/50">
+              Sends a one-off test message to your own admin address so you can confirm email delivery without
+              waiting for a real event.
+            </p>
+            <SendTestEmailButton />
+          </Card>
+        </div>
       </div>
 
       <div>

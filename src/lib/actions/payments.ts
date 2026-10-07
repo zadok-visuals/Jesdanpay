@@ -15,6 +15,27 @@ export interface PaymentsActionState {
   transactionId?: string;
 }
 
+const GENERIC_SUBMIT_ERROR = "We could not submit your request. Please check the details and try again.";
+
+// Turns a raw rmb_recipients insert failure into one of a few specific, actionable messages —
+// never the database's own text (constraint/column names aren't customer-facing). "23514" is
+// Postgres's check_violation code (rmb_recipients_alipay_check / _wechat_check, migration 0043,
+// or the plain not-null columns on the bank fields); "42501" is insufficient_privilege, which for
+// an authenticated insert on this table almost always means RLS rejected it because the session
+// itself is no longer valid. The checks already run above (names, and id-or-QR for Alipay/WeChat)
+// mean a real customer should never actually hit the 23514 branch — it's a last line of defence.
+function mapRecipientInsertError(error: { code: string; message: string }, payoutMethod: PayoutMethod): string {
+  if (error.code === "23514") {
+    return payoutMethod === "bank"
+      ? "Please fill in the bank name, account number and account holder name."
+      : "Please add the recipient's phone number or email, or upload a QR code, and make sure both first and last name are filled in.";
+  }
+  if (error.code === "42501" || /row level security/i.test(error.message)) {
+    return "Your session may have expired. Please refresh the page and sign in again.";
+  }
+  return GENERIC_SUBMIT_ERROR;
+}
+
 export async function submitRmbExchange(
   _prevState: PaymentsActionState,
   formData: FormData,
@@ -103,9 +124,11 @@ export async function submitRmbExchange(
   if (recipientError) {
     // Never show raw database error text to the user (constraint names, column names, etc. are
     // provider internals, same discipline as toCustomerError elsewhere in this file) — log it for
-    // debugging and return one clean, actionable message instead.
+    // debugging and return one clean, actionable message instead. The checks above already
+    // validate names and (id or QR) before this insert runs, so 23514 here is a last line of
+    // defence (e.g. a client that bypassed the UI's own validation), not the primary gate.
     console.error("[submitRmbExchange] recipient insert failed", recipientError);
-    return { error: "We could not submit your request. Please check the details and try again." };
+    return { error: mapRecipientInsertError(recipientError, payoutMethod) };
   }
 
   const { data: transactionId, error: rpcError } = await supabase.rpc(
@@ -117,7 +140,10 @@ export async function submitRmbExchange(
     console.error("[submitRmbExchange] create_rmb_manual_transaction failed", rpcError);
     // Keep the recipients table clean if the transaction couldn't be created.
     await supabase.from("rmb_recipients").delete().eq("id", recipient.id);
-    return { error: "We could not submit your request. Please check the details and try again." };
+    // "Insufficient balance" is create_rmb_manual_transaction's own exact raise text (migration
+    // 0004) — checked directly against that source rather than guessed.
+    const isInsufficientBalance = /insufficient balance/i.test(rpcError.message);
+    return { error: isInsufficientBalance ? "Your balance is too low for this amount." : GENERIC_SUBMIT_ERROR };
   }
 
   if (saveRecipient) {

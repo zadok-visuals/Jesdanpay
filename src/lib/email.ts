@@ -3,6 +3,15 @@ import { adminEmails } from "@/lib/auth/admin";
 
 const FROM_ADDRESS = "JesDanPay <notifications@jesdanpay.net>";
 
+// Every notification-style email below returns this instead of throwing or going silent — so a
+// caller (ultimately an admin, via notifyUser/the compose action in src/lib/actions/admin.ts) can
+// tell the difference between "sent" and "saved the notification, but the email itself didn't go
+// out, here's why" rather than just assuming success.
+export interface EmailResult {
+  sent: boolean;
+  reason?: string;
+}
+
 // Only the customer-facing HTML email body below ever interpolates a user-supplied value
 // (full_name) — sendKycSubmissionAlert's text-only admin alert doesn't need this.
 function escapeHtml(str: string): string {
@@ -47,11 +56,12 @@ export async function sendKycSubmissionAlert(params: { userName: string; userEma
 // skip-quietly-without-RESEND_API_KEY discipline as sendKycSubmissionAlert above — the approval
 // itself has already taken effect in the database by the time this runs, so a failed send here
 // must never undo or block it, only get logged for someone to notice separately.
-export async function sendKycApprovedEmail(params: { userName: string; userEmail: string }): Promise<void> {
+export async function sendKycApprovedEmail(params: { userName: string; userEmail: string }): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[kyc approved email] RESEND_API_KEY is not configured — skipping approval email");
-    return;
+    const reason = "RESEND_API_KEY is not configured";
+    console.warn(`[email] ${reason} — skipping KYC approval email`);
+    return { sent: false, reason };
   }
 
   try {
@@ -76,10 +86,14 @@ export async function sendKycApprovedEmail(params: { userName: string; userEmail
 </div>`,
     });
     if (error) {
-      console.error("[kyc approved email] Resend returned an error", error);
+      console.error("[email] kyc approved: Resend returned an error", error);
+      return { sent: false, reason: error.message };
     }
+    return { sent: true };
   } catch (err) {
-    console.error("[kyc approved email] failed to send via Resend", err);
+    const reason = err instanceof Error ? err.message : "Unknown error sending email";
+    console.error("[email] kyc approved: failed to send via Resend", err);
+    return { sent: false, reason };
   }
 }
 
@@ -91,11 +105,12 @@ export async function sendRmbCompletedEmail(params: {
   userEmail: string;
   deliveredAmount: number;
   hasProof: boolean;
-}): Promise<void> {
+}): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[rmb completed email] RESEND_API_KEY is not configured — skipping completion email");
-    return;
+    const reason = "RESEND_API_KEY is not configured";
+    console.warn(`[email] ${reason} — skipping RMB completion email`);
+    return { sent: false, reason };
   }
 
   try {
@@ -120,10 +135,14 @@ export async function sendRmbCompletedEmail(params: {
 </div>`,
     });
     if (error) {
-      console.error("[rmb completed email] Resend returned an error", error);
+      console.error("[email] rmb completed: Resend returned an error", error);
+      return { sent: false, reason: error.message };
     }
+    return { sent: true };
   } catch (err) {
-    console.error("[rmb completed email] failed to send via Resend", err);
+    const reason = err instanceof Error ? err.message : "Unknown error sending email";
+    console.error("[email] rmb completed: failed to send via Resend", err);
+    return { sent: false, reason };
   }
 }
 
@@ -133,11 +152,12 @@ export async function sendRmbRejectedEmail(params: {
   userName: string;
   userEmail: string;
   reason: string;
-}): Promise<void> {
+}): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[rmb rejected email] RESEND_API_KEY is not configured — skipping rejection email");
-    return;
+    const reason = "RESEND_API_KEY is not configured";
+    console.warn(`[email] ${reason} — skipping RMB rejection email`);
+    return { sent: false, reason };
   }
 
   try {
@@ -163,9 +183,67 @@ export async function sendRmbRejectedEmail(params: {
 </div>`,
     });
     if (error) {
-      console.error("[rmb rejected email] Resend returned an error", error);
+      console.error("[email] rmb rejected: Resend returned an error", error);
+      return { sent: false, reason: error.message };
     }
+    return { sent: true };
   } catch (err) {
-    console.error("[rmb rejected email] failed to send via Resend", err);
+    const reason = err instanceof Error ? err.message : "Unknown error sending email";
+    console.error("[email] rmb rejected: failed to send via Resend", err);
+    return { sent: false, reason };
+  }
+}
+
+// Generic best-effort email for any admin-created notification (approveKyc/rejectKyc's and the
+// RMB completion/rejection functions above keep their own dedicated, richer templates — this one
+// is for notifyUser, src/lib/actions/admin.ts, and the admin notification compose action, where
+// the title/body are arbitrary). Same never-throws discipline as every other function here.
+export async function sendNotificationEmail(params: {
+  to: string;
+  name: string;
+  title: string;
+  body: string;
+  ctaUrl?: string;
+  ctaLabel?: string;
+}): Promise<EmailResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    const reason = "RESEND_API_KEY is not configured";
+    console.warn(`[email] ${reason} — skipping notification email`);
+    return { sent: false, reason };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const safeName = escapeHtml(params.name);
+    const safeBody = escapeHtml(params.body);
+    const ctaLabel = params.ctaLabel ?? "Open JesDanPay";
+    const ctaHtml = params.ctaUrl
+      ? `<p style="margin:24px 0;">
+    <a href="${params.ctaUrl}" style="display:inline-block;background:#1b7a4b;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:500;">${escapeHtml(ctaLabel)}</a>
+  </p>`
+      : "";
+    const ctaText = params.ctaUrl ? `\n\n${ctaLabel}: ${params.ctaUrl}` : "";
+
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: params.to,
+      subject: params.title,
+      text: `Hi ${params.name},\n\n${params.body}${ctaText}`,
+      html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#171717;max-width:480px;margin:0 auto;">
+  <p>Hi ${safeName},</p>
+  <p>${safeBody}</p>
+  ${ctaHtml}
+</div>`,
+    });
+    if (error) {
+      console.error("[email] notification: Resend returned an error", error);
+      return { sent: false, reason: error.message };
+    }
+    return { sent: true };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error sending email";
+    console.error("[email] notification: failed to send via Resend", err);
+    return { sent: false, reason };
   }
 }

@@ -628,15 +628,44 @@ function RecipientStep({
           </div>
 
           {state.useQrCode && (
-            <FileDropzone
-              label={`${state.payoutMethod === "alipay" ? "Alipay" : "WeChat Pay"} QR code`}
-              accept="image/*"
-              bucket="rmb-recipient-qr"
-              userId={userId}
-              prefix="qr"
-              path={state.qrCodePath}
-              onUploaded={(path, fileName) => onChange({ qrCodePath: path, qrCodeFileName: fileName ?? "" })}
-            />
+            <>
+              <FileDropzone
+                label={`${state.payoutMethod === "alipay" ? "Alipay" : "WeChat Pay"} QR code`}
+                accept="image/*"
+                bucket="rmb-recipient-qr"
+                userId={userId}
+                prefix="qr"
+                path={state.qrCodePath}
+                onUploaded={(path, fileName) => onChange({ qrCodePath: path, qrCodeFileName: fileName ?? "" })}
+              />
+              {/* Optional in QR mode — the QR upload alone already satisfies the contact
+                  requirement (see contactValid below), this just helps the team reach the right
+                  account if the code itself is unclear or unreadable. */}
+              {state.payoutMethod === "alipay" ? (
+                <Input
+                  label="Recipient phone number or email (recommended)"
+                  id="recipientAlipayIdQr"
+                  name="recipientAlipayId"
+                  type="text"
+                  placeholder="Phone number or email"
+                  value={state.recipientAlipayId}
+                  onChange={(e) => onChange({ recipientAlipayId: e.target.value })}
+                />
+              ) : (
+                <Input
+                  label="Recipient phone number or email (recommended)"
+                  id="recipientWechatIdQr"
+                  name="recipientWechatId"
+                  type="text"
+                  placeholder="Phone number or email"
+                  value={state.recipientWechatId}
+                  onChange={(e) => onChange({ recipientWechatId: e.target.value })}
+                />
+              )}
+              <p className="-mt-2 text-xs text-foreground/50">
+                Helps our team reach the right account if the QR code is unclear.
+              </p>
+            </>
           )}
         </div>
       )}
@@ -733,9 +762,11 @@ function ConfirmStep({
   const methodLabel = PAYOUT_METHODS.find((m) => m.value === state.payoutMethod)?.label ?? "";
 
   const isAlipayOrWechat = state.payoutMethod === "alipay" || state.payoutMethod === "wechat";
+  const contactValue = state.payoutMethod === "alipay" ? state.recipientAlipayId : state.recipientWechatId;
   const recipientSummary = isAlipayOrWechat
-    ? (state.payoutMethod === "alipay" ? state.recipientAlipayId : state.recipientWechatId) ||
-      `QR code: ${state.qrCodeFileName}`
+    ? state.useQrCode
+      ? [`QR code: ${state.qrCodeFileName}`, contactValue || null].filter(Boolean).join(" · ")
+      : contactValue
     : `${state.recipientBankName} · ${state.recipientBankAccountNumber}`;
 
   const rows: { label: string; value: string }[] = [

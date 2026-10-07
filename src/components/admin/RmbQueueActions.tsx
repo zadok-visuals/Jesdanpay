@@ -29,9 +29,9 @@ function ActionButton({
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
-    <form action={formAction} className="inline-flex flex-col items-end gap-1">
+    <form action={formAction} className="flex w-full min-w-0 flex-col items-stretch gap-1 sm:w-auto sm:items-end">
       <input type="hidden" name="transactionId" value={transactionId} />
-      <Button type="submit" size="sm" variant={variant} loading={pending}>
+      <Button type="submit" size="sm" variant={variant} loading={pending} className="w-full sm:w-auto">
         {label}
       </Button>
       {state.error && <p className="text-xs text-danger-500">{state.error}</p>}
@@ -47,8 +47,11 @@ function RejectAction({ transactionId }: { transactionId: string }) {
   const [reason, setReason] = useState("");
 
   return (
-    <form action={formAction} className="flex flex-col items-end gap-1.5">
+    <form action={formAction} className="flex w-full min-w-0 flex-col items-stretch gap-1.5 sm:w-64">
       <input type="hidden" name="transactionId" value={transactionId} />
+      {/* text-base (not text-xs) below 16px triggers iOS Safari's auto-zoom on focus — same fix
+          as Input.tsx's own default sizing, applied here since this is a plain input rather than
+          that shared component. */}
       <input
         type="text"
         name="reason"
@@ -56,9 +59,9 @@ function RejectAction({ transactionId }: { transactionId: string }) {
         onChange={(e) => setReason(e.target.value)}
         placeholder="Reason for rejection (required)"
         required
-        className="w-56 rounded-lg border border-border px-3 py-1.5 text-xs outline-none focus:border-primary-400"
+        className="w-full max-w-full rounded-lg border border-border px-3 py-1.5 text-base outline-none focus:border-primary-400 sm:text-sm"
       />
-      <Button type="submit" size="sm" variant="danger" loading={pending} disabled={!reason.trim()}>
+      <Button type="submit" size="sm" variant="danger" loading={pending} disabled={!reason.trim()} className="w-full sm:w-auto sm:self-end">
         Reject
       </Button>
       {state.error && <p className="text-xs text-danger-500">{state.error}</p>}
@@ -108,7 +111,7 @@ function CompleteForm({ transactionId }: { transactionId: string }) {
   return (
     <form
       action={formAction}
-      className="flex w-full flex-col items-end gap-2 sm:w-72"
+      className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:w-72"
     >
       <input type="hidden" name="transactionId" value={transactionId} />
       <input type="hidden" name="proofRef" value={proofPath ?? ""} />
@@ -185,7 +188,7 @@ export function RmbQueueActions({
   }
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
+    <div className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-start">
       {status === "pending" && (
         <ActionButton action={markRmbProcessing} transactionId={transactionId} label="Mark processing" />
       )}

@@ -11,6 +11,7 @@ const initialState: AdminActionState = {};
 export function NotificationComposeForm() {
   const [state, formAction, pending] = useActionState(sendNotification, initialState);
   const [target, setTarget] = useState<"all" | "user">("all");
+  const [emailAll, setEmailAll] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -23,9 +24,10 @@ export function NotificationComposeForm() {
     if (state.error) {
       toast.error(state.error);
     } else {
-      toast.success("Notification sent");
+      toast.success(state.message ?? "Notification sent");
       formRef.current?.reset();
       setTarget("all");
+      setEmailAll(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
@@ -85,6 +87,19 @@ export function NotificationComposeForm() {
             required
             className="mt-1"
           />
+        )}
+        {target === "all" && (
+          <label className="mt-1 flex items-center gap-2 text-sm text-foreground/80">
+            <input
+              type="checkbox"
+              name="emailAll"
+              value="true"
+              checked={emailAll}
+              onChange={(e) => setEmailAll(e.target.checked)}
+              className="h-4 w-4 rounded border-border text-primary-600"
+            />
+            Also email every user
+          </label>
         )}
       </div>
 

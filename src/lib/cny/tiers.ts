@@ -87,3 +87,41 @@ export function computeConversionAmounts(
     tierRate: tier.usdt_to_cny_rate,
   };
 }
+
+export interface TierCurrencyEquivalent {
+  // The tier's own rate, echoed back so the caller can label the first line "<N> CNY is about
+  // ..." without re-reading tier.usdt_to_cny_rate itself.
+  tierCnyAmount: number;
+  // What tier.usdt_to_cny_rate CNY (i.e. exactly 1 USDT, by definition of the rate) is worth in
+  // the selected currency — null while the live rate isn't available yet (still loading, or the
+  // selected currency's rate hasn't resolved), never NaN/Infinity.
+  approxInSelectedCurrency: number | null;
+  // The plain 1 CNY -> selected currency figure, derived from the same number.
+  oneCnyInSelectedCurrency: number | null;
+}
+
+// Shared by CnyConvertForm.tsx and RmbExchangeForm.tsx's "CNY pricing tiers" cards — both show
+// each tier's own rate (e.g. "rate 6.6") and want a second, friendlier line underneath showing
+// what that same number means in whichever currency the user actually has selected. Since
+// tier.usdt_to_cny_rate CNY is, by definition, worth exactly 1 USDT at that tier, this is really
+// just "1 USDT in the selected currency" — expressed this way so it reads naturally next to the
+// tier's own displayed rate ("6.6 CNY is about ₦1,363.42") rather than introducing a separate,
+// unrelated "1 USDT = ..." line. `usdtPerUnit` is USDT per 1 unit of the selected currency (same
+// orientation as every other bushaRate in this codebase); pass 1 for USDT itself, or null/undefined
+// while the live rate for a fiat currency hasn't loaded yet.
+export function getTierCurrencyEquivalent(
+  tier: CnyTierRate,
+  usdtPerUnit: number | null | undefined,
+): TierCurrencyEquivalent {
+  const approxInSelectedCurrency =
+    usdtPerUnit != null && usdtPerUnit > 0 ? round2(1 / usdtPerUnit) : null;
+  const oneCnyInSelectedCurrency =
+    approxInSelectedCurrency != null && tier.usdt_to_cny_rate > 0
+      ? approxInSelectedCurrency / tier.usdt_to_cny_rate
+      : null;
+  return {
+    tierCnyAmount: tier.usdt_to_cny_rate,
+    approxInSelectedCurrency,
+    oneCnyInSelectedCurrency,
+  };
+}

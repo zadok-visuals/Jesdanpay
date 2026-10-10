@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Currency, Wallet, WithdrawalRecipient } from "@/lib/types/database";
 import type { UnifiedActivity } from "@/lib/transactions";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
@@ -23,6 +23,10 @@ export function AccountsView({
 }) {
   const currencies = wallets.map((w) => w.currency);
   const [selected, setSelected] = useState(currencies[0] ?? "NGN");
+  // The deposit panel always opens for whichever currency tab is already selected (there's no
+  // separate tab to switch to), so "View balance" after a deposit just needs to bring the figure
+  // back into view in case the user had scrolled down while the panel was open below it.
+  const balanceRef = useRef<HTMLParagraphElement>(null);
   // Only one action panel (Deposit or Withdraw) can be open at a time — previously these were
   // two independent booleans, so both could be open together and each trigger button flipped to
   // "Cancel" on its own, making it impossible to tell which "Cancel" closed which panel.
@@ -64,7 +68,7 @@ export function AccountsView({
           <span className="text-2xl">{CURRENCY_META[wallet.currency].flag}</span>
           <div>
             <p className="text-sm text-foreground/60">{CURRENCY_META[wallet.currency].label}</p>
-            <p className="text-3xl font-bold tracking-tight">
+            <p ref={balanceRef} className="text-3xl font-bold tracking-tight">
               {formatBalance(wallet.currency, wallet.balance)}
             </p>
           </div>
@@ -141,6 +145,7 @@ export function AccountsView({
           <DepositForm
             currency={wallet.currency as "NGN" | "GHS" | "KES" | "USDT"}
             onClose={() => setActivePanel(null)}
+            onViewBalance={() => balanceRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
           />
         )}
 

@@ -11,7 +11,7 @@ import type {
 } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { submitRmbExchange, previewLiveBushaRate, type PaymentsActionState } from "@/lib/actions/payments";
-import { computeConversionAmounts } from "@/lib/cny/tiers";
+import { computeConversionAmounts, getTierCurrencyEquivalent } from "@/lib/cny/tiers";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -392,6 +392,10 @@ function SourceStep({
             {sortedTierRates.map((tier) => {
               const isActive =
                 estimatedCny != null && estimatedCny >= tier.tier_min_cny && estimatedCny <= tier.tier_max_cny;
+              const equivalent = getTierCurrencyEquivalent(
+                tier,
+                state.sourceCurrency === "USDT" ? 1 : bushaRate,
+              );
               return (
                 <li
                   key={tier.tier_min_cny}
@@ -402,13 +406,25 @@ function SourceStep({
                   <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/60"}>
                     CNY {tier.tier_min_cny.toLocaleString("en-US")} to {tier.tier_max_cny.toLocaleString("en-US")}
                   </span>
-                  <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/70"}>
-                    rate {tier.usdt_to_cny_rate.toLocaleString("en-US", { maximumFractionDigits: 6 })}
-                    {isActive && (
-                      <span className="ml-2 rounded-full bg-primary-500 px-2 py-0.5 text-xs font-medium text-white">
-                        Your rate
-                      </span>
-                    )}
+                  <span className="flex flex-col items-end gap-0.5">
+                    <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/70"}>
+                      rate {tier.usdt_to_cny_rate.toLocaleString("en-US", { maximumFractionDigits: 6 })}
+                      {isActive && (
+                        <span className="ml-2 rounded-full bg-primary-500 px-2 py-0.5 text-xs font-medium text-white">
+                          Your rate
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-foreground/50" title="Reference price — before any fee">
+                      {equivalent.approxInSelectedCurrency != null
+                        ? `${equivalent.tierCnyAmount.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY is about ${formatBalance(state.sourceCurrency, equivalent.approxInSelectedCurrency)}`
+                        : "Fetching live rate…"}
+                    </span>
+                    <span className="text-xs text-foreground/40" title="Reference price — before any fee">
+                      {equivalent.oneCnyInSelectedCurrency != null
+                        ? `1 CNY = ${formatBalance(state.sourceCurrency, equivalent.oneCnyInSelectedCurrency)}`
+                        : " "}
+                    </span>
                   </span>
                 </li>
               );

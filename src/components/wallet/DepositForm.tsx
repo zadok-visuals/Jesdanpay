@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   getDepositQuote,
@@ -19,7 +20,25 @@ import type { Currency } from "@/lib/types/database";
 
 const STATUS_POLL_INTERVAL_MS = 10_000;
 
-function DepositSuccessScreen({ onClose }: { onClose: () => void }) {
+// Both buttons refresh the server-rendered balance (router.refresh() re-fetches the current
+// route's data — the Server Components here never cache, but the client's already-rendered
+// payload from before the deposit still needs this to actually pick up the new number) before
+// closing. "View balance" additionally scrolls the balance card into view, in case the user
+// had scrolled down while this panel was open — see AccountsView's onViewBalance.
+function DepositSuccessScreen({ onClose, onViewBalance }: { onClose: () => void; onViewBalance?: () => void }) {
+  const router = useRouter();
+
+  function handleViewBalance() {
+    router.refresh();
+    onViewBalance?.();
+    onClose();
+  }
+
+  function handleClose() {
+    router.refresh();
+    onClose();
+  }
+
   return (
     <div className="mt-4 flex flex-col items-center gap-4 rounded-xl border border-border bg-white p-6 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-2xl">✅</div>
@@ -30,8 +49,8 @@ function DepositSuccessScreen({ onClose }: { onClose: () => void }) {
         </p>
       </div>
       <div className="flex gap-3">
-        <Button onClick={onClose}>View balance</Button>
-        <Button variant="secondary" onClick={onClose}>
+        <Button onClick={handleViewBalance}>View balance</Button>
+        <Button variant="secondary" onClick={handleClose}>
           Close
         </Button>
       </div>
@@ -81,21 +100,38 @@ type DepositableCurrency = "NGN" | "GHS" | "KES" | "USDT";
 // GHS deposit through Klasha, NGN/KES/USDT through Busha. NGN moved here from Klasha once
 // Busha confirmed working for it live while Klasha's own access stayed blocked account-wide;
 // GHS stays on Klasha since Busha's real account rejects GHS outright.
-export function DepositForm({ currency, onClose }: { currency: DepositableCurrency; onClose: () => void }) {
+export function DepositForm({
+  currency,
+  onClose,
+  onViewBalance,
+}: {
+  currency: DepositableCurrency;
+  onClose: () => void;
+  onViewBalance?: () => void;
+}) {
   if (currency === "GHS") {
     return <KlashaDepositForm onClose={onClose} />;
   }
-  return <BushaDepositForm currency={currency} onClose={onClose} />;
+  return <BushaDepositForm currency={currency} onClose={onClose} onViewBalance={onViewBalance} />;
 }
 
 // Klasha has no separate quote/fee-preview step for deposits — one call both starts the
 // collection and returns the redirect link (GHS always uses Klasha's hosted payment page,
-// never the direct bank-details response that was NGN-only).
+// never the direct bank-details response that was NGN-only). Unlike Busha's deposit flow, there's
+// no "confirmed" status to poll here (no equivalent of checkDepositStatus for Klasha) — Close
+// refreshes regardless of whether the deposit actually completed, since there's no way from here
+// to tell the difference, and a refresh is harmless either way.
 function KlashaDepositForm({ onClose }: { onClose: () => void }) {
   const currency = "GHS" as const;
+  const router = useRouter();
   const [amount, setAmount] = useState("");
   const [state, setState] = useState<KlashaDepositState>({});
   const [isDepositing, startDepositing] = useTransition();
+
+  function handleClose() {
+    router.refresh();
+    onClose();
+  }
 
   function handleDeposit() {
     const fd = new FormData();
@@ -112,7 +148,7 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
       <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold">Complete your deposit</p>
-          <button type="button" onClick={onClose} className="text-xs text-foreground/50 hover:text-foreground">
+          <button type="button" onClick={handleClose} className="text-xs text-foreground/50 hover:text-foreground">
             Close
           </button>
         </div>
@@ -133,7 +169,7 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
     return (
       <KlashaBankDetailsCard
         bankDetails={state.bankDetails}
-        onClose={onClose}
+        onClose={handleClose}
         onStartNew={() => setState({})}
       />
     );
@@ -143,7 +179,7 @@ function KlashaDepositForm({ onClose }: { onClose: () => void }) {
     <div className="mt-4 flex flex-col gap-4 rounded-xl border border-border bg-white p-5">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">Add {currency}</p>
-        <button type="button" onClick={onClose} className="text-xs text-foreground/50 hover:text-foreground">
+        <button type="button" onClick={handleClose} className="text-xs text-foreground/50 hover:text-foreground">
           Close
         </button>
       </div>
@@ -283,7 +319,16 @@ function KlashaBankDetailsCard({
 }
 
 // Busha's quote-then-transfer pattern, with a fee preview step — used for NGN, KES, and USDT.
-function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "USDT"; onClose: () => void }) {
+function BushaDepositForm({
+  currency,
+  onClose,
+  onViewBalance,
+}: {
+  currency: "NGN" | "KES" | "USDT";
+  onClose: () => void;
+  onViewBalance?: () => void;
+}) {
+  const router = useRouter();
   const [amount, setAmount] = useState("");
   const [quoteState, setQuoteState] = useState<DepositQuoteState>({});
   const [depositState, setDepositState] = useState<DepositActionState>({});
@@ -310,6 +355,13 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
       const result = await checkDepositStatus(depositState.depositId!);
       if (result.status === "completed") {
         setConfirmed(true);
+        // Refresh the moment completion is actually detected — not just when the user later
+        // clicks a button on the success screen — so the balance is already current in the
+        // background by the time they look at it. checkDepositStatus already calls
+        // revalidatePath server-side; router.refresh() is what actually makes this client fetch
+        // that fresh payload (calling a Server Action as a plain function here, outside a
+        // form/transition dispatch, doesn't itself re-render the already-mounted page).
+        router.refresh();
         // A toast (not just the inline success screen) so a user who's stepped away from this
         // panel — or closed it while waiting — still sees the confirmation land.
         toast.success("Deposit confirmed — your balance has been updated.");
@@ -318,10 +370,10 @@ function BushaDepositForm({ currency, onClose }: { currency: "NGN" | "KES" | "US
       }
     }, STATUS_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [depositState.depositId, confirmed, depositFailed]);
+  }, [depositState.depositId, confirmed, depositFailed, router]);
 
   if (confirmed) {
-    return <DepositSuccessScreen onClose={onClose} />;
+    return <DepositSuccessScreen onClose={onClose} onViewBalance={onViewBalance} />;
   }
 
   if (depositFailed) {

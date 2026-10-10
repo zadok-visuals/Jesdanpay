@@ -7,7 +7,7 @@ import type { Wallet } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
 import { executeSwap, checkSwapStatus, previewSwapRate, type ExecuteSwapState } from "@/lib/actions/busha";
 import { applyMarkup, MARKUP_RATE } from "@/lib/busha/markup";
-import { MINIMUM_USDT_EQUIVALENT } from "@/lib/busha/limits";
+import { getMinimumConversionAmount } from "@/lib/busha/limits";
 import { round2 } from "@/lib/cny/tiers";
 import type { Currency } from "@/lib/types/database";
 import { Card } from "@/components/ui/Card";
@@ -180,15 +180,18 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const receiveAmount = rawTargetAmount != null ? applyMarkup(rawTargetAmount) : null;
   const feeAmount = amountEntered ? round2(amountNum * MARKUP_RATE) : null;
 
-  // Selling USDT: the entered amount already IS the USDT equivalent. Buying USDT with fiat:
-  // divide by the buy rate (fiat per 1 USDT) — same division already used for rawTargetAmount.
-  const usdtEquivalent = !amountEntered ? null : isSelling ? amountNum : activeRate ? amountNum / activeRate : null;
-  const belowMinimum = usdtEquivalent != null && usdtEquivalent < MINIMUM_USDT_EQUIVALENT;
+  // The minimum is always expressed in the currency being SPENT (config.source), never USDT —
+  // same helper the server uses (executeSwap, src/lib/actions/busha.ts) with the same live rate,
+  // so the two can never disagree about where the line is. Selling USDT: 1 unit of source IS 1
+  // USDT. Buying USDT with fiat: 1 unit of source (fiat) is worth 1/buyRate USDT.
+  const sourceUsdtPerUnit = config.source === "USDT" ? 1 : activeRate ? 1 / activeRate : null;
+  const minimumAmount = getMinimumConversionAmount(config.source as "NGN" | "GHS" | "KES" | "USDT", sourceUsdtPerUnit);
+  const belowMinimum = amountEntered && amountNum < minimumAmount;
 
   let disabledReason: string | null = null;
   if (amountNum <= 0) disabledReason = "Enter an amount to continue";
   else if (exceedsBalance) disabledReason = `Amount exceeds your available ${config.source} balance`;
-  else if (belowMinimum) disabledReason = "Minimum amount must be equivalent to 10 USDT";
+  else if (belowMinimum) disabledReason = `Minimum amount is ${formatBalance(config.source, minimumAmount)}`;
   else if (isRateLoading) disabledReason = "Fetching live rate…";
   else if (rateError) disabledReason = "Rate unavailable — try again";
 

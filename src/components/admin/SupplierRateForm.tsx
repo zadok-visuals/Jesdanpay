@@ -15,7 +15,7 @@ export function SupplierRateForm({ pairs }: { pairs: { base: Currency; quote: Cu
   const [state, formAction, pending] = useActionState(setSupplierRate, initialState);
 
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-3">
+    <form action={formAction} className="flex flex-wrap items-start gap-3">
       <div className="flex flex-col gap-1">
         <label htmlFor="pair" className="text-xs font-medium text-foreground/60">
           Pair
@@ -27,10 +27,14 @@ export function SupplierRateForm({ pairs }: { pairs: { base: Currency; quote: Cu
             </option>
           ))}
         </select>
+        <p className="w-40 text-[11px] leading-tight text-foreground/40">
+          USDT/CNY prices every CNY conversion, no matter which currency the customer paid in.
+          USDT/NGN, GHS or KES prices USDT swaps in that currency only.
+        </p>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="buyRate" className="text-xs font-medium text-foreground/60">
-          Buy rate (quote per 1 base)
+          Buy rate
         </label>
         <input
           id="buyRate"
@@ -41,6 +45,10 @@ export function SupplierRateForm({ pairs }: { pairs: { base: Currency; quote: Cu
           required
           className="rounded-lg border border-border px-3 py-1.5 text-sm"
         />
+        <p className="w-40 text-[11px] leading-tight text-foreground/40">
+          How many units of the second currency you get for 1 USDT. For USDT/CNY, this is CNY per
+          1 USDT (e.g. 6.6). For USDT/NGN, this is NGN per 1 USDT (e.g. 1550).
+        </p>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="effectiveFrom" className="text-xs font-medium text-foreground/60">
@@ -52,8 +60,11 @@ export function SupplierRateForm({ pairs }: { pairs: { base: Currency; quote: Cu
           type="datetime-local"
           className="rounded-lg border border-border px-3 py-1.5 text-sm"
         />
+        <p className="w-40 text-[11px] leading-tight text-foreground/40">
+          When this rate started applying. Leave blank to use right now.
+        </p>
       </div>
-      <Button type="submit" loading={pending}>
+      <Button type="submit" loading={pending} className="mt-5">
         {pending ? "Saving…" : "Save rate"}
       </Button>
       {state.error && <p className="text-xs text-danger-500">{state.error}</p>}

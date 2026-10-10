@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Currency, Wallet, CnyTierRate } from "@/lib/types/database";
 import { CURRENCY_META, formatBalance } from "@/lib/currency";
-import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/tiers";
-import { MINIMUM_USDT_EQUIVALENT } from "@/lib/busha/limits";
+import { computeConversionAmounts, getTierCurrencyEquivalent, round2, type CnyDirection } from "@/lib/cny/tiers";
+import { getMinimumConversionAmount } from "@/lib/busha/limits";
 import {
   previewLiveBushaRate,
   submitCnyConversion,
@@ -117,21 +117,27 @@ export function CnyConvertForm({
   // knows the CNY amount once computeConversionAmounts has resolved it (amounts.cnyAmount).
   const activeCnyAmount = amountEntered ? (direction === "from_cny" ? amountNum : (amounts?.cnyAmount ?? null)) : null;
   const sortedTierRates = [...tierRates].sort((a, b) => a.tier_min_cny - b.tier_min_cny);
+  // nonCnyCurrency is already "the currency being converted into" when direction is from_cny, and
+  // "the currency being converted from" when to_cny — exactly the currency PART C wants shown
+  // here regardless of direction, so no extra branching needed.
+  const tierEquivalentUsdtPerUnit = nonCnyCurrency === "USDT" ? 1 : bushaRate;
 
-  // amounts.nonCnyAmount is always the non-CNY-side amount regardless of direction — USDT per 1
-  // unit of itself is 1, so no rate multiplication needed there; fiat needs bushaRate (USDT per 1
-  // unit of that fiat currency) to convert to its USDT equivalent.
-  const usdtEquivalent = amounts
-    ? nonCnyCurrency === "USDT"
-      ? amounts.nonCnyAmount
-      : amounts.nonCnyAmount * (bushaRate ?? 0)
-    : null;
-  const belowMinimum = usdtEquivalent != null && usdtEquivalent < MINIMUM_USDT_EQUIVALENT;
+  // Minimum is expressed in whatever currency is being SPENT, never USDT — same helper the
+  // server uses (submitCnyConversion, src/lib/actions/payments.ts) with the same live rate, so
+  // the two can never disagree. to_cny spends nonCnyCurrency (bushaRate is already USDT per 1
+  // unit of it); from_cny spends CNY, which has no single live USDT rate (it depends on which
+  // tier the amount resolves into) — the static configured figure is used there instead.
+  const spendUsdtPerUnit = direction === "to_cny" ? (nonCnyCurrency === "USDT" ? 1 : bushaRate) : null;
+  const minimumAmount = getMinimumConversionAmount(
+    spendCurrency as "NGN" | "GHS" | "KES" | "USDT" | "CNY",
+    spendUsdtPerUnit,
+  );
+  const belowMinimum = amountEntered && amountNum < minimumAmount;
 
   let disabledReason: string | null = null;
   if (!amountEntered) disabledReason = "Enter an amount to continue";
   else if (exceedsBalance) disabledReason = `Amount exceeds your available ${spendCurrency} balance`;
-  else if (belowMinimum) disabledReason = "Minimum amount must be equivalent to 10 USDT";
+  else if (belowMinimum) disabledReason = `Minimum amount is ${formatBalance(spendCurrency, minimumAmount)}`;
   else if (isRateLoading) disabledReason = "Fetching live rate…";
   else if (rateError) disabledReason = "Rate unavailable — try again";
   else if (!amounts) disabledReason = "Conversion rates aren't configured yet";
@@ -328,6 +334,7 @@ export function CnyConvertForm({
               {sortedTierRates.map((tier) => {
                 const isActive =
                   activeCnyAmount != null && activeCnyAmount >= tier.tier_min_cny && activeCnyAmount <= tier.tier_max_cny;
+                const equivalent = getTierCurrencyEquivalent(tier, tierEquivalentUsdtPerUnit);
                 return (
                   <li
                     key={tier.tier_min_cny}
@@ -338,13 +345,25 @@ export function CnyConvertForm({
                     <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/60"}>
                       CNY {tier.tier_min_cny.toLocaleString("en-US")} to {tier.tier_max_cny.toLocaleString("en-US")}
                     </span>
-                    <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/70"}>
-                      rate {tier.usdt_to_cny_rate.toLocaleString("en-US", { maximumFractionDigits: 6 })}
-                      {isActive && (
-                        <span className="ml-2 rounded-full bg-primary-500 px-2 py-0.5 text-xs font-medium text-white">
-                          Your rate
-                        </span>
-                      )}
+                    <span className="flex flex-col items-end gap-0.5">
+                      <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/70"}>
+                        rate {tier.usdt_to_cny_rate.toLocaleString("en-US", { maximumFractionDigits: 6 })}
+                        {isActive && (
+                          <span className="ml-2 rounded-full bg-primary-500 px-2 py-0.5 text-xs font-medium text-white">
+                            Your rate
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-xs text-foreground/50" title="Reference price — before any fee">
+                        {equivalent.approxInSelectedCurrency != null
+                          ? `${equivalent.tierCnyAmount.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY is about ${formatBalance(nonCnyCurrency, equivalent.approxInSelectedCurrency)}`
+                          : "Fetching live rate…"}
+                      </span>
+                      <span className="text-xs text-foreground/40" title="Reference price — before any fee">
+                        {equivalent.oneCnyInSelectedCurrency != null
+                          ? `1 CNY = ${formatBalance(nonCnyCurrency, equivalent.oneCnyInSelectedCurrency)}`
+                          : " "}
+                      </span>
                     </span>
                   </li>
                 );

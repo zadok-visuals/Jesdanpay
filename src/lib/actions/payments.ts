@@ -7,8 +7,9 @@ import type { Currency, PayoutMethod, RmbRecipient } from "@/lib/types/database"
 import { toCustomerError } from "@/lib/provider-error";
 import { probeFiatToUsdtRate } from "@/lib/busha/rate";
 import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/tiers";
-import { MINIMUM_USDT_EQUIVALENT } from "@/lib/busha/limits";
+import { MINIMUM_USDT_EQUIVALENT, getMinimumConversionAmount } from "@/lib/busha/limits";
 import { verifyOwnedUpload } from "@/lib/storage/verifyUpload";
+import { formatBalance } from "@/lib/currency";
 
 export interface PaymentsActionState {
   error?: string;
@@ -295,11 +296,26 @@ export async function submitCnyConversion(
   if ("error" in result) return { error: result.error };
   const { preview } = result;
 
-  // Never trust the client's own minimum check — recompute the exact same formula server-side.
+  // Never trust the client's own minimum check — recompute the exact same thing server-side,
+  // with the same helper (and the same live rate) the client used, so the two can never disagree
+  // about where the line is. `amount` is already the spend amount in spendCurrency terms (see
+  // parseCnyFormInputs's header comment) — nonCnyCurrency when direction is to_cny, CNY otherwise.
+  const spendCurrency: Currency = direction === "to_cny" ? nonCnyCurrency : "CNY";
+  const spendUsdtPerUnit = direction === "to_cny" ? (nonCnyCurrency === "USDT" ? 1 : preview.bushaRate) : null;
+  const minimumAmount = getMinimumConversionAmount(
+    spendCurrency as "NGN" | "GHS" | "KES" | "USDT" | "CNY",
+    spendUsdtPerUnit,
+  );
+  if (amount < minimumAmount) {
+    return { error: `Minimum amount is ${formatBalance(spendCurrency, minimumAmount)}` };
+  }
+  // Defensive backstop — getMinimumConversionAmount is designed to never let the check above
+  // pass below this, but this is the actual hard floor Busha itself enforces, kept as a direct
+  // check too rather than only trusted implicitly.
   const usdtEquivalent =
     preview.nonCnyCurrency === "USDT" ? preview.nonCnyAmount : preview.nonCnyAmount * (preview.bushaRate ?? 0);
   if (usdtEquivalent < MINIMUM_USDT_EQUIVALENT) {
-    return { error: "Minimum amount must be equivalent to 10 USDT" };
+    return { error: `Minimum amount is ${formatBalance(spendCurrency, minimumAmount)}` };
   }
 
   const fromCurrency: Currency = direction === "to_cny" ? nonCnyCurrency : "CNY";

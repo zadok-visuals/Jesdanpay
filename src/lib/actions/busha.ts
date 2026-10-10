@@ -8,7 +8,8 @@ import type { Currency } from "@/lib/types/database";
 import * as busha from "@/lib/busha/client";
 import { getUsdtPairRates } from "@/lib/busha/rate";
 import { applyMarkup } from "@/lib/busha/markup";
-import { MINIMUM_USDT_EQUIVALENT, FIAT_MINIMUM_DEPOSIT } from "@/lib/busha/limits";
+import { MINIMUM_USDT_EQUIVALENT, FIAT_MINIMUM_DEPOSIT, getMinimumConversionAmount } from "@/lib/busha/limits";
+import { formatBalance } from "@/lib/currency";
 
 // FIAT_MINIMUM_DEPOSIT is only keyed by the fiat currencies that have a confirmed minimum — looks
 // up by exact currency match rather than a cast, so an unconfigured currency (USDT, or a fiat one
@@ -72,18 +73,31 @@ export async function executeSwap(
 
   // Must run BEFORE calling Busha, not after: by the time a quote/transfer response exists, the
   // real transfer has already executed at the provider — rejecting post-hoc using its response
-  // amounts (e.g. rawTargetAmount) would be too late to actually stop a sub-minimum swap.
+  // amounts (e.g. rawTargetAmount) would be too late to actually stop a sub-minimum swap. The
+  // minimum is shown/enforced in sourceCurrency (whatever the user is spending), via the same
+  // getMinimumConversionAmount helper UsdtExchangeForm.tsx uses client-side with the same rate,
+  // so the two can never disagree about where the line is.
   try {
-    const usdtEquivalent =
+    const sourceUsdtPerUnit =
       sourceCurrency === "USDT"
-        ? amountNum
+        ? 1
         : await (async () => {
             const rates = await getUsdtPairRates(sourceCurrency);
             if (!rates) throw new Error(`Conversions from ${sourceCurrency} aren't available right now. Please try again later.`);
-            return amountNum / rates.buyRate;
+            return 1 / rates.buyRate;
           })();
+    const minimumAmount = getMinimumConversionAmount(
+      sourceCurrency as "NGN" | "GHS" | "KES" | "USDT",
+      sourceUsdtPerUnit,
+    );
+    if (amountNum < minimumAmount) {
+      return { error: `Minimum amount is ${formatBalance(sourceCurrency, minimumAmount)}` };
+    }
+    // Defensive backstop — getMinimumConversionAmount is designed to never let the check above
+    // pass below this, but this is the actual hard floor Busha itself enforces.
+    const usdtEquivalent = amountNum * sourceUsdtPerUnit;
     if (usdtEquivalent < MINIMUM_USDT_EQUIVALENT) {
-      return { error: "Minimum amount must be equivalent to 10 USDT" };
+      return { error: `Minimum amount is ${formatBalance(sourceCurrency, minimumAmount)}` };
     }
   } catch (err) {
     return { error: toCustomerError(err, "busha.executeSwap") };
@@ -282,7 +296,13 @@ export async function initiateDeposit(
     })
     .select("id")
     .single();
-  if (insertError) return { error: insertError.message };
+  if (insertError) {
+    // Never show raw database error text to the user — the money has already moved at Busha's
+    // end by this point (createTransfer above succeeded), so this is purely a bookkeeping
+    // failure on our side, not something the user did wrong.
+    console.error("[initiateDeposit] deposits insert failed", insertError);
+    return { error: "We could not record your deposit. Please contact support with your transfer reference." };
+  }
 
   if (transfer.pay_in.address) {
     return {
@@ -335,7 +355,10 @@ export async function checkDepositStatus(depositId: string): Promise<DepositStat
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (error) return { error: error.message };
+  if (error) {
+    console.error("[checkDepositStatus] deposits select failed", error);
+    return { error: "We could not check your deposit status. Please try again." };
+  }
   if (!data) return { error: "Deposit not found." };
 
   if (data.status === "pending" && data.provider === "busha" && data.provider_reference) {

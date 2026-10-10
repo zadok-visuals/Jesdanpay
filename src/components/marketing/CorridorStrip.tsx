@@ -2,7 +2,7 @@ import { Reveal } from "@/components/marketing/Reveal";
 
 const CORRIDORS = [
   { flag: "🇳🇬", code: "NGN", country: "Nigeria" },
-  { flag: "🇬🇭", code: "GHS", country: "Ghana" },
+  { flag: "🇬🇭", code: "GHS", country: "Ghana", comingSoon: true },
   { flag: "🇰🇪", code: "KES", country: "Kenya" },
   { flag: "₮", code: "USDT", country: "Any market" },
   { flag: "🇨🇳", code: "CNY", country: "China" },
@@ -35,7 +35,14 @@ export function CorridorStrip() {
                   <div className="flex items-center gap-3 rounded-full border border-primary-800/10 bg-white/70 px-5 py-3 backdrop-blur">
                     <span className="text-xl leading-none">{corridor.flag}</span>
                     <div className="text-left">
-                      <p className="text-sm font-semibold text-primary-900">{corridor.code}</p>
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-primary-900">
+                        {corridor.code}
+                        {corridor.comingSoon && (
+                          <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
+                            Soon
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-primary-900/45">{corridor.country}</p>
                     </div>
                   </div>

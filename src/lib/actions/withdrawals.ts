@@ -8,6 +8,9 @@ import { attemptAutomatedPayout } from "@/lib/withdrawals/automated-payout";
 import { getBanks } from "@/lib/busha/client";
 import { probeFiatToUsdtRate } from "@/lib/busha/rate";
 import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD } from "@/lib/busha/limits";
+import { isCurrencyAvailable } from "@/lib/currency";
+
+const GHS_COMING_SOON_ERROR = "Ghana (GHS) is coming soon.";
 
 export interface WithdrawalActionState {
   error?: string;
@@ -92,6 +95,9 @@ export async function setWithdrawalRecipient(
   if (!user) redirect("/login");
 
   const currency = String(formData.get("currency") ?? "") as Currency;
+  if (!isCurrencyAvailable(currency)) {
+    return { error: GHS_COMING_SOON_ERROR };
+  }
   const parsed = await parseRecipientFields(currency, formData);
   if ("error" in parsed) return parsed;
 
@@ -240,6 +246,9 @@ export async function requestWithdrawal(
   const amount = Number(formData.get("amount"));
   const pin = String(formData.get("pin") ?? "").trim();
 
+  if (!isCurrencyAvailable(currency)) {
+    return { error: GHS_COMING_SOON_ERROR };
+  }
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid amount." };
   }

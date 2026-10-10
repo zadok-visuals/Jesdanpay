@@ -15,3 +15,14 @@ export function formatBalance(currency: Currency, balance: number) {
     maximumFractionDigits: 2,
   })}`;
 }
+
+// GHS (Ghana) was only ever exercised against the Klasha sandbox, never a live account — every
+// deposit/withdraw/convert/swap/send flow in the app checks this one list (client-side for the
+// UI, server-side via isCurrencyAvailable so nothing can bypass the UI and submit anyway)
+// instead of each independently hardcoding "GHS" — re-enabling it later is deleting one entry
+// here, not hunting down every flow again.
+export const COMING_SOON_CURRENCIES: Currency[] = ["GHS"];
+
+export function isCurrencyAvailable(currency: Currency): boolean {
+  return !COMING_SOON_CURRENCIES.includes(currency);
+}

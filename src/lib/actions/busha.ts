@@ -9,7 +9,9 @@ import * as busha from "@/lib/busha/client";
 import { getUsdtPairRates } from "@/lib/busha/rate";
 import { applyMarkup } from "@/lib/busha/markup";
 import { MINIMUM_USDT_EQUIVALENT, FIAT_MINIMUM_DEPOSIT, getMinimumConversionAmount } from "@/lib/busha/limits";
-import { formatBalance } from "@/lib/currency";
+import { formatBalance, isCurrencyAvailable } from "@/lib/currency";
+
+const GHS_COMING_SOON_ERROR = "Ghana (GHS) is coming soon.";
 
 // FIAT_MINIMUM_DEPOSIT is only keyed by the fiat currencies that have a confirmed minimum — looks
 // up by exact currency match rather than a cast, so an unconfigured currency (USDT, or a fiat one
@@ -30,6 +32,12 @@ export interface SwapRateState {
 // inverted for display. Fetched once per fiat-currency change; UsdtExchangeForm picks whichever
 // side applies to the direction currently selected.
 export async function previewSwapRate(fiatCurrency: Currency): Promise<SwapRateState> {
+  // No live rate probing for a currency that's never usable — see currency.ts's
+  // COMING_SOON_CURRENCIES; this is also what stops any lingering GHS rate-probe noise (the
+  // same class of thing an earlier patch already fixed for the CNY conversion path).
+  if (!isCurrencyAvailable(fiatCurrency)) {
+    return { error: GHS_COMING_SOON_ERROR };
+  }
   try {
     const rates = await getUsdtPairRates(fiatCurrency);
     if (!rates) return { error: `Conversions from ${fiatCurrency} aren't available right now. Please try again later.` };
@@ -65,6 +73,10 @@ export async function executeSwap(
   const sourceCurrency = String(formData.get("sourceCurrency") ?? "") as Currency;
   const targetCurrency = String(formData.get("targetCurrency") ?? "") as Currency;
   const amount = String(formData.get("amount") ?? "");
+
+  if (!isCurrencyAvailable(sourceCurrency) || !isCurrencyAvailable(targetCurrency)) {
+    return { error: GHS_COMING_SOON_ERROR };
+  }
 
   const amountNum = Number(amount);
   if (!Number.isFinite(amountNum) || amountNum <= 0) {

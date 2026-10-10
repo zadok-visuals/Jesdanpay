@@ -59,7 +59,7 @@ export function LiveRate() {
             {rates && (
               <div className="grid gap-4 sm:grid-cols-2">
                 {rates.map((rate) => {
-                  // from_cny (NGN/GHS/KES): "1 CNY = [amount] [currency]" — CNY on the left.
+                  // from_cny (NGN/KES): "1 CNY = [amount] [currency]" — CNY on the left.
                   // to_cny (USDT): "1 USDT = ¥[amount]" — USDT on the left, its original layout.
                   const isFromCny = rate.direction === "from_cny";
                   const leftCurrency = isFromCny ? "CNY" : rate.currency;
@@ -79,6 +79,18 @@ export function LiveRate() {
                     </div>
                   );
                 })}
+                {/* GHS stays part of the story (not removed), just never shown as a live rate —
+                    see marketingRates.ts's header comment for why it's excluded from `rates`
+                    itself (no live source, not a card worth probing). */}
+                <div className="flex items-center justify-between rounded-2xl border border-primary-800/10 bg-white/60 px-5 py-4 opacity-70">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl leading-none">{CURRENCY_META.GHS.flag}</span>
+                    <span className="text-sm font-medium text-primary-900">GHS</span>
+                  </div>
+                  <span className="rounded-full bg-accent-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-accent-700">
+                    Coming soon
+                  </span>
+                </div>
               </div>
             )}
             <p className="mt-6 text-center text-xs text-primary-900/40">

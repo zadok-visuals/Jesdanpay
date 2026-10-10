@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import * as klasha from "@/lib/klasha/client";
 import { toCustomerError } from "@/lib/provider-error";
+import { isCurrencyAvailable } from "@/lib/currency";
 
 export interface KlashaDepositState {
   error?: string;
@@ -29,6 +30,13 @@ export async function initiateKlashaDeposit(
   _prevState: KlashaDepositState,
   formData: FormData,
 ): Promise<KlashaDepositState> {
+  // GHS is the only currency this action ever handles — checked first, before any auth lookup,
+  // DB write, or call to Klasha, so re-enabling it later really is just removing "GHS" from
+  // COMING_SOON_CURRENCIES (src/lib/currency.ts) rather than also hunting for a stray guard here.
+  if (!isCurrencyAvailable("GHS")) {
+    return { error: "Ghana (GHS) is coming soon." };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

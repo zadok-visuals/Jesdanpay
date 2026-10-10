@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { requestWithdrawal, type RequestWithdrawalState } from "@/lib/actions/withdrawals";
 import { previewLiveBushaRate } from "@/lib/actions/payments";
 import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD } from "@/lib/busha/limits";
-import { CURRENCY_META, formatBalance } from "@/lib/currency";
+import { CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { Input } from "@/components/ui/Input";
@@ -36,7 +36,10 @@ export function WithdrawForm({
   // UsdtExchangeForm) — fetched once per currency, not per keystroke.
   const [bushaRate, setBushaRate] = useState<number | null>(null);
   useEffect(() => {
-    if (currency === "USDT") return;
+    // Also skipped for GHS so this effect never probes a rate for a currency the render below
+    // ends up blocking anyway (see the isCurrencyAvailable check further down) — this still has
+    // to run unconditionally as a hook, so the skip lives inside it, not around it.
+    if (currency === "USDT" || !isCurrencyAvailable(currency)) return;
     let cancelled = false;
     previewLiveBushaRate(currency).then((result) => {
       if (!cancelled) setBushaRate(result.rate ?? null);
@@ -45,6 +48,22 @@ export function WithdrawForm({
       cancelled = true;
     };
   }, [currency]);
+
+  // Blocked here too, not just by AccountsView never rendering this for GHS — defense in depth,
+  // same as the server-side checks in requestWithdrawal/setWithdrawalRecipient
+  // (src/lib/actions/withdrawals.ts). Placed after every hook above so it never changes the
+  // number of hooks called between renders (Rules of Hooks).
+  if (!isCurrencyAvailable(currency)) {
+    return (
+      <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-black/[.02] p-6 text-center">
+        <p className="text-sm font-medium text-foreground">Ghana (GHS) is coming soon.</p>
+        <p className="text-sm text-foreground/50">We will notify you as soon as it is available.</p>
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    );
+  }
 
   const amountNum = parseFloat(amount) || 0;
   const fee = Math.round(amountNum * WITHDRAWAL_FEE_RATE * 100) / 100;

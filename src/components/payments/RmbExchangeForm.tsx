@@ -9,7 +9,7 @@ import type {
   SavedRmbRecipient,
   CnyTierRate,
 } from "@/lib/types/database";
-import { CURRENCY_META, formatBalance } from "@/lib/currency";
+import { CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { submitRmbExchange, previewLiveBushaRate, type PaymentsActionState } from "@/lib/actions/payments";
 import { computeConversionAmounts, getTierCurrencyEquivalent } from "@/lib/cny/tiers";
 import { Card } from "@/components/ui/Card";
@@ -265,23 +265,32 @@ function SourceStep({
         <div className="flex flex-wrap gap-2">
           {availableCurrencies.map((c) => {
             const w = wallets.find((w) => w.currency === c);
+            const isComingSoon = !isCurrencyAvailable(c);
             return (
               <button
                 key={c}
                 type="button"
-                onClick={() => onChange({ sourceCurrency: c })}
+                disabled={isComingSoon}
+                onClick={isComingSoon ? undefined : () => onChange({ sourceCurrency: c })}
                 className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors ${
-                  state.sourceCurrency === c
-                    ? "border-primary-400 bg-primary-50 ring-1 ring-primary-400"
-                    : "border-border bg-white hover:border-primary-300"
+                  isComingSoon
+                    ? "cursor-not-allowed border-border bg-black/[.02] opacity-60"
+                    : state.sourceCurrency === c
+                      ? "border-primary-400 bg-primary-50 ring-1 ring-primary-400"
+                      : "border-border bg-white hover:border-primary-300"
                 }`}
               >
                 <span className="flex items-center gap-1.5 text-sm font-semibold">
                   <span>{CURRENCY_META[c].flag}</span>
                   <span>{c}</span>
+                  {isComingSoon && (
+                    <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
+                      Soon
+                    </span>
+                  )}
                 </span>
                 <span className="text-xs text-foreground/50">
-                  Balance: {w ? formatBalance(c, w.balance) : "—"}
+                  {isComingSoon ? "Coming soon" : `Balance: ${w ? formatBalance(c, w.balance) : "—"}`}
                 </span>
               </button>
             );

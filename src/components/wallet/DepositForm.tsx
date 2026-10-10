@@ -11,7 +11,7 @@ import {
   type DepositActionState,
 } from "@/lib/actions/busha";
 import { initiateKlashaDeposit, type KlashaDepositState } from "@/lib/actions/klasha";
-import { CURRENCY_META, formatBalance } from "@/lib/currency";
+import { CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { useCountdown, formatCountdown } from "@/lib/hooks/useCountdown";
@@ -109,6 +109,19 @@ export function DepositForm({
   onClose: () => void;
   onViewBalance?: () => void;
 }) {
+  // Blocked here too, not just by AccountsView never rendering this for GHS — defense in depth,
+  // same as the server-side check in initiateKlashaDeposit (src/lib/actions/klasha.ts).
+  if (!isCurrencyAvailable(currency)) {
+    return (
+      <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-black/[.02] p-6 text-center">
+        <p className="text-sm font-medium text-foreground">Ghana (GHS) is coming soon.</p>
+        <p className="text-sm text-foreground/50">We will notify you as soon as it is available.</p>
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    );
+  }
   if (currency === "GHS") {
     return <KlashaDepositForm onClose={onClose} />;
   }

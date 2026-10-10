@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/layout/Wordmark";
 import { FacebookIcon, TikTokIcon, InstagramIcon } from "@/components/marketing/MarketingIcons";
+import { SOCIAL_LINKS } from "@/lib/site";
 
 // Leading "/" on the hash anchors — see MarketingNav.tsx's LINKS comment; this footer now also
 // renders on /blog and /blog/[slug], where a bare "#foo" wouldn't navigate back to "/".
@@ -13,12 +14,10 @@ const FOOTER_LINKS = [
   { href: "/#faq", label: "FAQ" },
 ];
 
-// Facebook/TikTok/Instagram — the client's actual platforms. hrefs are all "#" placeholders (no
-// confirmed handles yet) — swap for the client's real profile URLs before launch.
 const SOCIALS = [
-  { href: "#", label: "Facebook", Icon: FacebookIcon },
-  { href: "#", label: "TikTok", Icon: TikTokIcon },
-  { href: "#", label: "Instagram", Icon: InstagramIcon },
+  { href: SOCIAL_LINKS.facebook, label: "Facebook", ariaLabel: "JesDanPay on Facebook", Icon: FacebookIcon },
+  { href: SOCIAL_LINKS.tiktok, label: "TikTok", ariaLabel: "JesDanPay on TikTok", Icon: TikTokIcon },
+  { href: SOCIAL_LINKS.instagram, label: "Instagram", ariaLabel: "JesDanPay on Instagram", Icon: InstagramIcon },
 ];
 
 export function MarketingFooter() {
@@ -50,11 +49,13 @@ export function MarketingFooter() {
           </div>
 
           <div className="flex gap-3">
-            {SOCIALS.map(({ href, label, Icon }) => (
+            {SOCIALS.map(({ href, label, ariaLabel, Icon }) => (
               <a
                 key={label}
                 href={href}
-                aria-label={label}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={ariaLabel}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-primary-900/10 text-primary-900/60 transition-colors hover:border-primary-900/25 hover:text-primary-900"
               >
                 <Icon />

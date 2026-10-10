@@ -9,7 +9,9 @@ import { probeFiatToUsdtRate } from "@/lib/busha/rate";
 import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/tiers";
 import { MINIMUM_USDT_EQUIVALENT, getMinimumConversionAmount } from "@/lib/busha/limits";
 import { verifyOwnedUpload } from "@/lib/storage/verifyUpload";
-import { formatBalance } from "@/lib/currency";
+import { formatBalance, isCurrencyAvailable } from "@/lib/currency";
+
+const GHS_COMING_SOON_ERROR = "Ghana (GHS) is coming soon.";
 
 export interface PaymentsActionState {
   error?: string;
@@ -69,6 +71,9 @@ export async function submitRmbExchange(
 
   if (!["alipay", "wechat", "bank"].includes(payoutMethod)) {
     return { error: "Invalid payout method." };
+  }
+  if (!isCurrencyAvailable(sourceCurrency)) {
+    return { error: GHS_COMING_SOON_ERROR };
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid amount." };
@@ -234,6 +239,13 @@ async function computeCnyRate(
   nonCnyCurrency: Currency,
   amount: number,
 ): Promise<{ preview: CnyRatePreview } | { error: string }> {
+  // Covers both callers below (submitRmbExchange's non-CNY source, and submitCnyConversion in
+  // either direction) — also what stops any lingering GHS rate-probe noise, same as the swap
+  // path's previewSwapRate (src/lib/actions/busha.ts).
+  if (!isCurrencyAvailable(nonCnyCurrency)) {
+    return { error: GHS_COMING_SOON_ERROR };
+  }
+
   const supabase = await createClient();
   const { data: tiers } = await supabase.from("cny_tier_rates").select("*");
   if (!tiers || tiers.length === 0) {
@@ -290,6 +302,9 @@ export interface LiveRateState {
 // number a Server Action would otherwise recompute redundantly on every render.
 export async function previewLiveBushaRate(currency: Currency): Promise<LiveRateState> {
   if (currency === "USDT") return { rate: undefined };
+  // Guarded at the source, not just by every caller disabling the GHS option in their own UI —
+  // one check here covers CnyConvertForm, WithdrawForm, and anything that calls this later.
+  if (!isCurrencyAvailable(currency)) return { error: GHS_COMING_SOON_ERROR };
   try {
     const rate = await probeFiatToUsdtRate(currency);
     return { rate };
@@ -322,6 +337,9 @@ export async function submitCnyConversion(
   if (!user) redirect("/login");
 
   const { direction, nonCnyCurrency, amount } = parseCnyFormInputs(formData);
+  if (!isCurrencyAvailable(nonCnyCurrency)) {
+    return { error: GHS_COMING_SOON_ERROR };
+  }
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid amount." };
   }

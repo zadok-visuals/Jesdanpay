@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import type { Currency, Wallet, WithdrawalRecipient } from "@/lib/types/database";
 import type { UnifiedActivity } from "@/lib/transactions";
-import { CURRENCY_META, formatBalance } from "@/lib/currency";
+import { CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { Tabs } from "@/components/ui/Tabs";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -41,9 +41,14 @@ export function AccountsView({
   // neither "Add Money" nor "Withdraw" here, only "Send to China" to spend the locked balance.
   const isUsdt = wallet.currency === "USDT";
   const isCny = wallet.currency === "CNY";
-  const canWithdraw = !isCny;
-  const depositOpen = activePanel === "deposit";
-  const withdrawOpen = activePanel === "withdraw";
+  // GHS was only ever exercised against the Klasha sandbox — every flow below (deposit,
+  // withdraw, Send to China, Convert USDT) rejects it server-side too (see currency.ts's
+  // COMING_SOON_CURRENCIES), so the whole action block is replaced with a plain notice instead of
+  // showing buttons that would just error out one step later.
+  const isGhs = !isCurrencyAvailable(wallet.currency);
+  const canWithdraw = !isCny && !isGhs;
+  const depositOpen = activePanel === "deposit" && !isGhs;
+  const withdrawOpen = activePanel === "withdraw" && !isGhs;
 
   function toggleDeposit() {
     setActivePanel((p) => (p === "deposit" ? null : "deposit"));
@@ -61,6 +66,13 @@ export function AccountsView({
           setSelected(c);
           setActivePanel(null);
         }}
+        renderBadge={(c) =>
+          !isCurrencyAvailable(c) ? (
+            <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
+              Coming soon
+            </span>
+          ) : null
+        }
       />
 
       <Card className="p-6 sm:p-8">
@@ -74,7 +86,12 @@ export function AccountsView({
           </div>
         </div>
 
-        {isCny ? (
+        {isGhs ? (
+          <div className="rounded-xl border border-dashed border-border bg-black/[.02] p-5 text-center">
+            <p className="text-sm font-medium text-foreground">Ghana (GHS) is coming soon.</p>
+            <p className="mt-1 text-sm text-foreground/50">We will notify you as soon as it is available.</p>
+          </div>
+        ) : isCny ? (
           <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-col sm:gap-3">
             <div className="contents sm:flex sm:gap-3">
               <LinkButton href="/pay-to-china" className="w-full sm:min-w-[180px] sm:w-auto">
@@ -99,8 +116,8 @@ export function AccountsView({
                 </svg>
               </span>
               <p className="text-xs leading-relaxed text-primary-800">
-                Exchange USDT to or from NGN, GHS, or KES at a live rate, right from
-                your balance.
+                Convert USDT to or from NGN or KES at a live rate, right from your balance.
+                GHS is coming soon.
               </p>
             </div>
 
@@ -165,8 +182,10 @@ export function AccountsView({
         </h2>
         <p className="text-sm text-foreground/50">
           {isUsdt
-            ? "USDT is held in your JesDanPay balance. Deposit directly, or use the Convert USDT flow in Conversions to convert to or from NGN, GHS, or KES."
-            : `Use "Add Money" above to deposit ${wallet.currency} — your balance updates once the transfer is confirmed.`}
+            ? "USDT is held in your JesDanPay balance. Deposit directly, or use the Convert USDT flow in Conversions to convert to or from NGN or KES. GHS is coming soon."
+            : isGhs
+              ? "Ghana (GHS) is coming soon. We will notify you as soon as it is available."
+              : `Use "Add Money" above to deposit ${wallet.currency} — your balance updates once the transfer is confirmed.`}
         </p>
       </Card>
 

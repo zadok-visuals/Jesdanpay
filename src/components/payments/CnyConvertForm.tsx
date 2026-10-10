@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Currency, Wallet, CnyTierRate } from "@/lib/types/database";
-import { CURRENCY_META, formatBalance } from "@/lib/currency";
+import { CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { computeConversionAmounts, getTierCurrencyEquivalent, round2, type CnyDirection } from "@/lib/cny/tiers";
 import { getMinimumConversionAmount } from "@/lib/busha/limits";
 import {
@@ -54,10 +54,14 @@ export function CnyConvertForm({
   usdtMarkupRate: number;
 }) {
   const availableCurrencies = NON_CNY_CURRENCIES.filter((c) => wallets.some((w) => w.currency === c));
+  // Shown as a disabled "Soon" chip below rather than removed — every user also always has a
+  // USDT wallet (provisioned for everyone, unlike the local-currency ones), so this is never
+  // empty even for a Ghana-only user, unlike UsdtExchangeForm's direction list.
+  const selectableCurrencies = availableCurrencies.filter(isCurrencyAvailable);
   const cnyWallet = wallets.find((w) => w.currency === "CNY");
 
   const [direction, setDirection] = useState<CnyDirection>("to_cny");
-  const [nonCnyCurrency, setNonCnyCurrency] = useState<Currency>(availableCurrencies[0] ?? "NGN");
+  const [nonCnyCurrency, setNonCnyCurrency] = useState<Currency>(selectableCurrencies[0] ?? "NGN");
   const [amount, setAmount] = useState("");
   const [done, setDone] = useState(false);
   const [actionState, setActionState] = useState<CnyConvertActionState>({});
@@ -219,23 +223,32 @@ export function CnyConvertForm({
           <div className="flex flex-wrap gap-2">
             {availableCurrencies.map((c) => {
               const w = wallets.find((w) => w.currency === c);
+              const isComingSoon = !isCurrencyAvailable(c);
               return (
                 <button
                   key={c}
                   type="button"
-                  onClick={() => setNonCnyCurrency(c)}
+                  disabled={isComingSoon}
+                  onClick={isComingSoon ? undefined : () => setNonCnyCurrency(c)}
                   className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors ${
-                    nonCnyCurrency === c
-                      ? "border-primary-400 bg-primary-50 ring-1 ring-primary-400"
-                      : "border-border bg-white hover:border-primary-300"
+                    isComingSoon
+                      ? "cursor-not-allowed border-border bg-black/[.02] opacity-60"
+                      : nonCnyCurrency === c
+                        ? "border-primary-400 bg-primary-50 ring-1 ring-primary-400"
+                        : "border-border bg-white hover:border-primary-300"
                   }`}
                 >
                   <span className="flex items-center gap-1.5 text-sm font-semibold">
                     <span>{CURRENCY_META[c].flag}</span>
                     <span>{c}</span>
+                    {isComingSoon && (
+                      <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
+                        Soon
+                      </span>
+                    )}
                   </span>
                   <span className="text-xs text-foreground/50">
-                    Balance: {w ? formatBalance(c, w.balance) : "—"}
+                    {isComingSoon ? "Coming soon" : `Balance: ${w ? formatBalance(c, w.balance) : "—"}`}
                   </span>
                 </button>
               );

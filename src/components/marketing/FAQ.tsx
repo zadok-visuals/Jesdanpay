@@ -9,12 +9,12 @@ const FAQS = [
   {
     question: "How does the JesDanPay corridor work?",
     answer:
-      "Deposit NGN, GHS, KES, or USDT into your JesDanPay wallet, convert it to CNY at a transparent rate, then pay your supplier in China directly or withdraw back to your local currency whenever you need to.",
+      "Deposit NGN, KES, or USDT into your JesDanPay wallet (GHS is coming soon), convert it to CNY at a transparent rate, then pay your supplier in China directly or withdraw back to your local currency whenever you need to.",
   },
   {
     question: "Which countries and currencies are supported?",
     answer:
-      "Nigeria (NGN), Ghana (GHS), and Kenya (KES) on the deposit side, plus USDT from any market, all converting to and from Chinese Yuan (CNY).",
+      "Nigeria (NGN) and Kenya (KES) on the deposit side today, plus USDT from any market, all converting to and from Chinese Yuan (CNY). Ghana (GHS) is coming soon.",
   },
   {
     question: "What fees does JesDanPay charge?",
@@ -34,7 +34,7 @@ const FAQS = [
   {
     question: "Can I withdraw funds back to my local currency?",
     answer:
-      "Yes — funds can be converted back out of CNY to NGN, GHS, KES, or USDT and withdrawn to your saved bank account or wallet address at any time.",
+      "Yes — funds can be converted back out of CNY to NGN, KES, or USDT (GHS coming soon) and withdrawn to your saved bank account or wallet address at any time.",
   },
   {
     question: "Is my money safe with JesDanPay?",

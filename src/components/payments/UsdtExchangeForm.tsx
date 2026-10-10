@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Wallet } from "@/lib/types/database";
-import { CURRENCY_META, formatBalance } from "@/lib/currency";
+import { CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { executeSwap, checkSwapStatus, previewSwapRate, type ExecuteSwapState } from "@/lib/actions/busha";
 import { applyMarkup, MARKUP_RATE } from "@/lib/busha/markup";
 import { getMinimumConversionAmount } from "@/lib/busha/limits";
@@ -90,7 +90,11 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const availableDirections = DIRECTIONS.filter(
     (d) => wallets.some((w) => w.currency === d.source) && wallets.some((w) => w.currency === d.target),
   );
-  const [direction, setDirection] = useState<Direction | null>(availableDirections[0]?.value ?? null);
+  // Shown as disabled "Soon" chips below rather than removed from the list entirely — a Ghanaian
+  // user should still see that GHS exists here, just not be able to pick it (see currency.ts's
+  // COMING_SOON_CURRENCIES). The default selection must never land on one of these.
+  const selectableDirections = availableDirections.filter((d) => isCurrencyAvailable(d.source) && isCurrencyAvailable(d.target));
+  const [direction, setDirection] = useState<Direction | null>(selectableDirections[0]?.value ?? null);
   const [amount, setAmount] = useState("");
   const [done, setDone] = useState(false);
   const [swapStatus, setSwapStatus] = useState<"pending" | "processing" | "completed" | "failed">(
@@ -150,11 +154,18 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   }, [fiatCurrency]);
 
   if (!direction || !config) {
+    const onlyGhsAvailable = availableDirections.length > 0 && selectableDirections.length === 0;
     return (
       <Card className="p-6 sm:p-8">
-        <p className="text-sm text-foreground/60">
-          USDT exchange isn&rsquo;t available without a local currency wallet.
-        </p>
+        {onlyGhsAvailable ? (
+          <p className="text-sm text-foreground/60">
+            Ghana (GHS) is coming soon. We will notify you as soon as it is available.
+          </p>
+        ) : (
+          <p className="text-sm text-foreground/60">
+            USDT exchange isn&rsquo;t available without a local currency wallet.
+          </p>
+        )}
       </Card>
     );
   }
@@ -240,23 +251,38 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
         <div>
           <p className="mb-2 text-sm font-medium text-foreground/80">Direction</p>
           <div className="flex flex-wrap gap-2">
-            {availableDirections.map((d) => (
-              <button
-                key={d.value}
-                type="button"
-                onClick={() => {
-                  setDirection(d.value);
-                  setAmount("");
-                }}
-                className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-                  direction === d.value
-                    ? "border-primary-400 bg-primary-50 text-primary-700 ring-1 ring-primary-400"
-                    : "border-border bg-white text-foreground/70 hover:border-primary-300"
-                }`}
-              >
-                {d.label}
-              </button>
-            ))}
+            {availableDirections.map((d) => {
+              const isComingSoon = !isCurrencyAvailable(d.source) || !isCurrencyAvailable(d.target);
+              return (
+                <button
+                  key={d.value}
+                  type="button"
+                  disabled={isComingSoon}
+                  onClick={
+                    isComingSoon
+                      ? undefined
+                      : () => {
+                          setDirection(d.value);
+                          setAmount("");
+                        }
+                  }
+                  className={`flex items-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                    isComingSoon
+                      ? "cursor-not-allowed border-border bg-black/[.02] text-foreground/30"
+                      : direction === d.value
+                        ? "border-primary-400 bg-primary-50 text-primary-700 ring-1 ring-primary-400"
+                        : "border-border bg-white text-foreground/70 hover:border-primary-300"
+                  }`}
+                >
+                  {d.label}
+                  {isComingSoon && (
+                    <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
+                      Soon
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 

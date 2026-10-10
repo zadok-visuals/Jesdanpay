@@ -14,6 +14,37 @@ export function adminEmails(): string[] {
     .filter(Boolean);
 }
 
+// The real admin recipient list for any admin-facing email alert (e.g. a new support message) —
+// the union of the ADMIN_EMAILS env fallback and every admin_users row's own profile email,
+// de-duplicated and lowercased. admin_users (migration 0038) is the authoritative access list
+// once it has rows, same as getAdminRole below, but an email alert should still reach every
+// *actual* admin even if some were only ever granted access via admin_users and never listed in
+// ADMIN_EMAILS — unlike getAdminRole, this is additive (union), not "admin_users overrides the
+// env fallback". Never throws: any failure (a transient DB error, a bad join) falls back to
+// adminEmails() alone rather than silently emailing nobody.
+export async function getAdminNotificationEmails(): Promise<string[]> {
+  const fallback = adminEmails();
+  try {
+    const admin = createAdminClient();
+    const { data: adminUsers, error: adminUsersError } = await admin.from("admin_users").select("id");
+    if (adminUsersError) throw adminUsersError;
+
+    const ids = (adminUsers ?? []).map((a) => a.id);
+    let fromAdminUsers: string[] = [];
+    if (ids.length > 0) {
+      const { data: profiles, error: profilesError } = await admin.from("profiles").select("email").in("id", ids);
+      if (profilesError) throw profilesError;
+      fromAdminUsers = (profiles ?? []).map((p) => p.email);
+    }
+
+    const combined = [...fallback, ...fromAdminUsers].map((email) => email.trim().toLowerCase()).filter(Boolean);
+    return [...new Set(combined)];
+  } catch (err) {
+    console.error("[email] getAdminNotificationEmails failed, falling back to ADMIN_EMAILS only", err);
+    return fallback;
+  }
+}
+
 // Non-redirecting check for UI that needs to know "is this user an admin" without gating access
 // to a whole page — e.g. deciding whether to render a link to /admin at all. requireAdminUser
 // below stays the actual access gate for admin pages/actions; this is display-only. Still just the

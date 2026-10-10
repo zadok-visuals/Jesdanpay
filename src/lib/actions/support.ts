@@ -3,8 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdminUser } from "@/lib/auth/admin";
+import { requireAdminUser, getAdminNotificationEmails } from "@/lib/auth/admin";
+import { sendSupportMessageAlertEmail, sendSupportReplyEmail } from "@/lib/email";
 import type { SupportMessage } from "@/lib/types/database";
+
+// Below this, a message is considered part of the SAME burst as whatever unread message from
+// the other side is already waiting — so a user firing off three messages in a row (or an admin
+// replying twice while the user hasn't looked yet) only ever emails once, on the first one.
+const FLOOD_WINDOW_MS = 10 * 60 * 1000;
 
 // ---- User-facing (own session, RLS-protected — see migration 0040) ----
 
@@ -33,8 +39,47 @@ export async function sendSupportMessage(body: string): Promise<{ error?: string
   const trimmed = body.trim();
   if (!trimmed) return { error: "Message can't be empty." };
 
+  // Checked BEFORE the insert, so the new message can't count itself — true exactly when this
+  // is the first message of a fresh burst (no other message from this user is still sitting
+  // unread from within the flood window), which is exactly when an admin alert is worth sending.
+  const windowStart = new Date(Date.now() - FLOOD_WINDOW_MS).toISOString();
+  const [{ count: recentUnreadCount }, { data: profile }] = await Promise.all([
+    supabase
+      .from("support_messages")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("sender", "user")
+      .is("read_at", null)
+      .gte("created_at", windowStart),
+    supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
+  ]);
+  const shouldAlert = (recentUnreadCount ?? 0) === 0;
+
   const { error } = await supabase.from("support_messages").insert({ user_id: user.id, sender: "user", body: trimmed });
-  if (error) return { error: error.message };
+  if (error) {
+    // Never show raw database error text to the user — same discipline as every other customer
+    // facing action in this app.
+    console.error("[sendSupportMessage] insert failed", error);
+    return { error: "We could not send your message. Please try again." };
+  }
+
+  if (shouldAlert) {
+    try {
+      const recipients = await getAdminNotificationEmails();
+      await sendSupportMessageAlertEmail({
+        to: recipients,
+        userName: profile?.full_name || profile?.email || user.email || "A user",
+        userEmail: profile?.email || user.email || "unknown",
+        userId: user.id,
+        messagePreview: trimmed,
+      });
+    } catch (err) {
+      // Belt-and-suspenders — sendSupportMessageAlertEmail already never throws on its own, but
+      // the message the user just sent must never fail over an email problem either way.
+      console.error("[email] support message alert failed", err);
+    }
+  }
+
   return {};
 }
 
@@ -156,8 +201,41 @@ export async function sendAdminSupportReply(userId: string, body: string): Promi
   if (!trimmed) return { error: "Message can't be empty." };
 
   const admin = createAdminClient();
+
+  // Same flood-protection shape as sendSupportMessage above, in reverse: skip the email when an
+  // admin message is already sitting unread in this thread from within the window — checked
+  // before the insert so the new reply can't count itself.
+  const windowStart = new Date(Date.now() - FLOOD_WINDOW_MS).toISOString();
+  const [{ count: recentUnreadCount }, { data: profile }] = await Promise.all([
+    admin
+      .from("support_messages")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("sender", "admin")
+      .is("read_at", null)
+      .gte("created_at", windowStart),
+    admin.from("profiles").select("full_name, email").eq("id", userId).maybeSingle(),
+  ]);
+  const shouldAlert = (recentUnreadCount ?? 0) === 0;
+
   const { error } = await admin.from("support_messages").insert({ user_id: userId, sender: "admin", body: trimmed });
   if (error) return { error: error.message };
+
+  // No notifications-table insert here on purpose — the in-app chat badge (unread admin
+  // messages) already covers this; a duplicate notification row would just be noise.
+  if (shouldAlert && profile?.email) {
+    try {
+      await sendSupportReplyEmail({
+        to: profile.email,
+        userName: profile.full_name || profile.email,
+        messagePreview: trimmed,
+      });
+    } catch (err) {
+      // Belt-and-suspenders — sendSupportReplyEmail already never throws on its own, but the
+      // reply itself has already been saved and must never fail over an email problem.
+      console.error("[email] support reply alert failed", err);
+    }
+  }
 
   revalidatePath(`/admin/chat/${userId}`);
   revalidatePath("/admin/chat");

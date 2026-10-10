@@ -18,6 +18,14 @@ function escapeHtml(str: string): string {
   return str.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
+// Shared by both support-chat email alerts below — a message body can be arbitrarily long, and
+// neither admin needs (nor should get, for the user-facing reply) the full thread dropped into
+// their inbox, just enough to know there's something to go look at.
+function truncateMessage(body: string, maxLength = 500): string {
+  const trimmed = body.trim();
+  return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength)}…` : trimmed;
+}
+
 // Fire-and-forget admin alert for a new KYC submission (src/lib/actions/kyc.ts). Never throws —
 // a missing/invalid RESEND_API_KEY, Resend being down, or notifications@jesdanpay.net's domain
 // not yet being verified in Resend's dashboard (a manual step outside this codebase) must never
@@ -244,6 +252,115 @@ export async function sendNotificationEmail(params: {
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Unknown error sending email";
     console.error("[email] notification: failed to send via Resend", err);
+    return { sent: false, reason };
+  }
+}
+
+// Fire-and-forget admin alert for a new support-chat message (src/lib/actions/support.ts's
+// sendSupportMessage) — this is the "a user messaged support and nobody ever found out" gap the
+// client reported. One send, not one per admin: `to` is the sender address itself and every real
+// admin goes in `bcc`, so no admin's email is ever exposed to another in a shared To/Cc. Same
+// never-throws, skip-quietly-without-RESEND_API_KEY discipline as every email above.
+export async function sendSupportMessageAlertEmail(params: {
+  to: string[];
+  userName: string;
+  userEmail: string;
+  userId: string;
+  messagePreview: string;
+}): Promise<EmailResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    const reason = "RESEND_API_KEY is not configured";
+    console.warn(`[email] ${reason} — skipping support message alert`);
+    return { sent: false, reason };
+  }
+  if (params.to.length === 0) {
+    const reason = "No admin recipients configured";
+    console.warn(`[email] ${reason} — skipping support message alert`);
+    return { sent: false, reason };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const chatUrl = `${appUrl}/admin/chat/${params.userId}`;
+    const preview = truncateMessage(params.messagePreview);
+    const safeName = escapeHtml(params.userName);
+    const safeEmail = escapeHtml(params.userEmail);
+    const safePreview = escapeHtml(preview);
+
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: FROM_ADDRESS,
+      bcc: params.to,
+      subject: `New support message from ${params.userName}`,
+      text: `${params.userName} (${params.userEmail}) sent a new support message:\n\n"${preview}"\n\nReply in admin chat: ${chatUrl}`,
+      html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#171717;max-width:480px;margin:0 auto;">
+  <p><strong>${safeName}</strong> (${safeEmail}) sent a new support message:</p>
+  <p style="padding:12px 16px;background:#f5f5f5;border-radius:12px;white-space:pre-wrap;">${safePreview}</p>
+  <p style="margin:24px 0;">
+    <a href="${chatUrl}" style="display:inline-block;background:#1b7a4b;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:500;">Reply in admin chat</a>
+  </p>
+</div>`,
+    });
+    if (error) {
+      console.error("[email] support message alert: Resend returned an error", error);
+      return { sent: false, reason: error.message };
+    }
+    return { sent: true };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error sending email";
+    console.error("[email] support message alert: failed to send via Resend", err);
+    return { sent: false, reason };
+  }
+}
+
+// Fire-and-forget notice for the customer (src/lib/actions/support.ts's sendAdminSupportReply)
+// — the other half of the same gap: a user who messaged support had no way to know an admin had
+// actually replied short of reopening the app. Deliberately shows only the new reply, never the
+// full thread (that stays in-app). Same discipline as every other email in this file.
+export async function sendSupportReplyEmail(params: {
+  to: string;
+  userName: string;
+  messagePreview: string;
+}): Promise<EmailResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    const reason = "RESEND_API_KEY is not configured";
+    console.warn(`[email] ${reason} — skipping support reply email`);
+    return { sent: false, reason };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const homeUrl = `${appUrl}/home`;
+    const preview = truncateMessage(params.messagePreview);
+    const safeName = escapeHtml(params.userName);
+    const safePreview = escapeHtml(preview);
+
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: params.to,
+      subject: "You have a new reply from JesDanPay support",
+      text: `Hi ${params.userName},\n\nYou have a new reply from JesDanPay support:\n\n"${preview}"\n\nOpen chat: ${homeUrl}`,
+      html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#171717;max-width:480px;margin:0 auto;">
+  <p>Hi ${safeName},</p>
+  <p>You have a new reply from JesDanPay support:</p>
+  <p style="padding:12px 16px;background:#f5f5f5;border-radius:12px;white-space:pre-wrap;">${safePreview}</p>
+  <p style="margin:24px 0;">
+    <a href="${homeUrl}" style="display:inline-block;background:#1b7a4b;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:500;">Open chat</a>
+  </p>
+</div>`,
+    });
+    if (error) {
+      console.error("[email] support reply: Resend returned an error", error);
+      return { sent: false, reason: error.message };
+    }
+    return { sent: true };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error sending email";
+    console.error("[email] support reply: failed to send via Resend", err);
     return { sent: false, reason };
   }
 }

@@ -37,6 +37,15 @@ function mapRecipientInsertError(error: { code: string; message: string }, payou
   return GENERIC_SUBMIT_ERROR;
 }
 
+// PostgREST's "function not found" — PGRST202, or the message it carries alongside that code —
+// is exactly what calling create_rmb_manual_transaction_v2 (migration 0045) returns before that
+// migration has actually been pasted into the SQL editor. Checked narrowly (not just "any RPC
+// error") so a real failure from the v2 function itself — insufficient balance, bad recipient,
+// etc. — is never masked by silently retrying against v1 instead of being reported.
+function isFunctionNotFoundError(error: { code?: string; message?: string }): boolean {
+  return error.code === "PGRST202" || /could not find.*function/i.test(error.message ?? "");
+}
+
 export async function submitRmbExchange(
   _prevState: PaymentsActionState,
   formData: FormData,
@@ -66,6 +75,21 @@ export async function submitRmbExchange(
   }
   if (saveRecipient && !saveLabel) {
     return { error: "Give this saved recipient a name." };
+  }
+
+  // Server-computed, never trusted from the client — this is the figure the admin queue
+  // (src/app/admin/rmb/page.tsx) relies on to show "what CNY value is this request actually for"
+  // (migration 0045). A CNY-wallet source IS already a CNY amount; anything else reuses the same
+  // unmarked tier estimate the form itself previews ("approx ¥X to your vendor"). Computed before
+  // the recipient row below even exists, so a rate-lookup failure here creates nothing at all —
+  // nothing to clean up on the error path.
+  let targetCny: number;
+  if (sourceCurrency === "CNY") {
+    targetCny = amount;
+  } else {
+    const rateResult = await computeCnyRate("to_cny", sourceCurrency, amount);
+    if ("error" in rateResult) return { error: rateResult.error };
+    targetCny = rateResult.preview.cnyAmount;
   }
 
   let qrCodeRef: string | undefined;
@@ -132,17 +156,32 @@ export async function submitRmbExchange(
     return { error: mapRecipientInsertError(recipientError, payoutMethod) };
   }
 
-  const { data: transactionId, error: rpcError } = await supabase.rpc(
-    "create_rmb_manual_transaction",
-    { p_recipient_id: recipient.id, p_currency: sourceCurrency, p_amount: amount },
-  );
+  let { data: transactionId, error: rpcError } = await supabase.rpc("create_rmb_manual_transaction_v2", {
+    p_recipient_id: recipient.id,
+    p_currency: sourceCurrency,
+    p_amount: amount,
+    p_target_cny: targetCny,
+  });
+
+  if (rpcError && isFunctionNotFoundError(rpcError)) {
+    // Migration 0045 hasn't been pasted into the SQL editor yet — fall back to the old function
+    // so submissions keep working in the meantime, just without a recorded CNY amount.
+    console.error(
+      "[submitRmbExchange] create_rmb_manual_transaction_v2 not found — migration 0045 is pending. Falling back to v1 (no CNY amount will be recorded for this request).",
+    );
+    ({ data: transactionId, error: rpcError } = await supabase.rpc("create_rmb_manual_transaction", {
+      p_recipient_id: recipient.id,
+      p_currency: sourceCurrency,
+      p_amount: amount,
+    }));
+  }
 
   if (rpcError) {
-    console.error("[submitRmbExchange] create_rmb_manual_transaction failed", rpcError);
+    console.error("[submitRmbExchange] create_rmb_manual_transaction(_v2) failed", rpcError);
     // Keep the recipients table clean if the transaction couldn't be created.
     await supabase.from("rmb_recipients").delete().eq("id", recipient.id);
-    // "Insufficient balance" is create_rmb_manual_transaction's own exact raise text (migration
-    // 0004) — checked directly against that source rather than guessed.
+    // "Insufficient balance" is both functions' own exact raise text (migration 0004/0045) —
+    // checked directly against that source rather than guessed.
     const isInsufficientBalance = /insufficient balance/i.test(rpcError.message);
     return { error: isInsufficientBalance ? "Your balance is too low for this amount." : GENERIC_SUBMIT_ERROR };
   }

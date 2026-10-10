@@ -43,6 +43,10 @@ function plainNumber(n: number): string {
   return n.toFixed(2);
 }
 
+function cny(n: number): string {
+  return `¥${n.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+}
+
 function dateHeading(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
@@ -57,22 +61,25 @@ function dateHeading(iso: string): string {
   });
 }
 
+// Compact details-grid field — small uppercase label, text-sm value, optional copy button.
 function Field({
   label,
   value,
   copyValue,
   copyLabel,
+  mono,
 }: {
   label: string;
   value: React.ReactNode;
   copyValue?: string | null;
   copyLabel?: string;
+  mono?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-foreground/40">{label}</dt>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <dd className="min-w-0 break-all text-sm font-medium text-foreground">{value}</dd>
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-[10px] font-medium uppercase tracking-wide text-foreground/40">{label}</dt>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <dd className={`min-w-0 break-all text-sm font-medium text-foreground ${mono ? "font-mono text-xs" : ""}`}>{value}</dd>
         {copyValue && <CopyButton value={copyValue} label={copyLabel ?? label} />}
       </div>
     </div>
@@ -200,7 +207,7 @@ export default async function AdminRmbPage({ searchParams }: { searchParams: Pro
     rows.push(
       <Card key={tx.id} className="overflow-hidden p-0">
         <details className="group">
-          <summary className="flex min-w-0 cursor-pointer list-none items-center gap-3 p-4 sm:p-5">
+          <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 p-3 sm:gap-3 sm:p-4">
             <svg
               className="h-4 w-4 shrink-0 text-foreground/40 transition-transform group-open:rotate-180"
               viewBox="0 0 24 24"
@@ -211,25 +218,95 @@ export default async function AdminRmbPage({ searchParams }: { searchParams: Pro
             >
               <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-sm font-medium text-foreground">
-                  {profile?.full_name || profile?.email || "—"}
-                </span>
-                <span className="truncate text-xs text-foreground/50">
-                  {recipient ? PAYOUT_LABELS[recipient.payout_method] : "—"} ·{" "}
-                  {new Date(tx.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                </span>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="font-semibold">{formatBalance(tx.currency, tx.amount)}</span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="truncate text-sm font-medium text-foreground">{profile?.full_name || profile?.email || "—"}</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {tx.target_amount != null ? (
+                  <span className="truncate text-sm font-semibold text-foreground">
+                    {formatBalance(tx.currency, tx.amount)} to {cny(tx.target_amount)}
+                  </span>
+                ) : (
+                  <>
+                    <span className="truncate text-sm font-semibold text-foreground">{formatBalance(tx.currency, tx.amount)}</span>
+                    <span className="text-xs text-foreground/40">CNY not recorded (older request)</span>
+                  </>
+                )}
                 <Pill tone={statusTone(tx.status)}>{tx.status}</Pill>
               </div>
+              <span className="truncate text-xs text-foreground/50">
+                {recipient ? PAYOUT_LABELS[recipient.payout_method] : "—"} ·{" "}
+                {new Date(tx.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+              </span>
             </div>
           </summary>
 
-          <div className="flex min-w-0 flex-col gap-4 border-t border-border p-4 sm:p-5">
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+          <div className="flex min-w-0 flex-col gap-3 border-t border-border p-3 sm:gap-4 sm:p-4">
+            {/* "Pay this" — everything the admin pastes into the external provider, together. */}
+            <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-primary-200 bg-primary-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-primary-700">Pay this</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {tx.target_amount != null ? (
+                  <>
+                    <span className="text-lg font-bold text-primary-900">Deliver {cny(tx.target_amount)}</span>
+                    <CopyButton value={plainNumber(tx.target_amount)} label="CNY amount to deliver" />
+                  </>
+                ) : (
+                  <span className="text-sm font-medium text-foreground/40">CNY not recorded (older request)</span>
+                )}
+              </div>
+
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 md:grid-cols-4">
+                <Field label="Recipient" value={recipientFullName || "—"} copyValue={recipientFullName || undefined} copyLabel="recipient name" />
+                <Field label="Payout method" value={recipient ? PAYOUT_LABELS[recipient.payout_method] : "—"} />
+
+                {recipient && (recipient.payout_method === "alipay" || recipient.payout_method === "wechat") && (
+                  <Field
+                    label={recipient.payout_method === "alipay" ? "Alipay ID" : "WeChat ID"}
+                    value={
+                      (recipient.payout_method === "alipay" ? recipient.recipient_alipay_id : recipient.recipient_wechat_id) ||
+                      (recipient.qr_code_ref ? "QR code only" : "—")
+                    }
+                    copyValue={recipient.payout_method === "alipay" ? recipient.recipient_alipay_id : recipient.recipient_wechat_id}
+                  />
+                )}
+
+                {recipient && recipient.payout_method === "bank" && (
+                  <>
+                    <Field label="Bank name" value={recipient.recipient_bank_name || "—"} copyValue={recipient.recipient_bank_name} />
+                    <Field
+                      label="Account number"
+                      value={recipient.recipient_bank_account_number || "—"}
+                      copyValue={recipient.recipient_bank_account_number}
+                    />
+                    <Field
+                      label="Account holder"
+                      value={recipient.recipient_account_holder_name || "—"}
+                      copyValue={recipient.recipient_account_holder_name}
+                    />
+                  </>
+                )}
+              </dl>
+
+              {recipient?.qr_code_ref && qrUrl && (
+                <div className="flex min-w-0 flex-col gap-2.5 rounded-lg border border-border bg-white p-2.5 sm:flex-row sm:items-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- a signed, expiring URL isn't a candidate for next/image's static optimization */}
+                  <img src={qrUrl} alt="Recipient QR code" className="h-24 w-24 shrink-0 rounded-lg border border-border object-contain" />
+                  <div className="flex flex-wrap gap-2">
+                    <a href={qrUrl} target="_blank" rel="noopener noreferrer" className={buttonClassName("secondary", "sm")}>
+                      Open full size
+                    </a>
+                    <a href={qrUrl} download className={buttonClassName("secondary", "sm")}>
+                      Download
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Compact details grid — everything else, tight and label-first. */}
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 md:grid-cols-4">
               <Field label="Customer" value={profile?.full_name || "—"} copyValue={profile?.full_name} copyLabel="customer name" />
               <Field
                 label="Email"
@@ -250,99 +327,23 @@ export default async function AdminRmbPage({ searchParams }: { searchParams: Pro
                 label="KYC status"
                 value={<Pill tone={statusTone(profile?.kyc_status ?? "")}>{profile?.kyc_status ?? "—"}</Pill>}
               />
-              <Field
-                label="Transaction ID"
-                value={<span title={tx.id}>{tx.id.slice(0, 8)}…</span>}
-                copyValue={tx.id}
-                copyLabel="full transaction ID"
-              />
-              <Field
-                label="Amount debited"
-                value={formatBalance(tx.currency, tx.amount)}
-                copyValue={plainNumber(tx.amount)}
-                copyLabel="amount debited"
-              />
-              {tx.target_amount != null && (
-                <Field
-                  label="Quoted CNY amount"
-                  value={`¥${tx.target_amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
-                  copyValue={plainNumber(tx.target_amount)}
-                  copyLabel="quoted CNY amount"
-                />
-              )}
-              <Field label="Payout method" value={recipient ? PAYOUT_LABELS[recipient.payout_method] : "—"} />
-
-              {recipient && (recipient.payout_method === "alipay" || recipient.payout_method === "wechat") && (
-                <>
-                  <Field
-                    label="Recipient first name"
-                    value={recipient.recipient_first_name || "—"}
-                    copyValue={recipient.recipient_first_name}
-                  />
-                  <Field
-                    label="Recipient last name"
-                    value={recipient.recipient_last_name || "—"}
-                    copyValue={recipient.recipient_last_name}
-                  />
-                  <Field label="Recipient full name" value={recipientFullName || "—"} copyValue={recipientFullName || undefined} />
-                  <Field
-                    label={recipient.payout_method === "alipay" ? "Alipay ID" : "WeChat ID"}
-                    value={
-                      (recipient.payout_method === "alipay" ? recipient.recipient_alipay_id : recipient.recipient_wechat_id) ||
-                      (recipient.qr_code_ref ? "QR code only" : "—")
-                    }
-                    copyValue={recipient.payout_method === "alipay" ? recipient.recipient_alipay_id : recipient.recipient_wechat_id}
-                  />
-                </>
-              )}
-
-              {recipient && recipient.payout_method === "bank" && (
-                <>
-                  <Field label="Bank name" value={recipient.recipient_bank_name || "—"} copyValue={recipient.recipient_bank_name} />
-                  <Field
-                    label="Account number"
-                    value={recipient.recipient_bank_account_number || "—"}
-                    copyValue={recipient.recipient_bank_account_number}
-                  />
-                  <Field
-                    label="Account holder"
-                    value={recipient.recipient_account_holder_name || "—"}
-                    copyValue={recipient.recipient_account_holder_name}
-                  />
-                </>
-              )}
+              <Field label="Amount debited" value={formatBalance(tx.currency, tx.amount)} />
+              <Field label="Created" value={new Date(tx.created_at).toLocaleString()} />
+              <Field label="Transaction ID" value={tx.id} copyValue={tx.id} copyLabel="full transaction ID" mono />
             </dl>
 
-            {recipient?.qr_code_ref && qrUrl && (
-              <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border p-3 sm:flex-row sm:items-center">
-                {/* eslint-disable-next-line @next/next/no-img-element -- a signed, expiring URL isn't a candidate for next/image's static optimization */}
-                <img src={qrUrl} alt="Recipient QR code" className="h-28 w-28 shrink-0 rounded-lg border border-border object-contain" />
-                <div className="flex flex-wrap gap-2">
-                  <a href={qrUrl} target="_blank" rel="noopener noreferrer" className={buttonClassName("secondary", "sm")}>
-                    Open full size
-                  </a>
-                  <a href={qrUrl} download className={buttonClassName("secondary", "sm")}>
-                    Download
-                  </a>
-                </div>
-              </div>
-            )}
-
             {tx.status === "failed" && tx.rejection_reason && (
-              <div className="min-w-0 break-words rounded-xl bg-danger-50 p-3 text-sm text-danger-700">
+              <div className="min-w-0 break-words rounded-xl bg-danger-50 p-2.5 text-sm text-danger-700">
                 <span className="font-medium">Rejection reason: </span>
                 {tx.rejection_reason}
               </div>
             )}
 
             {tx.status === "completed" && (
-              <div className="flex min-w-0 flex-col gap-1 break-words rounded-xl bg-success-50 p-3 text-sm text-foreground/80">
+              <div className="flex min-w-0 flex-col gap-1 break-words rounded-xl bg-success-50 p-2.5 text-sm text-foreground/80">
                 {tx.actual_target_amount != null && (
                   <p>
-                    Delivered:{" "}
-                    <strong className="font-semibold text-foreground">
-                      ¥{tx.actual_target_amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </strong>
+                    Delivered: <strong className="font-semibold text-foreground">{cny(tx.actual_target_amount)}</strong>
                   </p>
                 )}
                 {tx.actual_rate_note && <p>Note: {tx.actual_rate_note}</p>}
@@ -356,8 +357,8 @@ export default async function AdminRmbPage({ searchParams }: { searchParams: Pro
               </div>
             )}
 
-            <div className="flex w-full min-w-0 flex-col border-t border-border pt-4">
-              <RmbQueueActions transactionId={tx.id} status={tx.status} />
+            <div className="flex w-full min-w-0 flex-col border-t border-border pt-3">
+              <RmbQueueActions transactionId={tx.id} status={tx.status} defaultTargetAmount={tx.target_amount} />
             </div>
           </div>
         </details>

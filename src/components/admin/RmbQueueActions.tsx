@@ -69,7 +69,7 @@ function RejectAction({ transactionId }: { transactionId: string }) {
   );
 }
 
-function CompleteForm({ transactionId }: { transactionId: string }) {
+function CompleteForm({ transactionId, defaultTargetAmount }: { transactionId: string; defaultTargetAmount?: number | null }) {
   const [state, formAction, pending] = useActionState(completeRmbTransaction, initialState);
   const [open, setOpen] = useState(false);
   const [proofPath, setProofPath] = useState<string | null>(null);
@@ -123,6 +123,10 @@ function CompleteForm({ transactionId }: { transactionId: string }) {
         min="0.01"
         step="0.01"
         placeholder="0.00"
+        // Pre-filled with the CNY amount recorded at submission time (migration 0045) — the
+        // admin only needs to type something different if what was actually delivered differs
+        // from what was quoted, not re-type the same number every time it matches.
+        defaultValue={defaultTargetAmount != null ? defaultTargetAmount.toFixed(2) : undefined}
         required
         className="w-full"
       />
@@ -179,9 +183,11 @@ function CompleteForm({ transactionId }: { transactionId: string }) {
 export function RmbQueueActions({
   transactionId,
   status,
+  defaultTargetAmount,
 }: {
   transactionId: string;
   status: TransactionStatus;
+  defaultTargetAmount?: number | null;
 }) {
   if (status === "completed" || status === "failed") {
     return null;
@@ -192,7 +198,7 @@ export function RmbQueueActions({
       {status === "pending" && (
         <ActionButton action={markRmbProcessing} transactionId={transactionId} label="Mark processing" />
       )}
-      {status === "processing" && <CompleteForm transactionId={transactionId} />}
+      {status === "processing" && <CompleteForm transactionId={transactionId} defaultTargetAmount={defaultTargetAmount} />}
       <RejectAction transactionId={transactionId} />
     </div>
   );

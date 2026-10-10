@@ -399,6 +399,10 @@ export type Database = {
         Args: { p_recipient_id: string; p_currency: Currency; p_amount: number };
         Returns: string;
       };
+      create_rmb_manual_transaction_v2: {
+        Args: { p_recipient_id: string; p_currency: Currency; p_amount: number; p_target_cny: number };
+        Returns: string;
+      };
       admin_reject_rmb_transaction: {
         Args: { p_transaction_id: string; p_reason: string };
         Returns: undefined;

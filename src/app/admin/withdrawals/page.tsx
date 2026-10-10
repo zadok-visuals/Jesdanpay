@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
 import { Pill, statusTone } from "@/components/ui/Pill";
@@ -104,7 +105,12 @@ export default async function AdminWithdrawalsPage({ searchParams }: { searchPar
                       </Pill>
                     )}
                   </div>
-                  <p className="text-sm text-foreground/60">{profile?.full_name || profile?.email || tx.user_id}</p>
+                  <p className="text-sm text-foreground/60">
+                    {profile?.full_name || "—"}{" "}
+                    <Link href={`/admin/users/${tx.user_id}`} className="text-primary-600 hover:underline">
+                      {profile?.email || tx.user_id}
+                    </Link>
+                  </p>
                   <p className="text-xs text-foreground/50">
                     {recipient
                       ? recipient.wallet_address

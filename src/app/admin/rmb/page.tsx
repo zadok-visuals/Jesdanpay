@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
 import { Pill, statusTone } from "@/components/ui/Pill";
@@ -230,7 +231,19 @@ export default async function AdminRmbPage({ searchParams }: { searchParams: Pro
           <div className="flex min-w-0 flex-col gap-4 border-t border-border p-4 sm:p-5">
             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
               <Field label="Customer" value={profile?.full_name || "—"} copyValue={profile?.full_name} copyLabel="customer name" />
-              <Field label="Email" value={profile?.email || "—"} copyValue={profile?.email} />
+              <Field
+                label="Email"
+                value={
+                  profile?.email ? (
+                    <Link href={`/admin/users/${tx.user_id}`} className="text-primary-600 hover:underline">
+                      {profile.email}
+                    </Link>
+                  ) : (
+                    "—"
+                  )
+                }
+                copyValue={profile?.email}
+              />
               <Field label="Phone" value={profile?.phone || "—"} copyValue={profile?.phone} />
               <Field label="Country" value={profile?.country || "—"} />
               <Field

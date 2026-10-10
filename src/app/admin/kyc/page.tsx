@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
@@ -83,7 +84,10 @@ export default async function AdminKycPage({ searchParams }: { searchParams: Pro
               <Card key={profile.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold">{profile.full_name || profile.email}</span>
+                    <span className="font-semibold">{profile.full_name || "—"}</span>
+                    <Link href={`/admin/users/${profile.id}`} className="text-sm text-primary-600 hover:underline">
+                      {profile.email}
+                    </Link>
                     <Pill tone="warning">{profile.kyc_type ?? "unknown"}</Pill>
                   </div>
                   <p className="text-xs text-foreground/40">Submitted {formatSubmittedDate(profile.created_at)}</p>

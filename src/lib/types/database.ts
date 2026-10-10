@@ -233,6 +233,38 @@ export type Notification = {
   created_at: string;
 };
 
+// One row per deposit, transaction, or CNY conversion, joined to the owning profile — see
+// migration 0044's header comment for why this view exists. `kind` is the user-facing category
+// ("deposit" | "swap" | "cny_conversion" | "china_payment" | "withdrawal"); `source` is which
+// underlying table the row came from ("deposit" | "transaction" | "conversion"), mostly useful
+// for debugging. `fee` is only ever set for a withdrawal row.
+export type AdminActivityLedgerRow = {
+  source: string;
+  kind: string;
+  id: string;
+  user_id: string;
+  user_email: string | null;
+  user_name: string | null;
+  user_phone: string | null;
+  currency: Currency;
+  amount: number;
+  target_currency: Currency | null;
+  target_amount: number | null;
+  fee: number | null;
+  status: TransactionStatus;
+  reference: string | null;
+  provider: string | null;
+  created_at: string;
+};
+
+export type AdminLedgerTotal = {
+  kind: string;
+  currency: string;
+  status: string;
+  txn_count: number;
+  total_amount: number;
+};
+
 export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13";
@@ -352,8 +384,17 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      admin_activity_ledger: {
+        Row: AdminActivityLedgerRow;
+        Relationships: [];
+      };
+    };
     Functions: {
+      admin_ledger_totals: {
+        Args: { p_since?: string | null };
+        Returns: AdminLedgerTotal[];
+      };
       create_rmb_manual_transaction: {
         Args: { p_recipient_id: string; p_currency: Currency; p_amount: number };
         Returns: string;

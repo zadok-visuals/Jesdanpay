@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { requireAdminUser, getAdminRole } from "@/lib/auth/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card } from "@/components/ui/Card";
-import { Pill, type PillTone } from "@/components/ui/Pill";
+import { Pill, statusTone, type PillTone } from "@/components/ui/Pill";
 import {
   UsersIcon,
   ShieldCheckIcon,
@@ -15,10 +15,12 @@ import {
   ClockIcon,
   PieChartIcon,
   AdminIcon,
+  TransactionsIcon,
 } from "@/components/layout/NavIcons";
 import { formatBalance } from "@/lib/currency";
 import { sumByCurrency } from "@/lib/admin/aggregate";
-import type { Currency } from "@/lib/types/database";
+import { ledgerKindLabel } from "@/lib/admin/ledger";
+import type { AdminLedgerTotal, Currency } from "@/lib/types/database";
 
 async function countActive(
   admin: ReturnType<typeof createAdminClient>,
@@ -41,9 +43,31 @@ function last24hCutoffIso(): string {
   return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 }
 
-function CurrencyStatRows({ totals }: { totals: Map<string, number> }) {
+// All three replace the old "fetch every matching row, sum in JS" pattern — that silently
+// truncated once a currency's row count crossed Supabase's 1000-row cap, which is exactly how a
+// growing business quietly stops seeing its own real totals. admin_ledger_totals (migration
+// 0044) is a real SQL group-by, so there's nothing here left to truncate.
+function sumAmountByStatus(totals: AdminLedgerTotal[], statuses: string[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const t of totals) {
+    if (!statuses.includes(t.status)) continue;
+    out.set(t.currency, (out.get(t.currency) ?? 0) + t.total_amount);
+  }
+  return out;
+}
+function sumCountByStatus(totals: AdminLedgerTotal[], statuses: string[]): number {
+  return totals.filter((t) => statuses.includes(t.status)).reduce((sum, t) => sum + t.txn_count, 0);
+}
+function amountByKindAndCurrency(totals: AdminLedgerTotal[], kind: string, statuses: string[]): Map<string, number> {
+  return sumAmountByStatus(totals.filter((t) => t.kind === kind), statuses);
+}
+function countByKind(totals: AdminLedgerTotal[], kind: string, statuses: string[]): number {
+  return sumCountByStatus(totals.filter((t) => t.kind === kind), statuses);
+}
+
+function CurrencyStatRows({ totals, empty }: { totals: Map<string, number>; empty?: string }) {
   if (totals.size === 0) {
-    return <p className="text-xs text-foreground/50">No data yet.</p>;
+    return <p className="text-xs text-foreground/50">{empty ?? "No data yet."}</p>;
   }
   return (
     <div className="flex flex-col gap-1.5">
@@ -132,9 +156,10 @@ export default async function AdminIndexPage() {
     rmbCount,
     withdrawalCount,
     { count: totalUsers },
-    { data: completedTransactions },
+    { data: allTimeTotalsRaw },
+    { data: last24hTotalsRaw },
     { data: wallets },
-    { data: last24hTransactions },
+    { data: recentActivity },
     approvedKyc,
     pendingKyc,
     rejectedKyc,
@@ -144,21 +169,32 @@ export default async function AdminIndexPage() {
     countActive(admin, "rmb_manual"),
     countActive(admin, "withdrawal"),
     admin.from("profiles").select("*", { count: "exact", head: true }),
-    // Total volume per currency — every completed transaction regardless of type, same
-    // "fetch raw rows, aggregate in JS" approach already used by admin/pnl (Postgrest has no
-    // native group-by through the JS client).
-    admin.from("transactions").select("currency, amount").eq("status", "completed"),
+    admin.rpc("admin_ledger_totals", { p_since: null }),
+    admin.rpc("admin_ledger_totals", { p_since: last24h }),
     admin.from("wallets").select("currency, balance"),
-    admin.from("transactions").select("currency, amount").gte("created_at", last24h),
+    admin.from("admin_activity_ledger").select("*").order("created_at", { ascending: false }).limit(10),
     countKycStatus(admin, "approved"),
     countKycStatus(admin, "pending"),
     countKycStatus(admin, "rejected"),
   ]);
 
-  const volumeTotals = sumByCurrency(completedTransactions ?? [], (t) => t.currency, (t) => t.amount);
+  const allTimeTotals = allTimeTotalsRaw ?? [];
+  const last24hTotals = last24hTotalsRaw ?? [];
   const balanceTotals = sumByCurrency(wallets ?? [], (w) => w.currency, (w) => w.balance);
-  const last24hTotals = sumByCurrency(last24hTransactions ?? [], (t) => t.currency, (t) => t.amount);
-  const last24hCount = last24hTransactions?.length ?? 0;
+
+  // "Today"/"Last 24 hours" counts and sums EVERY kind and EVERY status within the window — this
+  // is the figure the client's complaint was actually about: a deposit or CNY conversion made
+  // yesterday now shows up here, where before only the `transactions` table did.
+  const last24hCount = sumCountByStatus(last24hTotals, ["pending", "processing", "completed", "failed"]);
+  const last24hCurrencyTotals = sumAmountByStatus(last24hTotals, ["pending", "processing", "completed", "failed"]);
+
+  const CATEGORIES = [
+    { kind: "deposit", title: "Deposits" },
+    { kind: "swap", title: "Swaps" },
+    { kind: "cny_conversion", title: "CNY conversions" },
+    { kind: "china_payment", title: "Payments to China" },
+    { kind: "withdrawal", title: "Withdrawals" },
+  ] as const;
 
   return (
     <div>
@@ -166,8 +202,9 @@ export default async function AdminIndexPage() {
 
       <div className="mb-8 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
         <QuickActionTile href="/admin/kyc" icon={<ShieldCheckIcon className="h-[18px] w-[18px]" />} label="KYC Review" />
-        <QuickActionTile href="/admin/rmb" icon={<ExchangeIcon className="h-[18px] w-[18px]" />} label="RMB Queue" />
+        <QuickActionTile href="/admin/rmb" icon={<ExchangeIcon className="h-[18px] w-[18px]" />} label="CNY Payment Queue" />
         <QuickActionTile href="/admin/withdrawals" icon={<WithdrawIcon className="h-[18px] w-[18px]" />} label="Withdrawals" />
+        <QuickActionTile href="/admin/transactions" icon={<TransactionsIcon className="h-[18px] w-[18px]" />} label="Transactions" />
         {role === "super_admin" && (
           <QuickActionTile href="/admin/administrators" icon={<AdminIcon className="h-[18px] w-[18px]" />} label="Administrators" />
         )}
@@ -188,7 +225,7 @@ export default async function AdminIndexPage() {
             href="/admin/rmb"
             icon={<ExchangeIcon className="h-[18px] w-[18px]" />}
             accent="amber"
-            title="CNY Exchange Queue"
+            title="CNY Payment Queue"
             count={rmbCount}
             description="Pending & processing RMB manual transfers"
           />
@@ -205,11 +242,24 @@ export default async function AdminIndexPage() {
 
       <section className="mb-8">
         <SectionHeader>Financials</SectionHeader>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <StatCard icon={<ChartBarIcon className="h-[18px] w-[18px]" />} accent="green" title="Total volume (completed transactions)">
-            <CurrencyStatRows totals={volumeTotals} />
-          </StatCard>
-          <StatCard icon={<TagIcon className="h-[18px] w-[18px]" />} accent="green" title="Wallet balances currently held">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {CATEGORIES.map(({ kind, title }) => {
+            const completed = amountByKindAndCurrency(allTimeTotals, kind, ["completed"]);
+            const completedCount = countByKind(allTimeTotals, kind, ["completed"]);
+            const awaiting = kind === "deposit" ? amountByKindAndCurrency(allTimeTotals, kind, ["pending", "processing"]) : null;
+            return (
+              <StatCard key={kind} icon={<ChartBarIcon className="h-[18px] w-[18px]" />} accent="green" title={title} count={completedCount} tone="success">
+                <CurrencyStatRows totals={completed} empty="No completed activity yet." />
+                {awaiting && awaiting.size > 0 && (
+                  <div className="mt-2 border-t border-border pt-2">
+                    <p className="mb-1 text-xs font-medium text-accent-700">Awaiting confirmation</p>
+                    <CurrencyStatRows totals={awaiting} />
+                  </div>
+                )}
+              </StatCard>
+            );
+          })}
+          <StatCard icon={<TagIcon className="h-[18px] w-[18px]" />} accent="green" title="Total user balances held (owed to users)">
             <CurrencyStatRows totals={balanceTotals} />
           </StatCard>
         </div>
@@ -231,6 +281,39 @@ export default async function AdminIndexPage() {
         </div>
       </section>
 
+      <section className="mb-8">
+        <div className="mb-3 flex items-center justify-between">
+          <SectionHeader>Recent activity</SectionHeader>
+          <Link href="/admin/transactions" className="text-sm font-medium text-primary-600 hover:underline">
+            View all transactions
+          </Link>
+        </div>
+        <Card className="overflow-hidden p-0">
+          {!recentActivity || recentActivity.length === 0 ? (
+            <p className="p-6 text-center text-sm text-foreground/50">No activity yet.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {recentActivity.map((row) => (
+                <li key={`${row.source}-${row.id}`} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-medium text-foreground">{row.user_name || "—"}</span>
+                    <Link href={`/admin/users/${row.user_id}`} className="truncate text-xs text-primary-600 hover:underline">
+                      {row.user_email || row.user_id}
+                    </Link>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-foreground/60">{ledgerKindLabel(row.kind)}</span>
+                    <span className="text-sm font-medium">{formatBalance(row.currency, row.amount)}</span>
+                    <Pill tone={statusTone(row.status)}>{row.status}</Pill>
+                    <span className="shrink-0 text-xs text-foreground/40">{new Date(row.created_at).toLocaleDateString()}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </section>
+
       <section>
         <SectionHeader>Overview</SectionHeader>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -245,8 +328,10 @@ export default async function AdminIndexPage() {
           </StatCard>
           <StatCard icon={<ClockIcon className="h-[18px] w-[18px]" />} accent="neutral" title="Last 24 hours">
             <p className="text-2xl font-bold">{last24hCount}</p>
-            <p className="-mt-2 mb-1 text-xs text-foreground/50">transaction{last24hCount === 1 ? "" : "s"}</p>
-            <CurrencyStatRows totals={last24hTotals} />
+            <p className="-mt-2 mb-1 text-xs text-foreground/50">
+              deposit{last24hCount === 1 ? "" : "s"}, swap{last24hCount === 1 ? "" : "s"}, conversions & more
+            </p>
+            <CurrencyStatRows totals={last24hCurrencyTotals} />
           </StatCard>
           <StatCard icon={<PieChartIcon className="h-[18px] w-[18px]" />} accent="neutral" title="KYC approval rate">
             <div className="flex flex-col gap-1.5 text-sm">

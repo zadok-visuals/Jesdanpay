@@ -8,6 +8,7 @@ import { SuspendUserActions } from "@/components/admin/SuspendUserActions";
 import { formatBalance } from "@/lib/currency";
 import { COUNTRIES } from "@/lib/countries";
 import { sumByCurrency } from "@/lib/admin/aggregate";
+import { ledgerKindLabel } from "@/lib/admin/ledger";
 import type { Currency } from "@/lib/types/database";
 
 function countryName(code: string | null): string {
@@ -48,12 +49,17 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
     .maybeSingle();
   if (!profile) notFound();
 
-  const [{ data: deposits }, { data: withdrawals }, { data: conversions }, { data: kycDocuments }] = await Promise.all([
-    admin.from("deposits").select("currency, amount, confirmed_amount").eq("user_id", id).eq("status", "completed"),
-    admin.from("transactions").select("currency, amount").eq("user_id", id).eq("type", "withdrawal").eq("status", "completed"),
-    admin.from("cny_conversions").select("from_currency, from_amount").eq("user_id", id),
-    admin.from("kyc_documents").select("*").eq("user_id", id),
-  ]);
+  const [{ data: deposits }, { data: withdrawals }, { data: conversions }, { data: kycDocuments }, { data: recentActivity }] =
+    await Promise.all([
+      admin.from("deposits").select("currency, amount, confirmed_amount").eq("user_id", id).eq("status", "completed"),
+      admin.from("transactions").select("currency, amount").eq("user_id", id).eq("type", "withdrawal").eq("status", "completed"),
+      admin.from("cny_conversions").select("from_currency, from_amount").eq("user_id", id),
+      admin.from("kyc_documents").select("*").eq("user_id", id),
+      // Every deposit/transaction/conversion this user has ever made, across every currency and
+      // type — the view migration 0044 introduced so an admin opening one user can actually see
+      // everything they did, not just whichever queue happened to bring them here.
+      admin.from("admin_activity_ledger").select("*").eq("user_id", id).order("created_at", { ascending: false }).limit(20),
+    ]);
 
   const depositTotals = sumByCurrency(deposits ?? [], (d) => d.currency, (d) => d.confirmed_amount ?? d.amount);
   const withdrawalTotals = sumByCurrency(withdrawals ?? [], (w) => w.currency, (w) => w.amount);
@@ -129,6 +135,31 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
       <Card className="p-6">
         <h2 className="mb-3 text-base font-semibold">KYC documents</h2>
         <KycDocumentList docs={kycDocuments ?? []} signedUrlByRef={signedUrlByRef} />
+      </Card>
+
+      <Card className="overflow-hidden p-0">
+        <h2 className="px-6 pt-5 pb-3 text-base font-semibold">Recent activity</h2>
+        {!recentActivity || recentActivity.length === 0 ? (
+          <p className="px-6 pb-5 text-sm text-foreground/50">No activity yet.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {recentActivity.map((row) => (
+              <li key={`${row.source}-${row.id}`} className="flex flex-wrap items-center justify-between gap-2 px-6 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-foreground">{ledgerKindLabel(row.kind)}</span>
+                  <span className="text-sm text-foreground/60">{formatBalance(row.currency, row.amount)}</span>
+                  {row.target_currency && row.target_amount != null && (
+                    <span className="text-xs text-foreground/40">→ {formatBalance(row.target_currency, row.target_amount)}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Pill tone={statusTone(row.status)}>{row.status}</Pill>
+                  <span className="shrink-0 text-xs text-foreground/40">{new Date(row.created_at).toLocaleString()}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );

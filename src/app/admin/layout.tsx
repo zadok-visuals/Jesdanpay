@@ -9,6 +9,7 @@ import { buttonClassName } from "@/components/ui/Button";
 import { AdminNavTabs } from "@/components/admin/AdminNavTabs";
 import { AdminHeaderMenu } from "@/components/admin/AdminHeaderMenu";
 import { AdminSessionLogger } from "@/components/admin/AdminSessionLogger";
+import { CURRENCY_DISPLAY_ORDER } from "@/lib/currency";
 import type { Currency } from "@/lib/types/database";
 
 // handle_new_user() (migration 0020) only provisions a wallet for the local currency matching
@@ -24,7 +25,7 @@ import type { Currency } from "@/lib/types/database";
 // already exist (ON CONFLICT DO NOTHING on the wallets table's own (user_id, currency) primary
 // key), never touching an existing wallet's balance. Runs only for the currently-authenticated
 // admin's own id, never another user's — gated by sitting right after requireAdminUser() here.
-const ADMIN_BACKFILL_CURRENCIES: Currency[] = ["NGN", "GHS", "KES", "CNY", "USDT"];
+const ADMIN_BACKFILL_CURRENCIES: Currency[] = CURRENCY_DISPLAY_ORDER;
 
 async function backfillAdminWallets(userId: string) {
   const admin = createAdminClient();

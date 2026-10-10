@@ -2,6 +2,7 @@ import Image from "next/image";
 import { PillButton } from "@/components/marketing/PillButton";
 import { Reveal } from "@/components/marketing/Reveal";
 import { ArrowRightIcon } from "@/components/marketing/MarketingIcons";
+import { HELLO_EMAIL } from "@/lib/site";
 
 export function Hero() {
   return (
@@ -43,8 +44,7 @@ export function Hero() {
                 Get started
                 <ArrowRightIcon />
               </PillButton>
-              {/* mailto placeholder — swap for the client's real support address before launch */}
-              <PillButton href="mailto:hello@jesdanpay.net" variant="secondary" size="lg">
+              <PillButton href={`mailto:${HELLO_EMAIL}`} variant="secondary" size="lg">
                 Talk to us
               </PillButton>
             </div>

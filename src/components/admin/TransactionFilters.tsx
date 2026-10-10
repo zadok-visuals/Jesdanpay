@@ -18,7 +18,7 @@ const STATUS_OPTIONS = [
   { value: "failed", label: "Failed" },
 ];
 
-const CURRENCY_OPTIONS = ["all", "NGN", "GHS", "KES", "USDT", "CNY"];
+const CURRENCY_OPTIONS = ["all", "NGN", "CNY", "USDT", "KES", "GHS"];
 
 export function TransactionFilters({
   search,

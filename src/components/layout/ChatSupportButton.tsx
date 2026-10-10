@@ -11,9 +11,21 @@ import type { SupportMessage } from "@/lib/types/database";
 // no reason to poll a chat panel nobody's looking at.
 const POLL_MS = 17_000;
 
-export function ChatSupportButton({ initialUnreadCount = 0 }: { initialUnreadCount?: number }) {
+export function ChatSupportButton({
+  initialUnreadCount = 0,
+  initialMessages,
+}: {
+  initialUnreadCount?: number;
+  // Fetched server-side alongside the dashboard layout's other queries (src/app/(dashboard)/
+  // layout.tsx) and seeded straight into state so the panel opens with real content instantly
+  // instead of flashing the empty state while getSupportThread's own cold round trip resolves —
+  // slowest right after a fresh sign-in. Undefined when that fetch failed; in that case `loaded`
+  // starts false and this falls back to the plain client fetch below, same as before.
+  initialMessages?: SupportMessage[];
+}) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<SupportMessage[]>([]);
+  const [messages, setMessages] = useState<SupportMessage[]>(initialMessages ?? []);
+  const [loaded, setLoaded] = useState(initialMessages !== undefined);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +37,10 @@ export function ChatSupportButton({ initialUnreadCount = 0 }: { initialUnreadCou
   async function loadMessages() {
     const result = await getSupportThread();
     if ("error" in result) setError(result.error);
-    else setMessages(result.messages);
+    else {
+      setMessages(result.messages);
+      setLoaded(true);
+    }
   }
 
   useEffect(() => {
@@ -36,7 +51,10 @@ export function ChatSupportButton({ initialUnreadCount = 0 }: { initialUnreadCou
       const result = await getSupportThread();
       if (cancelled) return;
       if ("error" in result) setError(result.error);
-      else setMessages(result.messages);
+      else {
+        setMessages(result.messages);
+        setLoaded(true);
+      }
     }
 
     tick();
@@ -92,10 +110,31 @@ export function ChatSupportButton({ initialUnreadCount = 0 }: { initialUnreadCou
 
       <Modal open={open} onClose={() => setOpen(false)} title="Support">
         <div ref={scrollRef} className="flex max-h-80 min-h-[10rem] flex-col gap-2 overflow-y-auto">
-          {messages.length === 0 ? (
-            <p className="py-10 text-center text-sm text-foreground/50">
-              No messages yet — send us one below and we&rsquo;ll reply here.
-            </p>
+          {!loaded ? (
+            <div className="flex flex-col gap-2 py-4">
+              <div className="h-9 w-2/3 animate-pulse self-start rounded-xl bg-black/[.06]" />
+              <div className="h-9 w-1/2 animate-pulse self-end rounded-xl bg-black/[.06]" />
+              <div className="h-9 w-3/5 animate-pulse self-start rounded-xl bg-black/[.06]" />
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
+              <div className="animate-chat-bubble-float relative flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-primary-500">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M4 18V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 4z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="absolute -bottom-1 flex gap-0.5 rounded-full bg-white px-1.5 py-0.5 shadow-sm">
+                  <span className="animate-chat-typing-dot h-1.5 w-1.5 rounded-full bg-primary-400 [animation-delay:0ms]" />
+                  <span className="animate-chat-typing-dot h-1.5 w-1.5 rounded-full bg-primary-400 [animation-delay:150ms]" />
+                  <span className="animate-chat-typing-dot h-1.5 w-1.5 rounded-full bg-primary-400 [animation-delay:300ms]" />
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">No messages yet</p>
+                <p className="mt-1 text-sm text-foreground/50">
+                  Send us a message below and we will reply right here.
+                </p>
+              </div>
+            </div>
           ) : (
             messages.map((m) => (
               <div

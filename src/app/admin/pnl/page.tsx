@@ -20,7 +20,7 @@ import type { AdminSearchParams } from "@/lib/admin/pagination";
 //      needs the opposite sign.
 // Fixing both required a supplier rate that's always "how many units of X per 1 USDT" — never a
 // currency-to-currency cross rate the admin has no way to actually know or quote.
-const FIAT_CURRENCIES: Currency[] = ["NGN", "GHS", "KES"];
+const FIAT_CURRENCIES: Currency[] = ["NGN", "KES", "GHS"];
 
 const PERIOD_OPTIONS = [
   { value: "1", label: "Today" },

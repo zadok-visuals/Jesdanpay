@@ -26,10 +26,10 @@ type Direction =
 const DIRECTIONS: { value: Direction; source: Currency; target: Currency; label: string }[] = [
   { value: "NGN_TO_USDT", source: "NGN", target: "USDT", label: "NGN → USDT" },
   { value: "USDT_TO_NGN", source: "USDT", target: "NGN", label: "USDT → NGN" },
-  { value: "GHS_TO_USDT", source: "GHS", target: "USDT", label: "GHS → USDT" },
-  { value: "USDT_TO_GHS", source: "USDT", target: "GHS", label: "USDT → GHS" },
   { value: "KES_TO_USDT", source: "KES", target: "USDT", label: "KES → USDT" },
   { value: "USDT_TO_KES", source: "USDT", target: "KES", label: "USDT → KES" },
+  { value: "GHS_TO_USDT", source: "GHS", target: "USDT", label: "GHS → USDT" },
+  { value: "USDT_TO_GHS", source: "USDT", target: "GHS", label: "USDT → GHS" },
 ];
 
 const STATUS_POLL_INTERVAL_MS = 10_000;

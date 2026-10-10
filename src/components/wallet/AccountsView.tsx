@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import type { Currency, Wallet, WithdrawalRecipient } from "@/lib/types/database";
 import type { UnifiedActivity } from "@/lib/transactions";
-import { CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
+import { CURRENCY_DISPLAY_ORDER, CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { Tabs } from "@/components/ui/Tabs";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -21,7 +21,7 @@ export function AccountsView({
   withdrawalRecipients: WithdrawalRecipient[];
   activityByCurrency: Record<Currency, UnifiedActivity[]>;
 }) {
-  const currencies = wallets.map((w) => w.currency);
+  const currencies = CURRENCY_DISPLAY_ORDER.filter((c) => wallets.some((w) => w.currency === c));
   const [selected, setSelected] = useState(currencies[0] ?? "NGN");
   // The deposit panel always opens for whichever currency tab is already selected (there's no
   // separate tab to switch to), so "View balance" after a deposit just needs to bring the figure

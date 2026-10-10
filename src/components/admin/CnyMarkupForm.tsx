@@ -19,7 +19,7 @@ export function CnyMarkupForm({
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
       <Input
-        label="Fiat markup — NGN/GHS/KES (%)"
+        label="Fiat markup — NGN/KES/GHS (%)"
         id="fiatMarkupPercent"
         name="fiatMarkupPercent"
         type="number"

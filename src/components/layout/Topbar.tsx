@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import { ChatSupportButton } from "@/components/layout/ChatSupportButton";
-import type { Notification } from "@/lib/types/database";
+import type { Notification, SupportMessage } from "@/lib/types/database";
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/);
@@ -16,9 +16,16 @@ interface TopbarProps {
   onMenuClick?: () => void;
   notifications?: Notification[];
   unreadChatCount?: number;
+  initialSupportMessages?: SupportMessage[];
 }
 
-export function Topbar({ name, onMenuClick, notifications = [], unreadChatCount = 0 }: TopbarProps) {
+export function Topbar({
+  name,
+  onMenuClick,
+  notifications = [],
+  unreadChatCount = 0,
+  initialSupportMessages,
+}: TopbarProps) {
   return (
     <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
@@ -39,7 +46,7 @@ export function Topbar({ name, onMenuClick, notifications = [], unreadChatCount 
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         <NotificationBell notifications={notifications} />
-        <ChatSupportButton initialUnreadCount={unreadChatCount} />
+        <ChatSupportButton initialUnreadCount={unreadChatCount} initialMessages={initialSupportMessages} />
 
         <Link
           href="/settings"

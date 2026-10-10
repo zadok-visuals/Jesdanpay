@@ -2,10 +2,10 @@ import { Reveal } from "@/components/marketing/Reveal";
 
 const CORRIDORS = [
   { flag: "🇳🇬", code: "NGN", country: "Nigeria" },
-  { flag: "🇬🇭", code: "GHS", country: "Ghana", comingSoon: true },
-  { flag: "🇰🇪", code: "KES", country: "Kenya" },
-  { flag: "₮", code: "USDT", country: "Any market" },
   { flag: "🇨🇳", code: "CNY", country: "China" },
+  { flag: "₮", code: "USDT", country: "Any market" },
+  { flag: "🇰🇪", code: "KES", country: "Kenya" },
+  { flag: "🇬🇭", code: "GHS", country: "Ghana", comingSoon: true },
 ];
 
 // Rendered twice back to back and slid left by exactly one copy-width (see .animate-marketing-

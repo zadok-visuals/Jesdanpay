@@ -149,3 +149,71 @@ body {
 .animate-marketing-marquee:hover {
   animation-play-state: paused;
 }
+
+/* Floating support button (src/components/marketing/FloatingSupport.tsx) and the chat panel's
+   animated empty state (src/components/layout/ChatSupportButton.tsx). Each utility class is
+   defined ONLY inside the no-preference media query below, so an element simply gets no
+   animation at all — no JS feature-detection needed — when the user has prefers-reduced-motion
+   set. */
+@keyframes support-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes support-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes chat-bubble-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes chat-typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.3;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-support-pop-in {
+    animation: support-pop-in 0.35s ease-out;
+  }
+
+  .animate-support-pulse-ring {
+    animation: support-pulse-ring 2.2s ease-out infinite;
+  }
+
+  .animate-chat-bubble-float {
+    animation: chat-bubble-float 2.6s ease-in-out infinite;
+  }
+
+  .animate-chat-typing-dot {
+    animation: chat-typing-dot 1.2s ease-in-out infinite;
+  }
+}

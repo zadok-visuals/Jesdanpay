@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { CURRENCY_DISPLAY_ORDER } from "@/lib/currency";
 import { Card } from "@/components/ui/Card";
 import { Pill, statusTone } from "@/components/ui/Pill";
 import { WithdrawalRecipientCard } from "@/components/wallet/WithdrawalRecipientCard";
@@ -83,9 +84,11 @@ export default async function SettingsPage() {
 
         <WithdrawalRecipientCard
           recipients={withdrawalRecipients ?? []}
-          availableCurrencies={(wallets ?? [])
-            .map((w) => w.currency)
-            .filter((c) => c === "NGN" || c === "GHS" || c === "KES" || c === "USDT")}
+          availableCurrencies={CURRENCY_DISPLAY_ORDER.filter(
+            (c) =>
+              (c === "NGN" || c === "GHS" || c === "KES" || c === "USDT") &&
+              (wallets ?? []).some((w) => w.currency === c),
+          )}
           nigerianBanks={nigerianBanks}
         />
 

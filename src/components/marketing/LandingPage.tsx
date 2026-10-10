@@ -11,6 +11,7 @@ import { SecurityTrust } from "@/components/marketing/SecurityTrust";
 import { FAQ } from "@/components/marketing/FAQ";
 import { FinalCta } from "@/components/marketing/FinalCta";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
+import { FloatingSupport } from "@/components/marketing/FloatingSupport";
 
 export function LandingPage() {
   return (
@@ -30,6 +31,7 @@ export function LandingPage() {
           <FinalCta />
         </main>
         <MarketingFooter />
+        <FloatingSupport />
       </div>
     </SmoothScroll>
   );

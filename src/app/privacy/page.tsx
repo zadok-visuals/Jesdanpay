@@ -58,7 +58,7 @@ export default function PrivacyPolicyPage() {
               </p>
               <p>
                 <strong className="font-semibold text-primary-900">Wallet and balance data:</strong>{" "}
-                your balances across supported currencies (NGN, GHS, KES, USDT, CNY) within the
+                your balances across supported currencies (NGN, CNY, USDT, KES, GHS) within the
                 platform.
               </p>
               <p>

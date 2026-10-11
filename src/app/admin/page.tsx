@@ -20,6 +20,7 @@ import {
 import { formatBalance } from "@/lib/currency";
 import { sumByCurrency } from "@/lib/admin/aggregate";
 import { ledgerKindLabel } from "@/lib/admin/ledger";
+import { computeAdminPnl } from "@/lib/admin/pnl";
 import type { AdminLedgerTotal, Currency } from "@/lib/types/database";
 
 async function countActive(
@@ -163,6 +164,7 @@ export default async function AdminIndexPage() {
     approvedKyc,
     pendingKyc,
     rejectedKyc,
+    pnl,
   ] = await Promise.all([
     getAdminRole(adminUser.id, adminUser.email),
     admin.from("profiles").select("*", { count: "exact", head: true }).eq("kyc_status", "pending"),
@@ -176,6 +178,9 @@ export default async function AdminIndexPage() {
     countKycStatus(admin, "approved"),
     countKycStatus(admin, "pending"),
     countKycStatus(admin, "rejected"),
+    // All-time, same as the PNL page's default "All time" filter — a quick-glance figure, not
+    // meant to replace the full breakdown (routes, per-order rows, skipped orders) on /admin/pnl.
+    computeAdminPnl(admin, null),
   ]);
 
   const allTimeTotals = allTimeTotalsRaw ?? [];
@@ -276,8 +281,12 @@ export default async function AdminIndexPage() {
             icon={<TrendingUpIcon className="h-[18px] w-[18px]" />}
             accent="green"
             title="PNL"
-            description="Realized margin vs. supplier cost"
-          />
+            description="Realized margin vs. supplier cost, all time (includes Pay to China)"
+          >
+            <p className={`text-2xl font-bold ${pnl.totalPnlUsdt >= 0 ? "text-primary-700" : "text-danger-500"}`}>
+              {formatBalance("USDT", pnl.totalPnlUsdt)}
+            </p>
+          </StatCard>
         </div>
       </section>
 

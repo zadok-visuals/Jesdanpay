@@ -111,7 +111,11 @@ export async function sendKycApprovedEmail(params: { userName: string; userEmail
 export async function sendRmbCompletedEmail(params: {
   userName: string;
   userEmail: string;
+  debitedAmount: number;
+  debitedCurrency: string;
   deliveredAmount: number;
+  recipientName: string | null;
+  reference: string;
   hasProof: boolean;
 }): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -126,17 +130,30 @@ export async function sendRmbCompletedEmail(params: {
     const appUrl = process.env.APP_URL ?? "http://localhost:3000";
     const transactionsUrl = `${appUrl}/transactions`;
     const safeName = escapeHtml(params.userName);
-    const amountText = `¥${params.deliveredAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-    const proofLine = params.hasProof ? " You can view the proof of payment in the app, on this transaction." : "";
+    const debitedText = `${params.debitedCurrency} ${params.debitedAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    const cnyText = `¥${params.deliveredAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    const shortRef = params.reference.slice(0, 8);
+    const dateText = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const proofLine = params.hasProof ? " Proof of payment is available in your notifications." : "";
+    const safeRecipient = params.recipientName ? escapeHtml(params.recipientName) : null;
 
     const { error } = await resend.emails.send({
       from: FROM_ADDRESS,
       to: params.userEmail,
       subject: "Your payment to China is complete",
-      text: `Hi ${params.userName},\n\nGood news - the vendor has been paid. ${amountText} was delivered.${proofLine}\n\nView your transactions: ${transactionsUrl}`,
+      text: `Hi ${params.userName},\n\nGood news, your vendor has been paid.\n\nAmount debited: ${debitedText}\nCNY sent: ${cnyText}${
+        params.recipientName ? `\nRecipient: ${params.recipientName}` : ""
+      }\nReference: ${shortRef}\nDate: ${dateText}${proofLine}\n\nView your transactions: ${transactionsUrl}`,
       html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#171717;max-width:480px;margin:0 auto;">
   <p>Hi ${safeName},</p>
-  <p>Good news, the vendor has been paid. <strong>${amountText}</strong> was delivered.${proofLine}</p>
+  <p>Good news, your vendor has been paid.${proofLine}</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+    <tr><td style="padding:6px 0;color:#6b7280;">Amount debited</td><td style="padding:6px 0;text-align:right;font-weight:600;">${debitedText}</td></tr>
+    <tr><td style="padding:6px 0;color:#6b7280;">CNY sent</td><td style="padding:6px 0;text-align:right;font-weight:600;">${cnyText}</td></tr>
+    ${safeRecipient ? `<tr><td style="padding:6px 0;color:#6b7280;">Recipient</td><td style="padding:6px 0;text-align:right;">${safeRecipient}</td></tr>` : ""}
+    <tr><td style="padding:6px 0;color:#6b7280;">Date</td><td style="padding:6px 0;text-align:right;">${dateText}</td></tr>
+  </table>
+  <p style="color:#6b7280;font-size:13px;">Reference: ${shortRef}</p>
   <p style="margin:24px 0;">
     <a href="${transactionsUrl}" style="display:inline-block;background:#1b7a4b;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:500;">View your transactions</a>
   </p>
@@ -267,6 +284,10 @@ export async function sendSupportMessageAlertEmail(params: {
   userEmail: string;
   userId: string;
   messagePreview: string;
+  // True when the message is an image attachment with no caption text — the preview itself is
+  // never the image or its signed URL (that URL is short-lived and user-scoped, and must never
+  // leave the app), just a plain "sent you an image" line pointing back at the chat.
+  isImageOnly?: boolean;
 }): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -284,7 +305,7 @@ export async function sendSupportMessageAlertEmail(params: {
     const resend = new Resend(apiKey);
     const appUrl = process.env.APP_URL ?? "http://localhost:3000";
     const chatUrl = `${appUrl}/admin/chat/${params.userId}`;
-    const preview = truncateMessage(params.messagePreview);
+    const preview = params.isImageOnly ? "Sent an image" : truncateMessage(params.messagePreview);
     const safeName = escapeHtml(params.userName);
     const safeEmail = escapeHtml(params.userEmail);
     const safePreview = escapeHtml(preview);
@@ -315,6 +336,173 @@ export async function sendSupportMessageAlertEmail(params: {
   }
 }
 
+// Fire-and-forget payout notice for the customer (src/lib/withdrawals/notify.ts, called from
+// every place a withdrawal can actually complete — the automated Busha payout, the webhook, the
+// reconciliation cron, and an admin's own manual completion). Same never-throws discipline as
+// every other email here.
+export async function sendWithdrawalCompletedEmail(params: {
+  userName: string;
+  userEmail: string;
+  amount: number;
+  currency: string;
+  netAmount: number;
+  reference: string;
+}): Promise<EmailResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    const reason = "RESEND_API_KEY is not configured";
+    console.warn(`[email] ${reason} — skipping withdrawal completed email`);
+    return { sent: false, reason };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const transactionsUrl = `${appUrl}/transactions`;
+    const safeName = escapeHtml(params.userName);
+    const amountText = `${params.currency} ${params.netAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    const shortRef = params.reference.slice(0, 8);
+
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: params.userEmail,
+      subject: "Your withdrawal is complete",
+      text: `Hi ${params.userName},\n\nYour withdrawal has been paid out. ${amountText} was sent to your saved recipient.\n\nReference: ${shortRef}\n\nView your transactions: ${transactionsUrl}`,
+      html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#171717;max-width:480px;margin:0 auto;">
+  <p>Hi ${safeName},</p>
+  <p>Your withdrawal has been paid out. <strong>${amountText}</strong> was sent to your saved recipient.</p>
+  <p style="color:#6b7280;font-size:13px;">Reference: ${shortRef}</p>
+  <p style="margin:24px 0;">
+    <a href="${transactionsUrl}" style="display:inline-block;background:#1b7a4b;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:500;">View your transactions</a>
+  </p>
+</div>`,
+    });
+    if (error) {
+      console.error("[email] withdrawal completed: Resend returned an error", error);
+      return { sent: false, reason: error.message };
+    }
+    return { sent: true };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error sending email";
+    console.error("[email] withdrawal completed: failed to send via Resend", err);
+    return { sent: false, reason };
+  }
+}
+
+// Fire-and-forget failure notice for the customer, same call sites as sendWithdrawalCompletedEmail
+// above — a failed withdrawal always refunds the wallet (fail_withdrawal_payout/
+// admin_reject_withdrawal), so this tells the user their balance is back rather than leaving them
+// wondering where the money went.
+export async function sendWithdrawalFailedEmail(params: {
+  userName: string;
+  userEmail: string;
+  amount: number;
+  currency: string;
+  reference: string;
+}): Promise<EmailResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    const reason = "RESEND_API_KEY is not configured";
+    console.warn(`[email] ${reason} — skipping withdrawal failed email`);
+    return { sent: false, reason };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const transactionsUrl = `${appUrl}/transactions`;
+    const safeName = escapeHtml(params.userName);
+    const amountText = `${params.currency} ${params.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    const shortRef = params.reference.slice(0, 8);
+
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: params.userEmail,
+      subject: "Your withdrawal could not be completed",
+      text: `Hi ${params.userName},\n\nWe could not complete your withdrawal of ${amountText}. The full amount has been returned to your balance.\n\nReference: ${shortRef}\n\nView your transactions: ${transactionsUrl}`,
+      html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#171717;max-width:480px;margin:0 auto;">
+  <p>Hi ${safeName},</p>
+  <p>We could not complete your withdrawal of <strong>${amountText}</strong>. The full amount has been returned to your balance.</p>
+  <p style="color:#6b7280;font-size:13px;">Reference: ${shortRef}</p>
+  <p style="margin:24px 0;">
+    <a href="${transactionsUrl}" style="display:inline-block;background:#1b7a4b;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:500;">View your transactions</a>
+  </p>
+</div>`,
+    });
+    if (error) {
+      console.error("[email] withdrawal failed: Resend returned an error", error);
+      return { sent: false, reason: error.message };
+    }
+    return { sent: true };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error sending email";
+    console.error("[email] withdrawal failed: failed to send via Resend", err);
+    return { sent: false, reason };
+  }
+}
+
+// Fire-and-forget receipt for a completed CNY conversion (src/lib/actions/payments.ts's
+// submitCnyConversion, which completes synchronously — there's no separate admin-approval step
+// for this one). Shows both sides of the trade so the receipt is self-contained even without
+// opening the app.
+export async function sendCnyConversionReceiptEmail(params: {
+  userName: string;
+  userEmail: string;
+  fromAmount: number;
+  fromCurrency: string;
+  toAmount: number;
+  toCurrency: string;
+  rate: number;
+  reference: string;
+}): Promise<EmailResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    const reason = "RESEND_API_KEY is not configured";
+    console.warn(`[email] ${reason} — skipping CNY conversion receipt email`);
+    return { sent: false, reason };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    const transactionsUrl = `${appUrl}/transactions`;
+    const safeName = escapeHtml(params.userName);
+    const fromText = `${params.fromCurrency} ${params.fromAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    const toText = `${params.toCurrency} ${params.toAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    const rateText = `1 ${params.fromCurrency} = ${params.rate.toLocaleString("en-US", { maximumFractionDigits: 6 })} ${params.toCurrency}`;
+    const shortRef = params.reference.slice(0, 8);
+
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: params.userEmail,
+      subject: "Your conversion is complete",
+      text: `Hi ${params.userName},\n\nYour conversion is complete.\n\nYou converted: ${fromText}\nYou received: ${toText}\nRate used: ${rateText}\nReference: ${shortRef}\n\nView your transactions: ${transactionsUrl}`,
+      html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#171717;max-width:480px;margin:0 auto;">
+  <p>Hi ${safeName},</p>
+  <p>Your conversion is complete.</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+    <tr><td style="padding:6px 0;color:#6b7280;">You converted</td><td style="padding:6px 0;text-align:right;font-weight:600;">${fromText}</td></tr>
+    <tr><td style="padding:6px 0;color:#6b7280;">You received</td><td style="padding:6px 0;text-align:right;font-weight:600;">${toText}</td></tr>
+    <tr><td style="padding:6px 0;color:#6b7280;">Rate used</td><td style="padding:6px 0;text-align:right;">${rateText}</td></tr>
+  </table>
+  <p style="color:#6b7280;font-size:13px;">Reference: ${shortRef}</p>
+  <p style="margin:24px 0;">
+    <a href="${transactionsUrl}" style="display:inline-block;background:#1b7a4b;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:500;">View your transactions</a>
+  </p>
+</div>`,
+    });
+    if (error) {
+      console.error("[email] cny conversion receipt: Resend returned an error", error);
+      return { sent: false, reason: error.message };
+    }
+    return { sent: true };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Unknown error sending email";
+    console.error("[email] cny conversion receipt: failed to send via Resend", err);
+    return { sent: false, reason };
+  }
+}
+
 // Fire-and-forget notice for the customer (src/lib/actions/support.ts's sendAdminSupportReply)
 // — the other half of the same gap: a user who messaged support had no way to know an admin had
 // actually replied short of reopening the app. Deliberately shows only the new reply, never the
@@ -323,6 +511,9 @@ export async function sendSupportReplyEmail(params: {
   to: string;
   userName: string;
   messagePreview: string;
+  // Same reasoning as sendSupportMessageAlertEmail's isImageOnly — never embeds or links the
+  // signed attachment URL itself, just says an image was sent and points back at the app.
+  isImageOnly?: boolean;
 }): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -335,7 +526,7 @@ export async function sendSupportReplyEmail(params: {
     const resend = new Resend(apiKey);
     const appUrl = process.env.APP_URL ?? "http://localhost:3000";
     const homeUrl = `${appUrl}/home`;
-    const preview = truncateMessage(params.messagePreview);
+    const preview = params.isImageOnly ? "Sent an image" : truncateMessage(params.messagePreview);
     const safeName = escapeHtml(params.userName);
     const safePreview = escapeHtml(preview);
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTransfer } from "@/lib/busha/client";
+import { notifyWithdrawalOutcome } from "@/lib/withdrawals/notify";
 
 // Fallback safety net for `transactions` rows that depend on a Busha webhook to resolve — same
 // rationale and shape as src/app/api/cron/reconcile-deposits, just for the `transactions` table
@@ -56,6 +57,7 @@ export async function GET(request: Request) {
           console.error(`[reconcile-busha-transfers] ${completeRpc} RPC failed`, { tx, error });
           results.push({ transactionId: tx.id, outcome: `complete failed: ${error.message}` });
         } else {
+          if (isWithdrawal) await notifyWithdrawalOutcome(admin, tx.id, "completed");
           console.log("[reconcile-busha-transfers] completed a stale transfer the webhook missed", {
             transactionId: tx.id,
             providerReference: tx.provider_reference,
@@ -66,6 +68,8 @@ export async function GET(request: Request) {
         const { error } = await admin.rpc(failRpc, { p_transaction_id: tx.id });
         if (error) {
           console.error(`[reconcile-busha-transfers] ${failRpc} RPC failed`, { tx, error });
+        } else if (isWithdrawal) {
+          await notifyWithdrawalOutcome(admin, tx.id, "failed");
         }
         results.push({ transactionId: tx.id, outcome: `marked failed (${transfer.status})` });
       } else {

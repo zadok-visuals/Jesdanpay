@@ -10,6 +10,7 @@ import { computeConversionAmounts, round2, type CnyDirection } from "@/lib/cny/t
 import { MINIMUM_USDT_EQUIVALENT, getMinimumConversionAmount } from "@/lib/busha/limits";
 import { verifyOwnedUpload } from "@/lib/storage/verifyUpload";
 import { formatBalance, isCurrencyAvailable } from "@/lib/currency";
+import { sendCnyConversionReceiptEmail } from "@/lib/email";
 
 const GHS_COMING_SOON_ERROR = "Ghana (GHS) is coming soon.";
 
@@ -393,6 +394,30 @@ export async function submitCnyConversion(
   });
 
   if (error) return { error: error.message };
+
+  // Best effort — the conversion itself already succeeded via the RPC above, that's the
+  // authoritative action, so a failed receipt email must never turn this into an error the user
+  // has to retry.
+  if (conversionId) {
+    const { data: profile } = await supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle();
+    if (profile?.email) {
+      const rate = fromAmount > 0 ? toAmount / fromAmount : 0;
+      const result = await sendCnyConversionReceiptEmail({
+        userName: profile.full_name ?? profile.email,
+        userEmail: profile.email,
+        fromAmount,
+        fromCurrency,
+        toAmount,
+        toCurrency,
+        rate,
+        reference: conversionId,
+      });
+      if (!result.sent) {
+        console.error("[submitCnyConversion] receipt email not sent", { conversionId, reason: result.reason });
+      }
+    }
+  }
+
   revalidatePath("/home");
   revalidatePath("/accounts");
   return { conversionId: conversionId ?? undefined };

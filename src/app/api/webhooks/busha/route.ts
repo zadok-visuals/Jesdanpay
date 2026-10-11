@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTransfer } from "@/lib/busha/client";
+import { notifyWithdrawalOutcome } from "@/lib/withdrawals/notify";
 
 // SECURITY (forgery hardening): this route used to trust the incoming POST body's own `status`
 // field to decide whether to complete or fail a `transactions` row. Since nothing verified the
@@ -216,6 +217,8 @@ export async function POST(request: Request) {
               providerReference,
               error,
             });
+          } else if (isWithdrawal) {
+            await notifyWithdrawalOutcome(admin, transaction.id, "completed");
           }
         } else if (transfer.status === "cancelled" || transfer.status === "funds_not_delivered") {
           const { error } = await admin.rpc(failRpc, { p_transaction_id: transaction.id });
@@ -226,6 +229,8 @@ export async function POST(request: Request) {
               providerReference,
               error,
             });
+          } else if (isWithdrawal) {
+            await notifyWithdrawalOutcome(admin, transaction.id, "failed");
           }
         } else {
           console.log(

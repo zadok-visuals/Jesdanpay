@@ -7,8 +7,8 @@ import type { Currency } from "@/lib/types/database";
 import { attemptAutomatedPayout } from "@/lib/withdrawals/automated-payout";
 import { getBanks } from "@/lib/busha/client";
 import { probeFiatToUsdtRate } from "@/lib/busha/rate";
-import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD } from "@/lib/busha/limits";
-import { isCurrencyAvailable } from "@/lib/currency";
+import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD, getMinimumWithdrawalAmount } from "@/lib/busha/limits";
+import { isCurrencyAvailable, formatBalance } from "@/lib/currency";
 
 const GHS_COMING_SOON_ERROR = "Ghana (GHS) is coming soon.";
 
@@ -257,15 +257,20 @@ export async function requestWithdrawal(
   // probe already used for the conversion minimum (CnyConvertForm/UsdtExchangeForm's server
   // actions). create_withdrawal_request has no live USDT rate available to it, so this is checked
   // here rather than pushed into SQL.
-  const usdtEquivalent =
-    currency === "USDT"
-      ? amount
-      : await probeFiatToUsdtRate(currency).catch(() => null);
-  if (usdtEquivalent == null) {
+  //
+  // usdtRate is USDT per 1 unit of `currency` (1 for USDT itself) — usdtEquivalent must multiply
+  // it by the requested amount, not compare the bare rate against the threshold directly. The
+  // bare-rate comparison here previously meant every NGN/KES withdrawal compared a tiny per-unit
+  // rate (e.g. ~0.0007 for NGN) against the 5 USDT floor, which is always true, i.e. essentially
+  // every non-USDT withdrawal would hit the minimum-amount error regardless of the actual amount.
+  const usdtRate = currency === "USDT" ? 1 : await probeFiatToUsdtRate(currency).catch(() => null);
+  if (usdtRate == null) {
     return { error: "Could not verify the withdrawal amount right now. Please try again." };
   }
+  const usdtEquivalent = amount * usdtRate;
+  const minimumAmount = getMinimumWithdrawalAmount(currency as "NGN" | "KES" | "USDT", usdtRate);
   if (usdtEquivalent < MINIMUM_WITHDRAWAL_USDT_THRESHOLD) {
-    return { error: `Minimum withdrawal is equivalent to ${MINIMUM_WITHDRAWAL_USDT_THRESHOLD} USDT` };
+    return { error: `Minimum withdrawal is ${formatBalance(currency, minimumAmount)}` };
   }
 
   if (!pin) {

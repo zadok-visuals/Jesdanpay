@@ -5,7 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { requestWithdrawal, type RequestWithdrawalState } from "@/lib/actions/withdrawals";
 import { previewLiveBushaRate } from "@/lib/actions/payments";
-import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD } from "@/lib/busha/limits";
+import { getMinimumWithdrawalAmount } from "@/lib/busha/limits";
 import { CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
 import { AmountInput } from "@/components/ui/AmountInput";
@@ -69,8 +69,9 @@ export function WithdrawForm({
   const fee = Math.round(amountNum * WITHDRAWAL_FEE_RATE * 100) / 100;
   const netAmount = amountNum - fee;
   const exceedsBalance = amountNum > 0 && amountNum > balance;
-  const usdtEquivalent = amountNum > 0 ? (currency === "USDT" ? amountNum : amountNum * (bushaRate ?? 0)) : null;
-  const belowMinimum = usdtEquivalent != null && usdtEquivalent < MINIMUM_WITHDRAWAL_USDT_THRESHOLD;
+  const usdtRate = currency === "USDT" ? 1 : bushaRate;
+  const minimumAmount = getMinimumWithdrawalAmount(currency as "NGN" | "KES" | "USDT", usdtRate);
+  const belowMinimum = amountNum > 0 && amountNum < minimumAmount;
   const amountValid = amountNum > 0 && !exceedsBalance && !belowMinimum;
   const pinValid = /^\d{4,6}$/.test(pin);
   const submitDisabledReason =
@@ -79,7 +80,7 @@ export function WithdrawForm({
       : exceedsBalance
         ? `Amount exceeds your available ${currency} balance`
         : belowMinimum
-          ? `Minimum withdrawal is equivalent to ${MINIMUM_WITHDRAWAL_USDT_THRESHOLD} USDT`
+          ? `Minimum withdrawal is ${formatBalance(currency, minimumAmount)}`
           : !pinValid
             ? "Enter your withdrawal PIN"
             : null;

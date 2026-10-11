@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,6 +12,139 @@ import type { SupportMessage } from "@/lib/types/database";
 // the other side is already waiting — so a user firing off three messages in a row (or an admin
 // replying twice while the user hasn't looked yet) only ever emails once, on the first one.
 const FLOOD_WINDOW_MS = 10 * 60 * 1000;
+
+const ATTACHMENT_BUCKET = "support-attachments";
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ATTACHMENT_URL_TTL_SECONDS = 60 * 60;
+const UPLOAD_NOT_AVAILABLE_ERROR = "Image upload is not available yet.";
+
+// migration 0046 adds support_messages.attachment_ref — until it's been pasted into the Supabase
+// SQL editor, any query that explicitly references that column fails with PostgREST's "column
+// not found in schema cache" (PGRST204) or Postgres's own undefined_column (42703). Checked
+// narrowly (not just "any error") so a real failure isn't mistaken for a pending migration —
+// same discipline as payments.ts's isFunctionNotFoundError for migration 0045.
+function isMissingColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === "PGRST204" || error.code === "42703") return true;
+  return /column .*(does not exist|not found)/i.test(error.message ?? "");
+}
+
+function sanitizedExtension(fileName: string, mimeType: string): string {
+  switch (mimeType) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/gif":
+      return "gif";
+    default: {
+      const match = /\.([a-zA-Z0-9]{1,5})$/.exec(fileName);
+      return match ? match[1].toLowerCase() : "bin";
+    }
+  }
+}
+
+export interface SupportUploadUrlState {
+  error?: string;
+  path?: string;
+  token?: string;
+}
+
+// Mints a short-lived signed upload URL/token for an image attachment, same pattern as
+// createRmbProofUploadUrl (src/lib/actions/admin.ts) — the file bytes never pass through this
+// server action's own 1MB body limit; the browser finishes the upload itself via
+// uploadToSignedUrl (src/lib/storage/clientUpload.ts). Validates type/size against the declared
+// values up front for a fast error — the bucket's own file_size_limit/allowed_mime_types
+// (migration 0046) is still the real, unbypassable enforcement at upload time.
+export async function createSupportUploadUrl(fileName: string, fileSize: number, mimeType: string): Promise<SupportUploadUrlState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  if (!ALLOWED_ATTACHMENT_TYPES.includes(mimeType)) {
+    return { error: "Only JPEG, PNG, WebP or GIF images are allowed." };
+  }
+  if (fileSize > MAX_ATTACHMENT_BYTES) {
+    return { error: "That image is too large (max 5MB)." };
+  }
+
+  // Cheap compatibility probe — see isMissingColumnError's header comment.
+  const probe = await supabase.from("support_messages").select("attachment_ref").limit(1);
+  if (probe.error && isMissingColumnError(probe.error)) {
+    return { error: UPLOAD_NOT_AVAILABLE_ERROR };
+  }
+
+  const ext = sanitizedExtension(fileName, mimeType);
+  const path = `${user.id}/${randomUUID().replace(/-/g, "")}.${ext}`;
+
+  const { data, error } = await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUploadUrl(path);
+  if (error) {
+    console.error("[createSupportUploadUrl]", error);
+    return { error: "We could not prepare the upload. Please try again." };
+  }
+  return { path: data.path, token: data.token };
+}
+
+// Admin variant — the destination folder is the CUSTOMER's own user id, not the admin's, so
+// there's no RLS path for the admin's own browser session to upload directly (same reasoning as
+// createRmbProofUploadUrl).
+export async function createAdminSupportUploadUrl(
+  userId: string,
+  fileName: string,
+  fileSize: number,
+  mimeType: string,
+): Promise<SupportUploadUrlState> {
+  await requireAdminUser();
+  if (!userId) return { error: "Missing user." };
+
+  if (!ALLOWED_ATTACHMENT_TYPES.includes(mimeType)) {
+    return { error: "Only JPEG, PNG, WebP or GIF images are allowed." };
+  }
+  if (fileSize > MAX_ATTACHMENT_BYTES) {
+    return { error: "That image is too large (max 5MB)." };
+  }
+
+  const admin = createAdminClient();
+  const probe = await admin.from("support_messages").select("attachment_ref").limit(1);
+  if (probe.error && isMissingColumnError(probe.error)) {
+    return { error: UPLOAD_NOT_AVAILABLE_ERROR };
+  }
+
+  const ext = sanitizedExtension(fileName, mimeType);
+  const path = `${userId}/${randomUUID().replace(/-/g, "")}.${ext}`;
+
+  const { data, error } = await admin.storage.from(ATTACHMENT_BUCKET).createSignedUploadUrl(path);
+  if (error) {
+    console.error("[createAdminSupportUploadUrl]", error);
+    return { error: "We could not prepare the upload. Please try again." };
+  }
+  return { path: data.path, token: data.token };
+}
+
+// Resolves attachment_ref -> a short-lived signed URL for every message that has one, in a
+// single batched call rather than one createSignedUrl per message. Silently leaves attachment_url
+// unset on a signing failure (a broken image icon in the UI) rather than failing the whole thread
+// load over one bad reference.
+async function withAttachmentUrls(
+  storage: ReturnType<typeof createAdminClient>["storage"] | Awaited<ReturnType<typeof createClient>>["storage"],
+  messages: SupportMessage[],
+): Promise<SupportMessage[]> {
+  const refs = messages.map((m) => m.attachment_ref).filter((r): r is string => !!r);
+  if (refs.length === 0) return messages;
+
+  const { data, error } = await storage.from(ATTACHMENT_BUCKET).createSignedUrls(refs, ATTACHMENT_URL_TTL_SECONDS);
+  if (error) {
+    console.error("[withAttachmentUrls] createSignedUrls failed", error);
+    return messages;
+  }
+  const urlByPath = new Map((data ?? []).map((d) => [d.path, d.signedUrl]));
+  return messages.map((m) => (m.attachment_ref ? { ...m, attachment_url: urlByPath.get(m.attachment_ref) ?? null } : m));
+}
 
 // ---- User-facing (own session, RLS-protected — see migration 0040) ----
 
@@ -27,17 +161,22 @@ export async function getSupportThread(): Promise<{ messages: SupportMessage[] }
     .eq("user_id", user.id)
     .order("created_at", { ascending: true });
   if (error) return { error: error.message };
-  return { messages: data ?? [] };
+  return { messages: await withAttachmentUrls(supabase.storage, data ?? []) };
 }
 
-export async function sendSupportMessage(body: string): Promise<{ error?: string }> {
+export async function sendSupportMessage(body: string, attachmentRef?: string | null): Promise<{ error?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
   const trimmed = body.trim();
-  if (!trimmed) return { error: "Message can't be empty." };
+  if (!trimmed && !attachmentRef) return { error: "Message can't be empty." };
+
+  // Untrusted client input — must point into THIS user's own folder, never another user's.
+  if (attachmentRef && !attachmentRef.startsWith(`${user.id}/`)) {
+    return { error: "That image upload doesn't match your account. Please try uploading it again." };
+  }
 
   // Checked BEFORE the insert, so the new message can't count itself — true exactly when this
   // is the first message of a fresh burst (no other message from this user is still sitting
@@ -55,8 +194,18 @@ export async function sendSupportMessage(body: string): Promise<{ error?: string
   ]);
   const shouldAlert = (recentUnreadCount ?? 0) === 0;
 
-  const { error } = await supabase.from("support_messages").insert({ user_id: user.id, sender: "user", body: trimmed });
+  const insertRow: { user_id: string; sender: "user"; body: string; attachment_ref?: string } = {
+    user_id: user.id,
+    sender: "user",
+    body: trimmed,
+  };
+  // Only referenced when actually provided — a text-only send never touches this column at all,
+  // so it keeps working even before migration 0046 has been applied.
+  if (attachmentRef) insertRow.attachment_ref = attachmentRef;
+
+  const { error } = await supabase.from("support_messages").insert(insertRow);
   if (error) {
+    if (attachmentRef && isMissingColumnError(error)) return { error: UPLOAD_NOT_AVAILABLE_ERROR };
     // Never show raw database error text to the user — same discipline as every other customer
     // facing action in this app.
     console.error("[sendSupportMessage] insert failed", error);
@@ -71,7 +220,8 @@ export async function sendSupportMessage(body: string): Promise<{ error?: string
         userName: profile?.full_name || profile?.email || user.email || "A user",
         userEmail: profile?.email || user.email || "unknown",
         userId: user.id,
-        messagePreview: trimmed,
+        messagePreview: trimmed || "Sent an image",
+        isImageOnly: !trimmed && !!attachmentRef,
       });
     } catch (err) {
       // Belt-and-suspenders — sendSupportMessageAlertEmail already never throws on its own, but
@@ -103,7 +253,8 @@ export async function getUnreadSupportMessageCountForUser(): Promise<number> {
 }
 
 // Marks every unread admin reply in the caller's own thread read — called when the user opens
-// the chat panel (src/components/layout/ChatSupportButton.tsx).
+// the chat panel (src/components/layout/ChatSupportButton.tsx), and again on every poll tick
+// while the panel stays open so "Seen" flips without the user having to close and reopen it.
 export async function markSupportMessagesReadByUser(): Promise<void> {
   const supabase = await createClient();
   const {
@@ -158,12 +309,13 @@ export async function getSupportThreads(): Promise<SupportThreadSummary[]> {
       const msgs = byUser.get(userId)!; // newest first
       const unreadCount = msgs.filter((m) => m.sender === "user" && !m.read_at).length;
       const profile = profileById.get(userId);
+      const last = msgs[0];
       return {
         userId,
         email: profile?.email ?? "Unknown",
         fullName: profile?.full_name ?? null,
-        lastMessage: msgs[0].body,
-        lastMessageAt: msgs[0].created_at,
+        lastMessage: last.body || (last.attachment_ref ? "Sent an image" : ""),
+        lastMessageAt: last.created_at,
         unreadCount,
       };
     })
@@ -192,15 +344,22 @@ export async function getSupportThreadMessages(userId: string): Promise<SupportM
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
-  return data ?? [];
+  return withAttachmentUrls(admin.storage, data ?? []);
 }
 
-export async function sendAdminSupportReply(userId: string, body: string): Promise<{ error?: string }> {
+export async function sendAdminSupportReply(userId: string, body: string, attachmentRef?: string | null): Promise<{ error?: string }> {
   await requireAdminUser();
   const trimmed = body.trim();
-  if (!trimmed) return { error: "Message can't be empty." };
+  if (!trimmed && !attachmentRef) return { error: "Message can't be empty." };
 
   const admin = createAdminClient();
+
+  // Untrusted client input — must point into the CUSTOMER's own folder (every support attachment,
+  // from either side of the conversation, lives under the user's folder — see migration 0046's
+  // header comment), never anywhere else.
+  if (attachmentRef && !attachmentRef.startsWith(`${userId}/`)) {
+    return { error: "That image upload doesn't match this conversation. Please try uploading it again." };
+  }
 
   // Same flood-protection shape as sendSupportMessage above, in reverse: skip the email when an
   // admin message is already sitting unread in this thread from within the window — checked
@@ -218,8 +377,18 @@ export async function sendAdminSupportReply(userId: string, body: string): Promi
   ]);
   const shouldAlert = (recentUnreadCount ?? 0) === 0;
 
-  const { error } = await admin.from("support_messages").insert({ user_id: userId, sender: "admin", body: trimmed });
-  if (error) return { error: error.message };
+  const insertRow: { user_id: string; sender: "admin"; body: string; attachment_ref?: string } = {
+    user_id: userId,
+    sender: "admin",
+    body: trimmed,
+  };
+  if (attachmentRef) insertRow.attachment_ref = attachmentRef;
+
+  const { error } = await admin.from("support_messages").insert(insertRow);
+  if (error) {
+    if (attachmentRef && isMissingColumnError(error)) return { error: UPLOAD_NOT_AVAILABLE_ERROR };
+    return { error: error.message };
+  }
 
   // No notifications-table insert here on purpose — the in-app chat badge (unread admin
   // messages) already covers this; a duplicate notification row would just be noise.
@@ -228,7 +397,8 @@ export async function sendAdminSupportReply(userId: string, body: string): Promi
       await sendSupportReplyEmail({
         to: profile.email,
         userName: profile.full_name || profile.email,
-        messagePreview: trimmed,
+        messagePreview: trimmed || "Sent an image",
+        isImageOnly: !trimmed && !!attachmentRef,
       });
     } catch (err) {
       // Belt-and-suspenders — sendSupportReplyEmail already never throws on its own, but the
@@ -243,7 +413,8 @@ export async function sendAdminSupportReply(userId: string, body: string): Promi
 }
 
 // Marks every unread user message in a given thread read — called when an admin opens that
-// thread (src/app/admin/chat/[userId]/page.tsx).
+// thread (src/app/admin/chat/[userId]/page.tsx), and again on every poll tick while the thread
+// stays open so "Seen" flips for the user without the admin having to reopen it.
 export async function markSupportThreadReadByAdmin(userId: string): Promise<void> {
   await requireAdminUser();
   const admin = createAdminClient();

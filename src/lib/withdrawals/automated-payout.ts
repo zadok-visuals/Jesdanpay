@@ -3,6 +3,7 @@ import type { Currency } from "@/lib/types/database";
 import { probeFiatToUsdtRate } from "@/lib/busha/rate";
 import { getPayoutChannel, createBushaRecipient, createPayoutTransfer } from "@/lib/busha/payout";
 import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD } from "@/lib/busha/limits";
+import { notifyWithdrawalOutcome } from "@/lib/withdrawals/notify";
 
 // Re-exported for visibility next to AUTOMATED_PAYOUT_USDT_THRESHOLD below — actually defined in
 // busha/limits.ts (a plain leaf constant) rather than here, since this module imports the
@@ -115,7 +116,10 @@ export async function attemptAutomatedPayout(transactionId: string, userId: stri
     // reconciliation catch it" pattern executeSwap already uses. funds_delivered is Busha's
     // documented terminal status for payouts/withdrawals specifically.
     if (transfer.status === "funds_delivered") {
-      await admin.rpc("complete_withdrawal_payout", { p_transaction_id: transactionId });
+      const { error: completeError } = await admin.rpc("complete_withdrawal_payout", { p_transaction_id: transactionId });
+      if (!completeError) {
+        await notifyWithdrawalOutcome(admin, transactionId, "completed");
+      }
     }
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);

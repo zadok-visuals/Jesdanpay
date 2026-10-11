@@ -217,6 +217,14 @@ export type SupportMessage = {
   user_id: string;
   sender: SupportMessageSender;
   body: string;
+  // Storage path ("{userId}/{uuid}.{ext}" in the support-attachments bucket) — null for a
+  // text-only message. Never read directly by the UI; see attachment_url below.
+  attachment_ref: string | null;
+  // A short-lived (1 hour) signed URL for attachment_ref, resolved server-side by
+  // getSupportThread/getSupportThreadMessages — not a real database column, so it's absent
+  // entirely (not null) on a raw row the client hasn't gone through those functions. Optional so
+  // existing call sites that select("*") before migration 0046 is applied still type-check.
+  attachment_url?: string | null;
   read_at: string | null;
   created_at: string;
 };

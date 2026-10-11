@@ -15,6 +15,7 @@ import {
   sendNotificationEmail,
   type EmailResult,
 } from "@/lib/email";
+import { notifyWithdrawalOutcome } from "@/lib/withdrawals/notify";
 
 export interface AdminActionState {
   error?: string;
@@ -148,7 +149,7 @@ export async function completeRmbTransaction(
   const admin = createAdminClient();
   const { data: tx } = await admin
     .from("transactions")
-    .select("user_id")
+    .select("user_id, amount, currency")
     .eq("id", transactionId)
     .eq("type", "rmb_manual")
     .maybeSingle();
@@ -177,7 +178,19 @@ export async function completeRmbTransaction(
   // Best effort from here on — the completion itself already succeeded via the RPC above, that's
   // the authoritative action, so a failed notification/email shouldn't turn this into an error the
   // admin has to retry. Same pattern approveKyc/rejectKyc already use.
-  const { data: profile } = await admin.from("profiles").select("full_name, email").eq("id", tx.user_id).maybeSingle();
+  const [{ data: profile }, { data: recipient }] = await Promise.all([
+    admin.from("profiles").select("full_name, email").eq("id", tx.user_id).maybeSingle(),
+    admin
+      .from("rmb_recipients")
+      .select("recipient_first_name, recipient_last_name, recipient_account_holder_name")
+      .eq("transaction_id", transactionId)
+      .maybeSingle(),
+  ]);
+  const recipientName = recipient
+    ? recipient.recipient_account_holder_name ||
+      [recipient.recipient_first_name, recipient.recipient_last_name].filter(Boolean).join(" ") ||
+      null
+    : null;
   const title = "Your payment to China is complete";
   const body = `The vendor has been paid. ¥${actualTargetAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} was delivered.`;
 
@@ -186,12 +199,21 @@ export async function completeRmbTransaction(
   await notifyUser(admin, { userId: tx.user_id, title, body, attachmentRef: proofRef, sendEmail: false });
 
   if (profile?.email) {
-    await sendRmbCompletedEmail({
+    const result = await sendRmbCompletedEmail({
       userName: profile.full_name ?? profile.email,
       userEmail: profile.email,
+      debitedAmount: tx.amount,
+      debitedCurrency: tx.currency,
       deliveredAmount: actualTargetAmount,
+      recipientName,
+      reference: transactionId,
       hasProof: !!proofRef,
     });
+    if (!result.sent) {
+      console.error("[completeRmbTransaction] completion email not sent", { transactionId, reason: result.reason });
+    }
+  } else {
+    console.error("[completeRmbTransaction] no email on file, skipping completion email", { transactionId });
   }
 
   revalidatePath("/admin/rmb");
@@ -350,6 +372,8 @@ export async function completeWithdrawal(
   const { error } = await admin.rpc("admin_complete_withdrawal", { p_transaction_id: transactionId });
 
   if (error) return { error: error.message };
+  // Best effort — the completion itself already succeeded via the RPC above.
+  await notifyWithdrawalOutcome(admin, transactionId, "completed");
   revalidatePath("/admin/withdrawals");
   return {};
 }
@@ -365,6 +389,8 @@ export async function rejectWithdrawal(
   const { error } = await admin.rpc("admin_reject_withdrawal", { p_transaction_id: transactionId });
 
   if (error) return { error: error.message };
+  // Best effort — the rejection (and its wallet refund) already succeeded via the RPC above.
+  await notifyWithdrawalOutcome(admin, transactionId, "failed");
   revalidatePath("/admin/withdrawals");
   return {};
 }

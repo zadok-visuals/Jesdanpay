@@ -80,3 +80,39 @@ export const FIAT_MINIMUM_DEPOSIT: Partial<Record<"NGN" | "GHS" | "KES", number>
 // from a client component — automated-payout.ts re-exports this constant for visibility next to
 // AUTOMATED_PAYOUT_USDT_THRESHOLD, but WithdrawForm.tsx imports it from here.
 export const MINIMUM_WITHDRAWAL_USDT_THRESHOLD = 5;
+
+// Round, friendly minimum amounts for a withdrawal, shown INSTEAD of "equivalent to 5 USDT" —
+// same reasoning as MINIMUM_CONVERSION_AMOUNT above, just a different (lower) USDT floor. Each
+// figure is just above the 5 USDT equivalent at the rates in effect on 2026-10-10. GHS and CNY
+// are deliberately absent — GHS withdrawals stay blocked (coming soon) and CNY has no withdrawal
+// path at all.
+export const MINIMUM_WITHDRAWAL_AMOUNT: Record<"NGN" | "KES" | "USDT", number> = {
+  NGN: 7500,
+  KES: 6500,
+  USDT: 5,
+};
+
+const MINIMUM_WITHDRAWAL_ROUNDING_STEP: Record<"NGN" | "KES" | "USDT", number> = {
+  NGN: 500,
+  KES: 100,
+  USDT: 1,
+};
+
+// Same shape and reasoning as getMinimumConversionAmount above, against the withdrawal-specific
+// 5 USDT floor instead of the 10 USDT conversion floor — so "minimum withdrawal" messaging (both
+// client-side disabled state and server-side enforcement) is always shown in the user's own
+// currency, never a raw "equivalent to N USDT" figure.
+export function getMinimumWithdrawalAmount(
+  currency: "NGN" | "KES" | "USDT",
+  usdtPerUnit?: number | null,
+): number {
+  const configured = MINIMUM_WITHDRAWAL_AMOUNT[currency];
+  if (currency === "USDT" || !usdtPerUnit || usdtPerUnit <= 0) return configured;
+
+  const configuredUsdtEquivalent = configured * usdtPerUnit;
+  if (configuredUsdtEquivalent >= MINIMUM_WITHDRAWAL_USDT_THRESHOLD) return configured;
+
+  const exactRequired = MINIMUM_WITHDRAWAL_USDT_THRESHOLD / usdtPerUnit;
+  const step = MINIMUM_WITHDRAWAL_ROUNDING_STEP[currency];
+  return Math.ceil(exactRequired / step) * step;
+}

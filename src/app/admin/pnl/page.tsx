@@ -36,6 +36,7 @@ export default async function AdminPnlPage({ searchParams }: { searchParams: Pro
     payToChinaPnlUsdt,
     totalPnlUsdt,
     totalSkipped,
+    totalEstimated,
     payToChinaCnySourceCount,
     routeResults,
     perOrderRows,
@@ -92,7 +93,15 @@ export default async function AdminPnlPage({ searchParams }: { searchParams: Pro
             converted.
           </li>
           <li>
-            A route with no supplier rate on file for the period it&rsquo;s skipped and flagged
+            An order placed before you set your first supplier rate for that pair uses your
+            earliest rate on file instead, marked{" "}
+            <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
+              Estimated
+            </span>{" "}
+            rather than skipped.
+          </li>
+          <li>
+            A route with no supplier rate on file AT ALL for the period is skipped and flagged
             below, never silently counted as zero.
           </li>
         </ul>
@@ -197,6 +206,16 @@ export default async function AdminPnlPage({ searchParams }: { searchParams: Pro
               they are not counted again here.
             </p>
           )}
+          {totalEstimated > 0 && (
+            <p className="text-xs text-foreground/50">
+              {totalEstimated} order(s) used an estimated supplier rate (marked{" "}
+              <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
+                Estimated
+              </span>{" "}
+              in the per-order breakdown below). Orders placed before your first supplier rate use
+              your earliest rate on file.
+            </p>
+          )}
         </Card>
 
         <details className="mt-4 group">
@@ -232,7 +251,14 @@ export default async function AdminPnlPage({ searchParams }: { searchParams: Pro
                         {r.supplierRateLabel === "No rate on file" ? (
                           <span className="text-foreground/40">No rate on file</span>
                         ) : (
-                          r.supplierRateLabel
+                          <>
+                            {r.supplierRateLabel}
+                            {r.estimated && (
+                              <span className="ml-1.5 rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
+                                Estimated
+                              </span>
+                            )}
+                          </>
                         )}
                       </td>
                       <td className={`py-2 pr-4 font-semibold ${r.pnlUsdt == null ? "text-foreground/40" : r.pnlUsdt >= 0 ? "" : "text-danger-500"}`}>

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Currency, SupplierRate } from "@/lib/types/database";
 import { formatBalance } from "@/lib/currency";
+import { usdtRateAt } from "@/lib/admin/supplierRate";
 
 // Every realized-PNL figure here is expressed in USDT, because that's the one unit every route
 // (CNY conversions started in any currency, USDT/fiat swaps, withdrawal fees in any currency, Pay
@@ -28,15 +29,6 @@ async function fetchAllRows<T>(
     from += FETCH_PAGE_SIZE;
   }
   return all;
-}
-
-// The USDT/<quote> rate in effect at time T — the row with the latest effective_from that's
-// still <= T. supplierRates is the full history, already in memory.
-function usdtRateAt(rates: SupplierRate[], quote: string, at: string): number | null {
-  const candidates = rates
-    .filter((r) => r.base_currency === "USDT" && r.quote_currency === quote && r.effective_from <= at)
-    .sort((a, b) => (a.effective_from < b.effective_from ? 1 : -1));
-  return candidates[0]?.buy_rate ?? null;
 }
 
 function numberLabel(n: number): string {
@@ -79,6 +71,9 @@ export interface PerOrderRow {
   customerRateLabel: string;
   supplierRateLabel: string;
   pnlUsdt: number | null;
+  // True when pnlUsdt was computed using a fallback (earliest-on-file, not the rate actually in
+  // effect at the time) supplier rate — see usdtRateAt's header comment.
+  estimated?: boolean;
 }
 
 export interface AdminPnlResult {
@@ -95,6 +90,9 @@ export interface AdminPnlResult {
   payToChinaSkipped: number;
   payToChinaCnySourceCount: number;
   totalSkipped: number;
+  // Orders whose PNL used a fallback supplier rate (see usdtRateAt) rather than the rate actually
+  // in effect at the time — counted (not skipped), but worth surfacing as an estimate.
+  totalEstimated: number;
   routeResults: RouteStat[];
   perOrderRows: PerOrderRow[];
 }
@@ -194,6 +192,7 @@ export async function computeAdminPnl(
   let withdrawalSkipped = 0;
   let payToChinaSkipped = 0;
   let payToChinaCnySourceCount = 0;
+  let totalEstimated = 0;
 
   // ── CNY conversions ──────────────────────────────────────────────────────────────────────
   for (const row of cnyConversions) {
@@ -207,25 +206,35 @@ export async function computeAdminPnl(
     const customerRate = cnyAmount / nonCnyAmount;
 
     const usdtValue = nonCnyCurrency === "USDT" ? nonCnyAmount : row.busha_rate != null ? nonCnyAmount * row.busha_rate : null;
-    const supplierRate = usdtRateAt(rates, "CNY", row.created_at);
+    const supplierRateLookup = usdtRateAt(rates, "CNY", row.created_at);
 
-    const supplierRateLabel = supplierRate != null ? `${numberLabel(supplierRate)} CNY/USDT` : "No rate on file";
+    const supplierRateLabel = supplierRateLookup != null ? `${numberLabel(supplierRateLookup.rate)} CNY/USDT` : "No rate on file";
     const paidLabel = formatBalance(row.from_currency, row.from_amount);
     const gotLabel = formatBalance(row.to_currency, row.to_amount);
     const customerRateLabel = `${numberLabel(customerRate)} CNY/${nonCnyCurrency}`;
 
-    if (usdtValue == null || supplierRate == null) {
+    if (usdtValue == null || supplierRateLookup == null) {
       conversionSkipped += 1;
       addSkipped(routeStats, route, nonCnyCurrency);
       perOrderRows.push({ createdAt: row.created_at, route, paidLabel, gotLabel, customerRateLabel, supplierRateLabel, pnlUsdt: null });
       continue;
     }
+    if (supplierRateLookup.estimated) totalEstimated += 1;
 
-    const cnyCostUsdt = cnyAmount / supplierRate;
+    const cnyCostUsdt = cnyAmount / supplierRateLookup.rate;
     const pnlUsdt = isFromCny ? cnyCostUsdt - usdtValue : usdtValue - cnyCostUsdt;
     conversionPnlUsdt += pnlUsdt;
     addVolumeAndPnl(routeStats, route, nonCnyCurrency, nonCnyAmount, pnlUsdt);
-    perOrderRows.push({ createdAt: row.created_at, route, paidLabel, gotLabel, customerRateLabel, supplierRateLabel, pnlUsdt });
+    perOrderRows.push({
+      createdAt: row.created_at,
+      route,
+      paidLabel,
+      gotLabel,
+      customerRateLabel,
+      supplierRateLabel,
+      pnlUsdt,
+      estimated: supplierRateLookup.estimated,
+    });
   }
 
   // ── USDT/fiat swaps ──────────────────────────────────────────────────────────────────────
@@ -238,25 +247,37 @@ export async function computeAdminPnl(
 
     const customerRate = isSourceUsdt ? row.target_amount / row.amount : row.amount / row.target_amount;
     const usdtAmount = isSourceUsdt ? row.amount : row.target_amount;
-    const supplierRate = usdtRateAt(rates, fiatCurrency, row.created_at);
+    const supplierRateLookup = usdtRateAt(rates, fiatCurrency, row.created_at);
 
-    const supplierRateLabel = supplierRate != null ? `${numberLabel(supplierRate)} ${fiatCurrency}/USDT` : "No rate on file";
+    const supplierRateLabel = supplierRateLookup != null ? `${numberLabel(supplierRateLookup.rate)} ${fiatCurrency}/USDT` : "No rate on file";
     const paidLabel = formatBalance(row.currency, row.amount);
     const gotLabel = formatBalance(row.target_currency, row.target_amount);
     const customerRateLabel = `${numberLabel(customerRate)} ${fiatCurrency}/USDT`;
 
-    if (supplierRate == null) {
+    if (supplierRateLookup == null) {
       swapSkipped += 1;
       addSkipped(routeStats, route, "USDT");
       perOrderRows.push({ createdAt: row.created_at, route, paidLabel, gotLabel, customerRateLabel, supplierRateLabel, pnlUsdt: null });
       continue;
     }
+    if (supplierRateLookup.estimated) totalEstimated += 1;
 
-    const pnlLocal = isSourceUsdt ? (supplierRate - customerRate) * usdtAmount : (customerRate - supplierRate) * usdtAmount;
-    const pnlUsdt = pnlLocal / supplierRate;
+    const pnlLocal = isSourceUsdt
+      ? (supplierRateLookup.rate - customerRate) * usdtAmount
+      : (customerRate - supplierRateLookup.rate) * usdtAmount;
+    const pnlUsdt = pnlLocal / supplierRateLookup.rate;
     swapPnlUsdt += pnlUsdt;
     addVolumeAndPnl(routeStats, route, "USDT", usdtAmount, pnlUsdt);
-    perOrderRows.push({ createdAt: row.created_at, route, paidLabel, gotLabel, customerRateLabel, supplierRateLabel, pnlUsdt });
+    perOrderRows.push({
+      createdAt: row.created_at,
+      route,
+      paidLabel,
+      gotLabel,
+      customerRateLabel,
+      supplierRateLabel,
+      pnlUsdt,
+      estimated: supplierRateLookup.estimated,
+    });
   }
 
   // ── Withdrawal fees ──────────────────────────────────────────────────────────────────────
@@ -265,23 +286,37 @@ export async function computeAdminPnl(
     const fee = row.amount - row.target_amount;
     const route = `withdrawals ${row.currency}`;
     const isUsdt = row.currency === "USDT";
-    const supplierRate = isUsdt ? null : usdtRateAt(rates, row.currency, row.created_at);
+    const supplierRateLookup = isUsdt ? null : usdtRateAt(rates, row.currency, row.created_at);
 
     const paidLabel = formatBalance(row.currency, row.amount);
     const gotLabel = formatBalance(row.currency, row.target_amount);
-    const supplierRateLabel = isUsdt ? "—" : supplierRate != null ? `${numberLabel(supplierRate)} ${row.currency}/USDT` : "No rate on file";
+    const supplierRateLabel = isUsdt
+      ? "—"
+      : supplierRateLookup != null
+        ? `${numberLabel(supplierRateLookup.rate)} ${row.currency}/USDT`
+        : "No rate on file";
 
-    if (!isUsdt && supplierRate == null) {
+    if (!isUsdt && supplierRateLookup == null) {
       withdrawalSkipped += 1;
       addSkipped(routeStats, route, row.currency);
       perOrderRows.push({ createdAt: row.created_at, route, paidLabel, gotLabel, customerRateLabel: "1% fee", supplierRateLabel, pnlUsdt: null });
       continue;
     }
+    if (supplierRateLookup?.estimated) totalEstimated += 1;
 
-    const usdtFee = isUsdt ? fee : fee / supplierRate!;
+    const usdtFee = isUsdt ? fee : fee / supplierRateLookup!.rate;
     withdrawalFeesUsdt += usdtFee;
     addVolumeAndPnl(routeStats, route, row.currency, row.amount, usdtFee);
-    perOrderRows.push({ createdAt: row.created_at, route, paidLabel, gotLabel, customerRateLabel: "1% fee", supplierRateLabel, pnlUsdt: usdtFee });
+    perOrderRows.push({
+      createdAt: row.created_at,
+      route,
+      paidLabel,
+      gotLabel,
+      customerRateLabel: "1% fee",
+      supplierRateLabel,
+      pnlUsdt: usdtFee,
+      estimated: supplierRateLookup?.estimated,
+    });
   }
 
   // ── Pay to China (Send to China) ────────────────────────────────────────────────────────
@@ -328,41 +363,53 @@ export async function computeAdminPnl(
       continue;
     }
 
-    const supplierRate = usdtRateAt(rates, "CNY", row.created_at);
+    const cnySupplierRateLookup = usdtRateAt(rates, "CNY", row.created_at);
     const customerRate = row.target_amount / row.amount;
     const customerRateLabel = `${numberLabel(customerRate)} CNY/${row.currency}`;
-    const supplierRateLabel = supplierRate != null ? `${numberLabel(supplierRate)} CNY/USDT` : "No rate on file";
+    const supplierRateLabel = cnySupplierRateLookup != null ? `${numberLabel(cnySupplierRateLookup.rate)} CNY/USDT` : "No rate on file";
 
-    if (supplierRate == null) {
+    if (cnySupplierRateLookup == null) {
       payToChinaSkipped += 1;
       addSkipped(routeStats, route, row.currency);
       perOrderRows.push({ createdAt: row.created_at, route, paidLabel, gotLabel, customerRateLabel, supplierRateLabel, pnlUsdt: null });
       continue;
     }
 
-    const cnyCostUsdt = row.target_amount / supplierRate;
-    const revenueUsdt = row.currency === "USDT" ? row.amount : row.amount / usdtRateAt(rates, row.currency, row.created_at)!;
     // revenueUsdt needs its own currency's supplier rate (not the CNY one) when currency isn't
-    // USDT — re-check separately so a missing NGN/KES/GHS rate is its own skip reason too.
-    if (row.currency !== "USDT" && usdtRateAt(rates, row.currency, row.created_at) == null) {
-      payToChinaSkipped += 1;
-      addSkipped(routeStats, route, row.currency);
-      perOrderRows.push({
-        createdAt: row.created_at,
-        route,
-        paidLabel,
-        gotLabel,
-        customerRateLabel,
-        supplierRateLabel: "No rate on file",
-        pnlUsdt: null,
-      });
-      continue;
+    // USDT — looked up once and reused for both the skip check and the actual math, rather than
+    // calling usdtRateAt twice for the same pair.
+    let revenueUsdt: number;
+    let revenueEstimated = false;
+    if (row.currency === "USDT") {
+      revenueUsdt = row.amount;
+    } else {
+      const revenueRateLookup = usdtRateAt(rates, row.currency, row.created_at);
+      if (revenueRateLookup == null) {
+        payToChinaSkipped += 1;
+        addSkipped(routeStats, route, row.currency);
+        perOrderRows.push({
+          createdAt: row.created_at,
+          route,
+          paidLabel,
+          gotLabel,
+          customerRateLabel,
+          supplierRateLabel: "No rate on file",
+          pnlUsdt: null,
+        });
+        continue;
+      }
+      revenueUsdt = row.amount / revenueRateLookup.rate;
+      revenueEstimated = revenueRateLookup.estimated;
     }
 
+    const isEstimated = cnySupplierRateLookup.estimated || revenueEstimated;
+    if (isEstimated) totalEstimated += 1;
+
+    const cnyCostUsdt = row.target_amount / cnySupplierRateLookup.rate;
     const pnlUsdt = revenueUsdt - cnyCostUsdt;
     payToChinaPnlUsdt += pnlUsdt;
     addVolumeAndPnl(routeStats, route, row.currency, row.amount, pnlUsdt);
-    perOrderRows.push({ createdAt: row.created_at, route, paidLabel, gotLabel, customerRateLabel, supplierRateLabel, pnlUsdt });
+    perOrderRows.push({ createdAt: row.created_at, route, paidLabel, gotLabel, customerRateLabel, supplierRateLabel, pnlUsdt, estimated: isEstimated });
   }
 
   perOrderRows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
@@ -384,6 +431,7 @@ export async function computeAdminPnl(
     payToChinaSkipped,
     payToChinaCnySourceCount,
     totalSkipped,
+    totalEstimated,
     routeResults,
     perOrderRows,
   };

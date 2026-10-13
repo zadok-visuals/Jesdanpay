@@ -84,7 +84,7 @@ export const MINIMUM_WITHDRAWAL_USDT_THRESHOLD = 5;
 // Round, friendly minimum amounts for a withdrawal, shown INSTEAD of "equivalent to 5 USDT" —
 // same reasoning as MINIMUM_CONVERSION_AMOUNT above, just a different (lower) USDT floor. Each
 // figure is just above the 5 USDT equivalent at the rates in effect on 2026-10-10. GHS and CNY
-// are deliberately absent — GHS withdrawals stay blocked (coming soon) and CNY has no withdrawal
+// are deliberately absent — GHS withdrawals stay blocked (under maintenance) and CNY has no withdrawal
 // path at all.
 export const MINIMUM_WITHDRAWAL_AMOUNT: Record<"NGN" | "KES" | "USDT", number> = {
   NGN: 7500,

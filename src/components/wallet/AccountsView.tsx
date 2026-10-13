@@ -41,10 +41,10 @@ export function AccountsView({
   // neither "Add Money" nor "Withdraw" here, only "Send to China" to spend the locked balance.
   const isUsdt = wallet.currency === "USDT";
   const isCny = wallet.currency === "CNY";
-  // GHS was only ever exercised against the Klasha sandbox — every flow below (deposit,
-  // withdraw, Send to China, Convert USDT) rejects it server-side too (see currency.ts's
-  // COMING_SOON_CURRENCIES), so the whole action block is replaced with a plain notice instead of
-  // showing buttons that would just error out one step later.
+  // GHS is flagged under maintenance — every flow below (deposit, withdraw, Send to China,
+  // Convert USDT) rejects it server-side too (see currency.ts's MAINTENANCE_CURRENCIES), so the
+  // whole action block is replaced with a plain notice instead of showing buttons that would
+  // just error out one step later.
   const isGhs = !isCurrencyAvailable(wallet.currency);
   const canWithdraw = !isCny && !isGhs;
   const depositOpen = activePanel === "deposit" && !isGhs;
@@ -69,7 +69,7 @@ export function AccountsView({
         renderBadge={(c) =>
           !isCurrencyAvailable(c) ? (
             <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
-              Coming soon
+              Maintenance
             </span>
           ) : null
         }
@@ -88,7 +88,7 @@ export function AccountsView({
 
         {isGhs ? (
           <div className="rounded-xl border border-dashed border-border bg-black/[.02] p-5 text-center">
-            <p className="text-sm font-medium text-foreground">Ghana (GHS) is coming soon.</p>
+            <p className="text-sm font-medium text-foreground">Ghana (GHS) is currently under maintenance.</p>
             <p className="mt-1 text-sm text-foreground/50">We will notify you as soon as it is available.</p>
           </div>
         ) : isCny ? (
@@ -117,7 +117,7 @@ export function AccountsView({
               </span>
               <p className="text-xs leading-relaxed text-primary-800">
                 Convert USDT to or from NGN or KES at a live rate, right from your balance.
-                GHS is coming soon.
+                GHS is currently under maintenance.
               </p>
             </div>
 
@@ -182,9 +182,9 @@ export function AccountsView({
         </h2>
         <p className="text-sm text-foreground/50">
           {isUsdt
-            ? "USDT is held in your JesDanPay balance. Deposit directly, or use the Convert USDT flow in Conversions to convert to or from NGN or KES. GHS is coming soon."
+            ? "USDT is held in your JesDanPay balance. Deposit directly, or use the Convert USDT flow in Conversions to convert to or from NGN or KES. GHS is currently under maintenance."
             : isGhs
-              ? "Ghana (GHS) is coming soon. We will notify you as soon as it is available."
+              ? "Ghana (GHS) is currently under maintenance. We will notify you as soon as it is available."
               : `Use "Add Money" above to deposit ${wallet.currency} — your balance updates once the transfer is confirmed.`}
         </p>
       </Card>

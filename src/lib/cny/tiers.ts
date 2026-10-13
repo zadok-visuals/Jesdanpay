@@ -87,30 +87,3 @@ export function computeConversionAmounts(
     tierRate: tier.usdt_to_cny_rate,
   };
 }
-
-export interface TierCurrencyEquivalent {
-  // What tier.usdt_to_cny_rate CNY (i.e. exactly 1 USDT, by definition of the rate) is worth in
-  // the selected currency — null while the live USDT-to-fiat rate isn't available yet (still
-  // loading, or the selected currency's rate hasn't resolved), never NaN/Infinity.
-  tierFiat: number | null;
-  // The plain 1 CNY -> selected currency figure, derived from the same number.
-  oneCnyFiat: number | null;
-}
-
-// Shared by CnyConvertForm.tsx and RmbExchangeForm.tsx's "CNY pricing tiers" cards — both show
-// each tier's own rate routed through the same customer-facing USDT-to-fiat rate the USDT
-// conversion screen shows (UsdtExchangeForm + previewSwapRate), never derived as 1 / bushaRate
-// (that's a different, internal orientation that disagreed with what customers see there).
-// tier.usdt_to_cny_rate CNY is, by definition, worth exactly 1 USDT — so tierFiat is simply
-// `fiatPerUsdt` itself, and oneCnyFiat divides that by the tier's own rate. `fiatPerUsdt` is fiat
-// per 1 USDT for the selected currency (pass 1 for USDT itself), or null/undefined while that
-// rate hasn't loaded yet.
-export function getTierCurrencyEquivalent(
-  tier: CnyTierRate,
-  fiatPerUsdt: number | null | undefined,
-): TierCurrencyEquivalent {
-  const tierFiat = fiatPerUsdt != null && fiatPerUsdt > 0 ? round2(fiatPerUsdt) : null;
-  const oneCnyFiat =
-    tierFiat != null && tier.usdt_to_cny_rate > 0 ? round2(fiatPerUsdt! / tier.usdt_to_cny_rate) : null;
-  return { tierFiat, oneCnyFiat };
-}

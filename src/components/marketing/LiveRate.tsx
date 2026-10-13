@@ -88,7 +88,7 @@ export function LiveRate() {
                     <span className="text-sm font-medium text-primary-900">GHS</span>
                   </div>
                   <span className="rounded-full bg-accent-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-accent-700">
-                    Coming soon
+                    Maintenance
                   </span>
                 </div>
               </div>

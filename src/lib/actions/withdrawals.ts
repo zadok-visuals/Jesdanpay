@@ -10,7 +10,7 @@ import { probeFiatToUsdtRate } from "@/lib/busha/rate";
 import { MINIMUM_WITHDRAWAL_USDT_THRESHOLD, getMinimumWithdrawalAmount } from "@/lib/busha/limits";
 import { isCurrencyAvailable, formatBalance } from "@/lib/currency";
 
-const GHS_COMING_SOON_ERROR = "Ghana (GHS) is coming soon.";
+const GHS_MAINTENANCE_ERROR = "Ghana (GHS) is currently under maintenance.";
 
 export interface WithdrawalActionState {
   error?: string;
@@ -96,7 +96,7 @@ export async function setWithdrawalRecipient(
 
   const currency = String(formData.get("currency") ?? "") as Currency;
   if (!isCurrencyAvailable(currency)) {
-    return { error: GHS_COMING_SOON_ERROR };
+    return { error: GHS_MAINTENANCE_ERROR };
   }
   const parsed = await parseRecipientFields(currency, formData);
   if ("error" in parsed) return parsed;
@@ -247,7 +247,7 @@ export async function requestWithdrawal(
   const pin = String(formData.get("pin") ?? "").trim();
 
   if (!isCurrencyAvailable(currency)) {
-    return { error: GHS_COMING_SOON_ERROR };
+    return { error: GHS_MAINTENANCE_ERROR };
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid amount." };

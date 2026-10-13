@@ -12,7 +12,7 @@ import { verifyOwnedUpload } from "@/lib/storage/verifyUpload";
 import { formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { sendCnyConversionReceiptEmail } from "@/lib/email";
 
-const GHS_COMING_SOON_ERROR = "Ghana (GHS) is coming soon.";
+const GHS_MAINTENANCE_ERROR = "Ghana (GHS) is currently under maintenance.";
 
 export interface PaymentsActionState {
   error?: string;
@@ -74,7 +74,7 @@ export async function submitRmbExchange(
     return { error: "Invalid payout method." };
   }
   if (!isCurrencyAvailable(sourceCurrency)) {
-    return { error: GHS_COMING_SOON_ERROR };
+    return { error: GHS_MAINTENANCE_ERROR };
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid amount." };
@@ -244,7 +244,7 @@ async function computeCnyRate(
   // either direction) — also what stops any lingering GHS rate-probe noise, same as the swap
   // path's previewSwapRate (src/lib/actions/busha.ts).
   if (!isCurrencyAvailable(nonCnyCurrency)) {
-    return { error: GHS_COMING_SOON_ERROR };
+    return { error: GHS_MAINTENANCE_ERROR };
   }
 
   const supabase = await createClient();
@@ -305,7 +305,7 @@ export async function previewLiveBushaRate(currency: Currency): Promise<LiveRate
   if (currency === "USDT") return { rate: undefined };
   // Guarded at the source, not just by every caller disabling the GHS option in their own UI —
   // one check here covers CnyConvertForm, WithdrawForm, and anything that calls this later.
-  if (!isCurrencyAvailable(currency)) return { error: GHS_COMING_SOON_ERROR };
+  if (!isCurrencyAvailable(currency)) return { error: GHS_MAINTENANCE_ERROR };
   try {
     const rate = await probeFiatToUsdtRate(currency);
     return { rate };
@@ -339,7 +339,7 @@ export async function submitCnyConversion(
 
   const { direction, nonCnyCurrency, amount } = parseCnyFormInputs(formData);
   if (!isCurrencyAvailable(nonCnyCurrency)) {
-    return { error: GHS_COMING_SOON_ERROR };
+    return { error: GHS_MAINTENANCE_ERROR };
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid amount." };

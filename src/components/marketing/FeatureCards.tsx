@@ -17,7 +17,7 @@ const FEATURES = [
   {
     icon: BoltIcon,
     title: "Instant deposits",
-    body: "Fund your wallet in NGN, KES, or USDT and see it reflected in seconds, not business days. GHS is coming soon.",
+    body: "Fund your wallet in NGN, KES, or USDT and see it reflected in seconds, not business days. GHS is currently under maintenance.",
     cardBg: "bg-primary-50/70",
     iconBg: "bg-primary-800/10 text-primary-800",
   },

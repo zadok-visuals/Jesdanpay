@@ -11,8 +11,7 @@ import type {
 } from "@/lib/types/database";
 import { CURRENCY_DISPLAY_ORDER, CURRENCY_META, formatBalance, isCurrencyAvailable } from "@/lib/currency";
 import { submitRmbExchange, previewLiveBushaRate, type PaymentsActionState } from "@/lib/actions/payments";
-import { previewSwapRate } from "@/lib/actions/busha";
-import { computeConversionAmounts, getTierCurrencyEquivalent } from "@/lib/cny/tiers";
+import { computeConversionAmounts, resolveForwardTier } from "@/lib/cny/tiers";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -185,33 +184,6 @@ function SourceStep({
     });
   }, [state.sourceCurrency, isCnySource]);
 
-  // The "CNY pricing tiers" card below shows each tier's rate against the SAME customer-facing
-  // USDT-to-fiat rate the Convert USDT screen shows (previewSwapRate's sellRate), independent of
-  // bushaRate above (which drives the actual conversion math and has a different orientation).
-  // Skipped entirely for a CNY source, same as the tier card itself.
-  const [tierFiatPerUsdt, setTierFiatPerUsdt] = useState<number | null>(null);
-  const [tierRateError, setTierRateError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setTierRateError(null);
-    if (isCnySource) return;
-    if (state.sourceCurrency === "USDT") {
-      setTierFiatPerUsdt(1);
-      return;
-    }
-    setTierFiatPerUsdt(null);
-    let cancelled = false;
-    (async () => {
-      const result = await previewSwapRate(state.sourceCurrency);
-      if (cancelled) return;
-      if (result.error) setTierRateError(result.error);
-      else setTierFiatPerUsdt(result.sellRate ?? null);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [state.sourceCurrency, isCnySource]);
-
   const rateReady = isCnySource || state.sourceCurrency === "USDT" || bushaRate != null;
   // Gated on amountEntered alone (not amountValid) so the rate card keeps showing real numbers
   // even when the typed amount exceeds the user's balance — only the "Next" button below is
@@ -220,14 +192,28 @@ function SourceStep({
     !isCnySource && amountEntered && rateReady
       ? computeConversionAmounts("to_cny", amountNum, state.sourceCurrency === "USDT" ? null : bushaRate, tierRates)
       : null;
-  const effectiveRate = amounts && amounts.nonCnyAmount > 0 ? amounts.cnyAmount / amounts.nonCnyAmount : null;
+  // Default-preview rate shown before any amount is typed, so the Live rate card's rate row is
+  // never just a dash on first load (only "Your vendor receives" below stays blank until there's
+  // a real amount). Reads the lowest tier's own rate directly — resolveForwardTier(1, …) reliably
+  // lands on it, since 1 USDT's CNY value is always well under even the lowest tier's ceiling —
+  // rather than round-tripping a nominal 1-unit amount through computeConversionAmounts, which
+  // for a low-value fiat currency like NGN rounds the resulting CNY amount down to 0.00 and
+  // produces a bogus Infinity when that's later divided into (1 / effectiveRate) below.
+  const lowestTier = !isCnySource ? resolveForwardTier(1, tierRates) : null;
+  const defaultEffectiveRate =
+    lowestTier == null
+      ? null
+      : state.sourceCurrency === "USDT"
+        ? lowestTier.usdt_to_cny_rate
+        : bushaRate != null
+          ? bushaRate * lowestTier.usdt_to_cny_rate
+          : null;
+  const effectiveRate =
+    amounts && amounts.nonCnyAmount > 0 ? amounts.cnyAmount / amounts.nonCnyAmount : defaultEffectiveRate;
   // No markup applied here — Pay to China's profit comes purely from the tiered rate spread
   // (6.5/6.6), not a stacked fee, and settlement is always manual anyway (the admin enters the
   // real delivered CNY afterward), so this estimate is the tier rate's own output, unmarked-up.
   const estimatedCny = amounts ? amounts.cnyAmount : null;
-  // Same ladder CnyConvertForm.tsx shows on the Conversions page — sorted so the tier the current
-  // amount falls into can be highlighted in order.
-  const sortedTierRates = [...tierRates].sort((a, b) => a.tier_min_cny - b.tier_min_cny);
 
   // Dual-input bidirectional CNY field: state.amount (the source-currency amount) stays the
   // canonical value threaded through every later step; this local string mirrors it in CNY terms
@@ -293,15 +279,15 @@ function SourceStep({
         <div className="flex flex-wrap gap-2">
           {availableCurrencies.map((c) => {
             const w = wallets.find((w) => w.currency === c);
-            const isComingSoon = !isCurrencyAvailable(c);
+            const isUnderMaintenance = !isCurrencyAvailable(c);
             return (
               <button
                 key={c}
                 type="button"
-                disabled={isComingSoon}
-                onClick={isComingSoon ? undefined : () => onChange({ sourceCurrency: c })}
+                disabled={isUnderMaintenance}
+                onClick={isUnderMaintenance ? undefined : () => onChange({ sourceCurrency: c })}
                 className={`flex flex-col gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors ${
-                  isComingSoon
+                  isUnderMaintenance
                     ? "cursor-not-allowed border-border bg-black/[.02] opacity-60"
                     : state.sourceCurrency === c
                       ? "border-primary-400 bg-primary-50 ring-1 ring-primary-400"
@@ -311,14 +297,14 @@ function SourceStep({
                 <span className="flex items-center gap-1.5 text-sm font-semibold">
                   <span>{CURRENCY_META[c].flag}</span>
                   <span>{c}</span>
-                  {isComingSoon && (
+                  {isUnderMaintenance && (
                     <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
-                      Soon
+                      Maintenance
                     </span>
                   )}
                 </span>
                 <span className="text-xs text-foreground/50">
-                  {isComingSoon ? "Coming soon" : `Balance: ${w ? formatBalance(c, w.balance) : "—"}`}
+                  {isUnderMaintenance ? "Maintenance" : `Balance: ${w ? formatBalance(c, w.balance) : "—"}`}
                 </span>
               </button>
             );
@@ -413,56 +399,6 @@ function SourceStep({
             An estimate — the actual transfer is confirmed manually by our team, usually within
             1–2 hours.
           </p>
-        </div>
-      )}
-
-      {/* Same card as CnyConvertForm.tsx's Conversions page — shows the full tier ladder the Live
-          rate above came from, highlighting which band the estimated CNY amount currently falls
-          into. Skipped for isCnySource same as the Live rate card, since there's no tier lookup
-          to show when sending CNY directly. */}
-      {!isCnySource && sortedTierRates.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-border bg-white">
-          <div className="border-b border-border px-6 py-4">
-            <p className="text-sm font-semibold text-foreground">CNY pricing tiers</p>
-          </div>
-          <ul className="divide-y divide-border">
-            {sortedTierRates.map((tier) => {
-              const isActive =
-                estimatedCny != null && estimatedCny >= tier.tier_min_cny && estimatedCny <= tier.tier_max_cny;
-              const equivalent = getTierCurrencyEquivalent(tier, tierFiatPerUsdt);
-              return (
-                <li
-                  key={tier.tier_min_cny}
-                  className={`flex items-center justify-between gap-4 px-6 py-3 text-sm ${
-                    isActive ? "bg-primary-50" : ""
-                  }`}
-                >
-                  <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/60"}>
-                    CNY {tier.tier_min_cny.toLocaleString("en-US")} to {tier.tier_max_cny.toLocaleString("en-US")}
-                  </span>
-                  <span className="flex flex-col items-end gap-0.5">
-                    <span className={isActive ? "font-semibold text-primary-800" : "text-foreground/70"}>
-                      {equivalent.tierFiat != null
-                        ? `${tier.usdt_to_cny_rate.toLocaleString("en-US", { maximumFractionDigits: 6 })} CNY = ${formatBalance(state.sourceCurrency, equivalent.tierFiat)}`
-                        : tierRateError
-                          ? "Rate unavailable"
-                          : "Fetching live rate…"}
-                      {isActive && (
-                        <span className="ml-2 rounded-full bg-primary-500 px-2 py-0.5 text-xs font-medium text-white">
-                          Your rate
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-xs text-foreground/50" title="Reference price — before any fee">
-                      {equivalent.oneCnyFiat != null
-                        ? `1 CNY = ${formatBalance(state.sourceCurrency, equivalent.oneCnyFiat)}`
-                        : " "}
-                    </span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
         </div>
       )}
 

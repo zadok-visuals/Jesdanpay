@@ -6,7 +6,7 @@ interface TabsProps<T extends string> {
   options: readonly T[];
   value: T;
   onChange: (value: T) => void;
-  // Optional per-option badge (e.g. a "Coming soon" pill) — rendered next to the label, never
+  // Optional per-option badge (e.g. a "Maintenance" pill) — rendered next to the label, never
   // changes tab selection/click behavior, so existing callers (TotalBalanceCard.tsx) are
   // unaffected by simply not passing it.
   renderBadge?: (option: T) => ReactNode;

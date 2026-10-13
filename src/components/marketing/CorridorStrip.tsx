@@ -5,7 +5,7 @@ const CORRIDORS = [
   { flag: "🇨🇳", code: "CNY", country: "China" },
   { flag: "₮", code: "USDT", country: "Any market" },
   { flag: "🇰🇪", code: "KES", country: "Kenya" },
-  { flag: "🇬🇭", code: "GHS", country: "Ghana", comingSoon: true },
+  { flag: "🇬🇭", code: "GHS", country: "Ghana", underMaintenance: true },
 ];
 
 // Rendered twice back to back and slid left by exactly one copy-width (see .animate-marketing-
@@ -37,9 +37,9 @@ export function CorridorStrip() {
                     <div className="text-left">
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-primary-900">
                         {corridor.code}
-                        {corridor.comingSoon && (
+                        {corridor.underMaintenance && (
                           <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
-                            Soon
+                            Maintenance
                           </span>
                         )}
                       </p>

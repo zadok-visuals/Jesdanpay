@@ -32,9 +32,9 @@ export async function initiateKlashaDeposit(
 ): Promise<KlashaDepositState> {
   // GHS is the only currency this action ever handles — checked first, before any auth lookup,
   // DB write, or call to Klasha, so re-enabling it later really is just removing "GHS" from
-  // COMING_SOON_CURRENCIES (src/lib/currency.ts) rather than also hunting for a stray guard here.
+  // MAINTENANCE_CURRENCIES (src/lib/currency.ts) rather than also hunting for a stray guard here.
   if (!isCurrencyAvailable("GHS")) {
-    return { error: "Ghana (GHS) is coming soon." };
+    return { error: "Ghana (GHS) is currently under maintenance." };
   }
 
   const supabase = await createClient();

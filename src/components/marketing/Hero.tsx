@@ -19,7 +19,7 @@ export function Hero() {
         <div>
           <Reveal>
             <span className="inline-flex items-center rounded-full border border-primary-800/15 bg-white/60 px-4 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-primary-800 backdrop-blur">
-              Nigeria · Ghana (soon) · Kenya → China
+              Nigeria · Ghana (maintenance) · Kenya → China
             </span>
           </Reveal>
 
@@ -32,7 +32,7 @@ export function Hero() {
 
           <Reveal delay={0.16}>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-primary-900/60">
-              Deposit NGN, KES or USDT (GHS coming soon), convert to CNY at a transparent rate,
+              Deposit NGN, KES or USDT (GHS is under maintenance), convert to CNY at a transparent rate,
               and pay your supplier directly — or withdraw back out whenever you need to. Fast
               settlement, no hidden markups.
             </p>

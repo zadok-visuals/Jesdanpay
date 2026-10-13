@@ -10,8 +10,8 @@ export const CURRENCY_META: Record<Currency, { flag: string; label: string; symb
 };
 
 // Single shared ordering for every currency picker/tab/list in the app — NGN, CNY, USDT, KES,
-// GHS, with GHS always last since it's coming soon. Filter this (rather than writing an ad hoc
-// array per component) so every list stays in sync and can't drift from this one.
+// GHS, with GHS always last since it's under maintenance. Filter this (rather than writing an ad
+// hoc array per component) so every list stays in sync and can't drift from this one.
 export const CURRENCY_DISPLAY_ORDER: Currency[] = ["NGN", "CNY", "USDT", "KES", "GHS"];
 
 export function formatBalance(currency: Currency, balance: number) {
@@ -21,13 +21,13 @@ export function formatBalance(currency: Currency, balance: number) {
   })}`;
 }
 
-// GHS (Ghana) was only ever exercised against the Klasha sandbox, never a live account — every
-// deposit/withdraw/convert/swap/send flow in the app checks this one list (client-side for the
-// UI, server-side via isCurrencyAvailable so nothing can bypass the UI and submit anyway)
-// instead of each independently hardcoding "GHS" — re-enabling it later is deleting one entry
-// here, not hunting down every flow again.
-export const COMING_SOON_CURRENCIES: Currency[] = ["GHS"];
+// GHS (Ghana) was only ever exercised against the Klasha sandbox, never a live account, and is
+// now flagged under maintenance — every deposit/withdraw/convert/swap/send flow in the app
+// checks this one list (client-side for the UI, server-side via isCurrencyAvailable so nothing
+// can bypass the UI and submit anyway) instead of each independently hardcoding "GHS" —
+// re-enabling it later is deleting one entry here, not hunting down every flow again.
+export const MAINTENANCE_CURRENCIES: Currency[] = ["GHS"];
 
 export function isCurrencyAvailable(currency: Currency): boolean {
-  return !COMING_SOON_CURRENCIES.includes(currency);
+  return !MAINTENANCE_CURRENCIES.includes(currency);
 }

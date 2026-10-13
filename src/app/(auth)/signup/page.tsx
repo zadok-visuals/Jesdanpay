@@ -79,7 +79,7 @@ export default function SignupPage() {
             </select>
             <p className="text-xs text-foreground/40">
               NGN or KES wallets are only available for Nigeria or Kenya — every account still
-              gets USDT and CNY. A Ghana wallet (GHS) is coming soon.
+              gets USDT and CNY. A Ghana wallet (GHS) is currently under maintenance.
             </p>
           </div>
 

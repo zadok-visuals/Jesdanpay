@@ -114,7 +114,7 @@ export function DepositForm({
   if (!isCurrencyAvailable(currency)) {
     return (
       <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-black/[.02] p-6 text-center">
-        <p className="text-sm font-medium text-foreground">Ghana (GHS) is coming soon.</p>
+        <p className="text-sm font-medium text-foreground">Ghana (GHS) is currently under maintenance.</p>
         <p className="text-sm text-foreground/50">We will notify you as soon as it is available.</p>
         <Button variant="secondary" onClick={onClose}>
           Close

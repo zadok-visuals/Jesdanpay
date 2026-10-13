@@ -90,9 +90,9 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
   const availableDirections = DIRECTIONS.filter(
     (d) => wallets.some((w) => w.currency === d.source) && wallets.some((w) => w.currency === d.target),
   );
-  // Shown as disabled "Soon" chips below rather than removed from the list entirely — a Ghanaian
-  // user should still see that GHS exists here, just not be able to pick it (see currency.ts's
-  // COMING_SOON_CURRENCIES). The default selection must never land on one of these.
+  // Shown as disabled "Maintenance" chips below rather than removed from the list entirely — a
+  // Ghanaian user should still see that GHS exists here, just not be able to pick it (see
+  // currency.ts's MAINTENANCE_CURRENCIES). The default selection must never land on one of these.
   const selectableDirections = availableDirections.filter((d) => isCurrencyAvailable(d.source) && isCurrencyAvailable(d.target));
   const [direction, setDirection] = useState<Direction | null>(selectableDirections[0]?.value ?? null);
   const [amount, setAmount] = useState("");
@@ -159,7 +159,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
       <Card className="p-6 sm:p-8">
         {onlyGhsAvailable ? (
           <p className="text-sm text-foreground/60">
-            Ghana (GHS) is coming soon. We will notify you as soon as it is available.
+            Ghana (GHS) is currently under maintenance. We will notify you as soon as it is available.
           </p>
         ) : (
           <p className="text-sm text-foreground/60">
@@ -252,14 +252,14 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
           <p className="mb-2 text-sm font-medium text-foreground/80">Direction</p>
           <div className="flex flex-wrap gap-2">
             {availableDirections.map((d) => {
-              const isComingSoon = !isCurrencyAvailable(d.source) || !isCurrencyAvailable(d.target);
+              const isUnderMaintenance = !isCurrencyAvailable(d.source) || !isCurrencyAvailable(d.target);
               return (
                 <button
                   key={d.value}
                   type="button"
-                  disabled={isComingSoon}
+                  disabled={isUnderMaintenance}
                   onClick={
-                    isComingSoon
+                    isUnderMaintenance
                       ? undefined
                       : () => {
                           setDirection(d.value);
@@ -267,7 +267,7 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
                         }
                   }
                   className={`flex items-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
-                    isComingSoon
+                    isUnderMaintenance
                       ? "cursor-not-allowed border-border bg-black/[.02] text-foreground/30"
                       : direction === d.value
                         ? "border-primary-400 bg-primary-50 text-primary-700 ring-1 ring-primary-400"
@@ -275,9 +275,9 @@ export function UsdtExchangeForm({ wallets }: { wallets: Wallet[] }) {
                   }`}
                 >
                   {d.label}
-                  {isComingSoon && (
+                  {isUnderMaintenance && (
                     <span className="rounded-full bg-accent-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent-700">
-                      Soon
+                      Maintenance
                     </span>
                   )}
                 </button>
